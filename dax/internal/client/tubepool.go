@@ -26,11 +26,12 @@ import (
 const network = "tcp"
 
 type tubePool struct {
-	address   string
-	gate      gate
-	errCh     chan error
-	timeout   time.Duration
-	connectFn func(string, string) (net.Conn, error)
+	address              string
+	gate                 gate
+	errCh                chan error
+	timeout              time.Duration
+	connectFn            func(string, string) (net.Conn, error)
+	closeTubeImmediately bool
 
 	mutex      sync.Mutex
 	closed     bool  // protected by mutex
@@ -186,6 +187,10 @@ func (p *tubePool) put(tube *tube) {
 
 func (p *tubePool) discard(tube *tube) {
 	if tube == nil {
+		return
+	}
+	if p.closeTubeImmediately {
+		tube.Close()
 		return
 	}
 	go func() {

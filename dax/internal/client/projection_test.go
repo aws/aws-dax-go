@@ -76,6 +76,36 @@ func TestBuildDocumentPath(t *testing.T) {
 	}
 }
 
+func TestBuildProjectionOrdinals(t *testing.T) {
+	cases := []struct {
+		projectionExpression     string
+		expressionAttributeNames map[string]*string
+		documentPaths            []documentPath
+	}{
+		{
+			"#1",
+			map[string]*string{"#1": aws.String("a")},
+			[]documentPath{{[]documentPathElement{{name: "a", index: -1}}}},
+		},
+		{
+			"#1, #2",
+			map[string]*string{"#1": aws.String("a"), "#2": aws.String("b")},
+			[]documentPath{{[]documentPathElement{{name: "a", index: -1}}}, {[]documentPathElement{{name: "b", index: -1}}}},
+		},
+	}
+
+	for _, c := range cases {
+		actual, err := buildProjectionOrdinals(&c.projectionExpression, c.expressionAttributeNames)
+		if err != nil {
+			t.Errorf("unexpected error %v", err)
+		}
+		if !reflect.DeepEqual(c.documentPaths, actual) {
+			t.Errorf("expected %v, got %v for %s", c.documentPaths, actual, c.projectionExpression)
+		}
+	}
+
+}
+
 func TestItemBuilder(t *testing.T) {
 	cases := []struct {
 		projectionExpression     string

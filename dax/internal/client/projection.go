@@ -48,7 +48,7 @@ func buildProjectionOrdinals(projectionExpression *string, expressionAttributeNa
 	terms := strings.Split(*projectionExpression, ",")
 	dps := make([]documentPath, 0, len(terms))
 	for _, t := range terms {
-		dp, err := buildDocumentPath(t, expressionAttributeNames)
+		dp, err := buildDocumentPath(strings.TrimSpace(t), expressionAttributeNames)
 		if err != nil {
 			return nil, err
 		}

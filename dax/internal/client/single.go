@@ -608,33 +608,39 @@ func (client *SingleDaxClient) executeWithContext(ctx aws.Context, op string, en
 	}
 
 	if err = client.auth(tube); err != nil {
-		client.recycleTube(tube, err)
+		client.pool.discard(tube)
 		return err
 	}
 
 	writer := tube.cborWriter
 	if err = encoder(tube.cborWriter); err != nil {
-		client.recycleTube(tube, err)
+		// Validation errors will cause pool to be discarded as there is no guarantee
+		// that the validation was performed before any data was written into tube
+		client.pool.discard(tube)
 		return err
 	}
 	if err := writer.Flush(); err != nil {
-		client.recycleTube(tube, err)
+		client.pool.discard(tube)
 		return err
 	}
 
 	reader := tube.cborReader
 	ex, err := decodeError(reader)
 	if err != nil { // decode or network error
-		client.recycleTube(tube, err)
+		client.pool.discard(tube)
 		return err
 	}
 	if ex != nil { // user or server error
-		client.recycleTube(tube, nil) // do not close conn
+		client.recycleTube(tube, ex)
 		return ex
 	}
 
 	err = decoder(reader)
-	client.recycleTube(tube, err)
+	if err != nil {
+		client.pool.discard(tube)
+	} else {
+		client.pool.put(tube)
+	}
 	return err
 }
 
