@@ -16,11 +16,12 @@
 package dax
 
 import (
+	"io"
+
 	"github.com/aws/aws-dax-go/dax/internal/client"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"io"
 )
 
 func (d *Dax) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
@@ -247,12 +248,27 @@ func (d *Dax) QueryPagesWithContext(aws.Context, *dynamodb.QueryInput, func(*dyn
 	return d.unImpl()
 }
 
-func (d *Dax) ScanPages(*dynamodb.ScanInput, func(*dynamodb.ScanOutput, bool) bool) error {
-	return d.unImpl()
+func (d *Dax) ScanPages(in *dynamodb.ScanInput, fn func(*dynamodb.ScanOutput, bool) bool) error {
+	return d.ScanPagesWithContext(nil, in, fn)
 }
 
-func (d *Dax) ScanPagesWithContext(aws.Context, *dynamodb.ScanInput, func(*dynamodb.ScanOutput, bool) bool, ...request.Option) error {
-	return d.unImpl()
+func (d *Dax) ScanPagesWithContext(ctx aws.Context, in *dynamodb.ScanInput, fn func(*dynamodb.ScanOutput, bool) bool, opts ...request.Option) error {
+	var doWork func() error
+	doWork = func() error {
+		out, err := d.ScanWithContext(ctx, in, opts...)
+		if err != nil {
+			return err
+		}
+
+		isLastPage := out.LastEvaluatedKey != nil
+		cont := fn(out, isLastPage)
+		if cont && !isLastPage {
+			in.ExclusiveStartKey = out.LastEvaluatedKey
+			return doWork()
+		}
+		return nil
+	}
+	return doWork()
 }
 
 func (d *Dax) CreateBackup(*dynamodb.CreateBackupInput) (*dynamodb.CreateBackupOutput, error) {
