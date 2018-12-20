@@ -51,6 +51,8 @@ const (
 	OpDeleteItem            = "DeleteItem"
 	OpBatchGetItem          = "BatchGetItem"
 	OpBatchWriteItem        = "BatchWriteItem"
+	OpTransactGetItems      = "TransactGetItems"
+	OpTransactWriteItems    = "TransactWriteItems"
 	OpQuery                 = "Query"
 	OpScan                  = "Scan"
 )
@@ -342,6 +344,36 @@ func (client *SingleDaxClient) BatchGetItemWithOptions(input *dynamodb.BatchGetI
 		return err
 	}
 	if err = client.executeWithRetries(OpBatchGetItem, opt, encoder, decoder); err != nil {
+		return output, err
+	}
+	return output, nil
+}
+
+func (client *SingleDaxClient) TransactWriteItemsWithOptions(input *dynamodb.TransactWriteItemsInput, output *dynamodb.TransactWriteItemsOutput, opt RequestOptions) (*dynamodb.TransactWriteItemsOutput, error) {
+	encoder := func(writer *cbor.Writer) error {
+		return encodeTransactWriteItemsInput(opt.Context, input, client.keySchema, client.attrNamesListToId, writer)
+	}
+	var err error
+	decoder := func(reader *cbor.Reader) error {
+		output, err = decodeTransactWriteItemsOutput(opt.Context, reader, input, client.keySchema, client.attrListIdToNames, output)
+		return err
+	}
+	if err = client.executeWithRetries(OpBatchWriteItem, opt, encoder, decoder); err != nil {
+		return output, err
+	}
+	return output, nil
+}
+
+func (client *SingleDaxClient) TransactGetItemsWithOptions(input *dynamodb.TransactGetItemsInput, output *dynamodb.TransactGetItemsOutput, opt RequestOptions) (*dynamodb.TransactGetItemsOutput, error) {
+	encoder := func(writer *cbor.Writer) error {
+		return encodeTransactGetItemsInput(opt.Context, input, client.keySchema, writer)
+	}
+	var err error
+	decoder := func(reader *cbor.Reader) error {
+		output, err = decodeTransactGetItemsOutput(opt.Context, reader, input, client.keySchema, client.attrListIdToNames, output)
+		return err
+	}
+	if err = client.executeWithRetries(OpBatchWriteItem, opt, encoder, decoder); err != nil {
 		return output, err
 	}
 	return output, nil

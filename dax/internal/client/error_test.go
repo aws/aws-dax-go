@@ -65,6 +65,63 @@ func TestDecodeError(t *testing.T) {
 	}
 }
 
+func TestDecodeTransactionCanceledException(t *testing.T) {
+	errcode := []int{4, 37, 38, 39, 58}
+	awserr := awserr.NewRequestFailure(awserr.New(dynamodb.ErrCodeTransactionCanceledException, "TransactionCanceledException Message", nil), 400, "request-1")
+	reasonLen := 2
+	reasonCodes := []string{"reasonCode1", "reasonCode2"}
+	reasonMsgs := []string{"reasonMsg1", "reasonMsg2"}
+	reasonItems := [][]byte{[]byte("reasonItem1"), []byte("reasonItem2")}
+	var expectedReasonItems []byte
+	for _, item := range reasonItems {
+		expectedReasonItems = append(expectedReasonItems, item...)
+	}
+	var b bytes.Buffer
+	w := cbor.NewWriter(&b)
+	w.WriteArrayHeader(len(errcode))
+	for _, c := range errcode {
+		w.WriteInt(c)
+	}
+	w.WriteString(awserr.Message())
+
+	w.WriteArrayHeader(4)
+	w.WriteString(awserr.RequestID())
+	w.WriteString(awserr.Code())
+	w.WriteInt(awserr.StatusCode())
+	w.WriteArrayHeader(3 * reasonLen)
+	for i := 0; i < reasonLen; i++ {
+		w.WriteString(reasonCodes[i])
+		w.WriteString(reasonMsgs[i])
+		w.WriteBytes(reasonItems[i])
+	}
+	w.Flush()
+
+	r := cbor.NewReader(&b)
+	e, err := decodeError(r)
+	if err != nil {
+		t.Errorf("unexpected error %v", err)
+	}
+
+	d, ok := e.(*daxTransactionCanceledFailure)
+	if !ok {
+		t.Errorf("expected daxTransactionCanceledFailure type")
+	}
+
+	expected := &daxTransactionCanceledFailure{
+		daxRequestFailure: daxRequestFailure{
+			RequestFailure: awserr,
+			codes:          errcode,
+		},
+		cancellationReasonCodes: reasonCodes,
+		cancellationReasonMsgs:  reasonMsgs,
+		cancellationReasonItems: expectedReasonItems,
+	}
+
+	if !reflect.DeepEqual(expected, d) {
+		t.Errorf("expected %v, got %v", expected, d)
+	}
+}
+
 func TestDecodeErrorInfer(t *testing.T) {
 	var b bytes.Buffer
 	errcode := []int{4, 37, 38, 39, 43}

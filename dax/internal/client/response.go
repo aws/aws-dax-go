@@ -17,6 +17,7 @@ package client
 
 import (
 	"fmt"
+
 	"github.com/aws/aws-dax-go/dax/internal/cbor"
 	"github.com/aws/aws-dax-go/dax/internal/lru"
 	"github.com/aws/aws-sdk-go/aws"
@@ -53,6 +54,16 @@ const (
 	keyRole
 	keyAvailablityZone
 	keyLeaderSessionId
+)
+
+const (
+	capacityUnits = iota + 1
+	readCapacityUnits
+	writeCapacityUnits
+	tableName
+	table
+	globalSecondaryIndexes
+	localSecondaryIndexes
 )
 
 func decodeEndpointsOutput(reader *cbor.Reader) ([]serviceEndpoint, error) {
@@ -322,7 +333,7 @@ func decodeUpdateItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamod
 	return output, nil
 }
 
-func decodeGetItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.GetItemInput, attrNamesListToId *lru.Lru, output *dynamodb.GetItemOutput) (*dynamodb.GetItemOutput, error) {
+func decodeGetItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.GetItemInput, attrListIdToNames *lru.Lru, output *dynamodb.GetItemOutput) (*dynamodb.GetItemOutput, error) {
 	if consumed, err := consumeNil(reader); err != nil {
 		return output, err
 	} else if consumed {
@@ -343,7 +354,7 @@ func decodeGetItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.G
 				return err
 			}
 		case responseParamItem:
-			item, err := decodeNonKeyAttributes(ctx, reader, attrNamesListToId, projectionOrdinals)
+			item, err := decodeNonKeyAttributes(ctx, reader, attrListIdToNames, projectionOrdinals)
 			if err != nil {
 				return err
 			}
@@ -727,6 +738,130 @@ func decodeBatchGetItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynam
 	return output, nil
 }
 
+func decodeTransactWriteItemsOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.TransactWriteItemsInput, keySchemaCache *lru.Lru, attrListIdToNames *lru.Lru, output *dynamodb.TransactWriteItemsOutput) (*dynamodb.TransactWriteItemsOutput, error) {
+	len, err := reader.ReadArrayLength()
+	if err != nil {
+		return output, err
+	}
+	if len != 3 {
+		// returnValues still in the tube even though it's not being returned
+		// But user shouldn't be able to see it.
+		return output, awserr.New(request.ErrCodeSerialization, fmt.Sprintf("TransactWriteResponse needs to have 2 elements, instead had: %d", len), nil)
+	}
+	_, err = reader.ReadArrayLength()
+	if err != nil {
+		return output, err
+	}
+	if output == nil {
+		output = &dynamodb.TransactWriteItemsOutput{}
+	}
+
+	numCC, err := reader.ReadArrayLength()
+	if err != nil {
+		return output, err
+	}
+	if numCC > 0 {
+		output.ConsumedCapacity = make([]*dynamodb.ConsumedCapacity, numCC)
+		for i := 0; i < numCC; i++ {
+			if output.ConsumedCapacity[i], err = decodeConsumedCapacityExtended(reader); err != nil {
+				return output, err
+			}
+		}
+	}
+
+	icmLen, err := reader.ReadMapLength()
+	if err != nil {
+		return output, err
+	}
+	if icmLen > 0 {
+		output.ItemCollectionMetrics = make(map[string][]*dynamodb.ItemCollectionMetrics, icmLen)
+		for i := 0; i < icmLen; i++ {
+			table, err := reader.ReadString()
+			if err != nil {
+				return output, err
+			}
+			keys, err := getKeySchema(ctx, keySchemaCache, table)
+			if err != nil {
+				return output, err
+			}
+			pkey := *keys[0].AttributeName
+			numMetrics, err := reader.ReadArrayLength()
+			if err != nil {
+				return output, err
+			}
+			metrics := make([]*dynamodb.ItemCollectionMetrics, numMetrics)
+			for j := 0; j < numMetrics; j++ {
+				metrics[j], err = decodeItemCollectionMetrics(reader, pkey)
+				if err != nil {
+					return output, err
+				}
+			}
+			output.ItemCollectionMetrics[table] = metrics
+		}
+	}
+
+	return output, nil
+}
+
+func decodeTransactGetItemsOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.TransactGetItemsInput, keySchemaCache *lru.Lru, attrListIdToNames *lru.Lru, output *dynamodb.TransactGetItemsOutput) (*dynamodb.TransactGetItemsOutput, error) {
+	length, err := reader.ReadArrayLength()
+	if err != nil {
+		return output, err
+	}
+	if length != 2 {
+		return output, awserr.New(request.ErrCodeSerialization, fmt.Sprintf("TransactGetResponse needs to have 2 elements, instead had: %d", length), nil)
+	}
+
+	if output == nil {
+		output = &dynamodb.TransactGetItemsOutput{}
+	}
+
+	numR, err := reader.ReadArrayLength()
+	if err != nil {
+		return output, err
+	}
+	if numR != len(input.TransactItems) {
+		return output, awserr.New(request.ErrCodeSerialization, fmt.Sprintf("TransactGetResponse need to have the same number of Responses "+
+			"as the length of TransactItems in the input: %d, instead had: %d", len(input.TransactItems), numR), nil)
+	}
+
+	responses := make([]*dynamodb.ItemResponse, numR)
+	for i := 0; i < numR; i++ {
+		get := input.TransactItems[i].Get
+		projectionOrdinals, err := buildProjectionOrdinals(get.ProjectionExpression, get.ExpressionAttributeNames)
+		if err != nil {
+			return output, err
+		}
+		item, err := decodeNonKeyAttributes(ctx, reader, attrListIdToNames, projectionOrdinals)
+		if err != nil {
+			return output, err
+		}
+		// The key attributes are only added if it's NOT a projection
+		if item != nil && len(projectionOrdinals) == 0 {
+			for k, v := range get.Key {
+				item[k] = v
+			}
+		}
+		responses[i] = &dynamodb.ItemResponse{Item: item}
+	}
+	output.Responses = responses
+
+	numCC, err := reader.ReadArrayLength()
+	if err != nil {
+		return output, err
+	}
+	if numCC > 0 {
+		output.ConsumedCapacity = make([]*dynamodb.ConsumedCapacity, numCC)
+		for i := 0; i < numCC; i++ {
+			if output.ConsumedCapacity[i], err = decodeConsumedCapacityExtended(reader); err != nil {
+				return output, err
+			}
+		}
+	}
+
+	return output, nil
+}
+
 func decodeScanQueryItems(ctx aws.Context, reader *cbor.Reader, table string, keySchemaCache *lru.Lru, attrNamesListToId *lru.Lru, projectionOrdinals []documentPath) ([]map[string]*dynamodb.AttributeValue, error) {
 	consumed, err := consumeNil(reader)
 	if err != nil {
@@ -1052,7 +1187,7 @@ func decodeConsumedCapacity(reader *cbor.Reader) (*dynamodb.ConsumedCapacity, er
 		return nil, nil
 	}
 
-	if _, err := reader.ReadArrayLength(); err != nil {
+	if _, err := reader.ReadBytesLength(); err != nil {
 		return nil, err
 	}
 
@@ -1084,11 +1219,11 @@ func decodeConsumedCapacity(reader *cbor.Reader) (*dynamodb.ConsumedCapacity, er
 		}
 	}
 
-	cc.GlobalSecondaryIndexes, err = decodeIndexConsumedCapacity(reader)
+	cc.GlobalSecondaryIndexes, err = decodeIndexConsumedCapacity(reader, false)
 	if err != nil {
 		return nil, err
 	}
-	cc.LocalSecondaryIndexes, err = decodeIndexConsumedCapacity(reader)
+	cc.LocalSecondaryIndexes, err = decodeIndexConsumedCapacity(reader, false)
 	if err != nil {
 		return nil, err
 	}
@@ -1096,7 +1231,113 @@ func decodeConsumedCapacity(reader *cbor.Reader) (*dynamodb.ConsumedCapacity, er
 	return cc, nil
 }
 
-func decodeIndexConsumedCapacity(reader *cbor.Reader) (map[string]*dynamodb.Capacity, error) {
+func decodeConsumedCapacityExtended(reader *cbor.Reader) (*dynamodb.ConsumedCapacity, error) {
+	consumed, err := consumeNil(reader)
+	if err != nil {
+		return nil, err
+	}
+	if consumed {
+		return nil, nil
+	}
+
+	cc := &dynamodb.ConsumedCapacity{}
+	err = consumeMap(reader, func(key int, reader *cbor.Reader) error {
+		switch key {
+		case tableName:
+			s, err := reader.ReadString()
+			if err != nil {
+				return err
+			}
+			cc.SetTableName(s)
+		case capacityUnits:
+			f, err := reader.ReadFloat64()
+			if err != nil {
+				return err
+			}
+			cc.SetCapacityUnits(f)
+		case readCapacityUnits:
+			f, err := reader.ReadFloat64()
+			if err != nil {
+				return err
+			}
+			cc.SetReadCapacityUnits(f)
+		case writeCapacityUnits:
+			f, err := reader.ReadFloat64()
+			if err != nil {
+				return err
+			}
+			cc.SetWriteCapacityUnits(f)
+		case table:
+			c, err := decodeCapacity(reader)
+			if err != nil {
+				return err
+			}
+			cc.SetTable(c)
+		case globalSecondaryIndexes:
+			c, err := decodeIndexConsumedCapacity(reader, true)
+			if err != nil {
+				return err
+			}
+			cc.SetGlobalSecondaryIndexes(c)
+		case localSecondaryIndexes:
+			c, err := decodeIndexConsumedCapacity(reader, true)
+			if err != nil {
+				return err
+			}
+			cc.SetLocalSecondaryIndexes(c)
+		default:
+			return awserr.New(request.ErrCodeSerialization, fmt.Sprintf("unknown response param key %d", key), nil)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return cc, nil
+}
+
+func decodeCapacity(reader *cbor.Reader) (*dynamodb.Capacity, error) {
+	consumed, err := consumeNil(reader)
+	if err != nil {
+		return nil, err
+	}
+	if consumed {
+		return nil, nil
+	}
+
+	c := &dynamodb.Capacity{}
+	err = consumeMap(reader, func(key int, reader *cbor.Reader) error {
+		switch key {
+		case capacityUnits:
+			f, err := reader.ReadFloat64()
+			if err != nil {
+				return err
+			}
+			c.SetCapacityUnits(f)
+		case readCapacityUnits:
+			f, err := reader.ReadFloat64()
+			if err != nil {
+				return err
+			}
+			c.SetReadCapacityUnits(f)
+		case writeCapacityUnits:
+			f, err := reader.ReadFloat64()
+			if err != nil {
+				return err
+			}
+			c.SetWriteCapacityUnits(f)
+		default:
+			return awserr.New(request.ErrCodeSerialization, fmt.Sprintf("unknown response param key %d", key), nil)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+func decodeIndexConsumedCapacity(reader *cbor.Reader, extended bool) (map[string]*dynamodb.Capacity, error) {
 	consumed, err := consumeNil(reader)
 	if err != nil {
 		return nil, err
@@ -1116,13 +1357,22 @@ func decodeIndexConsumedCapacity(reader *cbor.Reader) (map[string]*dynamodb.Capa
 		if err != nil {
 			return nil, err
 		}
-		c, err := reader.ReadFloat64()
-		if err != nil {
-			return nil, err
+		var c *dynamodb.Capacity
+		if extended {
+			c, err = decodeCapacity(reader)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			f, err := reader.ReadFloat64()
+			if err != nil {
+				return nil, err
+			}
+			c = &dynamodb.Capacity{
+				CapacityUnits: aws.Float64(f),
+			}
 		}
-		index[i] = &dynamodb.Capacity{
-			CapacityUnits: aws.Float64(c),
-		}
+		index[i] = c
 	}
 	return index, nil
 }
@@ -1136,7 +1386,7 @@ func decodeItemCollectionMetrics(reader *cbor.Reader, partitionKey string) (*dyn
 		return nil, nil
 	}
 
-	if _, err := reader.ReadArrayLength(); err != nil {
+	if _, err := reader.ReadBytesLength(); err != nil {
 		return nil, err
 	}
 

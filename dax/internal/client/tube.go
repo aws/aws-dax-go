@@ -17,15 +17,16 @@ package client
 
 import (
 	"bufio"
-	"github.com/aws/aws-dax-go/dax/internal/cbor"
 	"net"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/aws/aws-dax-go/dax/internal/cbor"
 )
 
 const magic = "J7yne5G"
-const agent = "DaxGoClient-1.0"
+const agent = "DaxGoClient-1.1.0"
 
 var optional = map[string]string{"UserAgent": agent}
 

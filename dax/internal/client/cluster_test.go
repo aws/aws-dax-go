@@ -484,5 +484,13 @@ func (c *testClient) BatchGetItemWithOptions(input *dynamodb.BatchGetItemInput, 
 func (c *testClient) NewDaxRequest(op *request.Operation, input, output interface{}, opt RequestOptions) *request.Request {
 	panic("unimpl")
 }
+
+func (c *testClient) TransactWriteItemsWithOptions(input *dynamodb.TransactWriteItemsInput, output *dynamodb.TransactWriteItemsOutput, opt RequestOptions) (*dynamodb.TransactWriteItemsOutput, error) {
+	panic("unimpl")
+}
+func (c *testClient) TransactGetItemsWithOptions(input *dynamodb.TransactGetItemsInput, output *dynamodb.TransactGetItemsOutput, opt RequestOptions) (*dynamodb.TransactGetItemsOutput, error) {
+	panic("unimpl")
+}
+
 func (c *testClient) build(req *request.Request) { panic("unimpl") }
 func (c *testClient) send(req *request.Request)  { panic("unimpl") }

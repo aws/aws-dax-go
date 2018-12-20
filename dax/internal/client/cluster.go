@@ -178,6 +178,30 @@ func (cc *ClusterDaxClient) BatchWriteItemWithOptions(input *dynamodb.BatchWrite
 	return output, nil
 }
 
+func (cc *ClusterDaxClient) TransactWriteItemsWithOptions(input *dynamodb.TransactWriteItemsInput, output *dynamodb.TransactWriteItemsOutput, opt RequestOptions) (*dynamodb.TransactWriteItemsOutput, error) {
+	var err error
+	action := func(client DaxAPI, o RequestOptions) error {
+		output, err = client.TransactWriteItemsWithOptions(input, output, o)
+		return err
+	}
+	if err = cc.retry(OpTransactWriteItems, action, opt); err != nil {
+		return output, err
+	}
+	return output, nil
+}
+
+func (cc *ClusterDaxClient) TransactGetItemsWithOptions(input *dynamodb.TransactGetItemsInput, output *dynamodb.TransactGetItemsOutput, opt RequestOptions) (*dynamodb.TransactGetItemsOutput, error) {
+	var err error
+	action := func(client DaxAPI, o RequestOptions) error {
+		output, err = client.TransactGetItemsWithOptions(input, output, o)
+		return err
+	}
+	if err = cc.retry(OpTransactGetItems, action, opt); err != nil {
+		return output, err
+	}
+	return output, nil
+}
+
 func (cc *ClusterDaxClient) GetItemWithOptions(input *dynamodb.GetItemInput, output *dynamodb.GetItemOutput, opt RequestOptions) (*dynamodb.GetItemOutput, error) {
 	var err error
 	action := func(client DaxAPI, o RequestOptions) error {

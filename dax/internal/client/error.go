@@ -16,6 +16,8 @@
 package client
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"github.com/aws/aws-dax-go/dax/internal/cbor"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -36,6 +38,13 @@ type daxRequestFailure struct {
 	codes []int
 }
 
+type daxTransactionCanceledFailure struct {
+	daxRequestFailure
+	cancellationReasonCodes []string
+	cancellationReasonMsgs  []string
+	cancellationReasonItems []byte
+}
+
 func newDaxRequestFailure(codes []int, errorCode, message, requestId string, statusCode int) *daxRequestFailure {
 	return &daxRequestFailure{
 		RequestFailure: awserr.NewRequestFailure(awserr.New(errorCode, message, nil), statusCode, requestId),
@@ -43,8 +52,18 @@ func newDaxRequestFailure(codes []int, errorCode, message, requestId string, sta
 	}
 }
 
+func newDaxTransactionCanceledFailure(codes []int, errorCode, message, requestId string, statusCode int,
+	cancellationReasonCodes, cancellationReasonMsgs []string, cancellationReasonItems []byte) *daxTransactionCanceledFailure {
+	return &daxTransactionCanceledFailure{
+		daxRequestFailure:       *newDaxRequestFailure(codes, errorCode, message, requestId, statusCode),
+		cancellationReasonCodes: cancellationReasonCodes,
+		cancellationReasonMsgs:  cancellationReasonMsgs,
+		cancellationReasonItems: cancellationReasonItems,
+	}
+}
+
 func (f *daxRequestFailure) retryable() bool {
-	return len(f.codes) > 0 && (f.codes[0] == 1 || f.codes[0] == 2)
+	return len(f.codes) > 0 && (f.codes[0] == 1 || f.codes[0] == 2) || inferErrorCode(f.codes) == dynamodb.ErrCodeTransactionInProgressException
 }
 
 func (f *daxRequestFailure) recoverable() bool {
@@ -77,16 +96,16 @@ func translateError(err error) awserr.Error {
 }
 
 func decodeError(reader *cbor.Reader) (awserr.Error, error) {
-	len, err := reader.ReadArrayLength()
+	length, err := reader.ReadArrayLength()
 	if err != nil {
 		return nil, err
 	}
-	if len == 0 {
+	if length == 0 {
 		return nil, nil
 	}
 
-	codes := make([]int, len)
-	for i := 0; i < len; i++ {
+	codes := make([]int, length)
+	for i := 0; i < length; i++ {
 		codes[i], err = reader.ReadInt()
 		if err != nil {
 			return nil, err
@@ -100,6 +119,8 @@ func decodeError(reader *cbor.Reader) (awserr.Error, error) {
 
 	var requestId, errorCode string
 	var statusCode int
+	var cancellationReasonCodes, cancellationReasonMsgs []string
+	var cancellationReasonItems []byte
 	hdr, err := reader.PeekHeader()
 	if err != nil {
 		return nil, err
@@ -109,12 +130,12 @@ func decodeError(reader *cbor.Reader) (awserr.Error, error) {
 			return nil, err
 		}
 	} else {
-		len, err = reader.ReadArrayLength()
+		length, err = reader.ReadArrayLength()
 		if err != nil {
 			return nil, err
 		}
-		if len != 3 {
-			return nil, awserr.New(request.ErrCodeSerialization, fmt.Sprintf("expected 3 elements for error info, got %d", len), nil)
+		if (length < 3) || (length > 4) {
+			return nil, awserr.New(request.ErrCodeSerialization, fmt.Sprintf("expected 3 or 4 elements for error info, got %d", length), nil)
 		}
 		if hdr, err = reader.PeekHeader(); err != nil {
 			return nil, err
@@ -145,6 +166,54 @@ func decodeError(reader *cbor.Reader) (awserr.Error, error) {
 		} else if statusCode, err = reader.ReadInt(); err != nil {
 			return nil, err
 		}
+
+		if length == 4 {
+			arrLen, err := reader.ReadArrayLength()
+			if err != nil {
+				return nil, err
+			}
+			if arrLen%3 != 0 {
+				return nil, awserr.New(request.ErrCodeSerialization, "error found when parsing CancellationReasons", nil)
+			}
+			cancellationReasonsLen := arrLen / 3
+			cancellationReasonCodes = make([]string, cancellationReasonsLen)
+			cancellationReasonMsgs = make([]string, cancellationReasonsLen)
+			var itemsBuf bytes.Buffer
+			itemsWriter := bufio.NewWriter(&itemsBuf)
+			for i := 0; i < cancellationReasonsLen; i++ {
+				if consumed, err := consumeNil(reader); err != nil {
+					return nil, err
+				} else if !consumed {
+					cancellationReasonCodes[i], err = reader.ReadString()
+					if err != nil {
+						return nil, err
+					}
+				}
+				if consumed, err := consumeNil(reader); err != nil {
+					return nil, err
+				} else if !consumed {
+					cancellationReasonMsgs[i], err = reader.ReadString()
+					if err != nil {
+						return nil, err
+					}
+				}
+				if consumed, err := consumeNil(reader); err != nil {
+					return nil, err
+				} else if !consumed {
+					bytes, err := reader.ReadBytes()
+					if err != nil {
+						return nil, err
+					}
+					if _, err = itemsWriter.Write(bytes); err != nil {
+						return nil, err
+					}
+				}
+			}
+			if err = itemsWriter.Flush(); err != nil {
+				return nil, err
+			}
+			cancellationReasonItems = itemsBuf.Bytes()
+		}
 	}
 
 	if errorCode == "" {
@@ -154,6 +223,10 @@ func decodeError(reader *cbor.Reader) (awserr.Error, error) {
 		statusCode = inferStatusCode(codes)
 	}
 
+	if cancellationReasonCodes != nil && len(cancellationReasonCodes) > 0 {
+		return newDaxTransactionCanceledFailure(codes, errorCode, msg, requestId, statusCode,
+			cancellationReasonCodes, cancellationReasonMsgs, cancellationReasonItems), nil
+	}
 	return newDaxRequestFailure(codes, errorCode, msg, requestId, statusCode), nil
 }
 
@@ -193,6 +266,14 @@ func inferErrorCode(codes []int) string {
 						return dynamodb.ErrCodeItemCollectionSizeLimitExceededException
 					case 49:
 						return dynamodb.ErrCodeLimitExceededException
+					case 57:
+						return dynamodb.ErrCodeTransactionConflictException
+					case 58:
+						return dynamodb.ErrCodeTransactionCanceledException
+					case 59:
+						return dynamodb.ErrCodeTransactionInProgressException
+					case 60:
+						return dynamodb.ErrCodeIdempotentParameterMismatchException
 					}
 				}
 			case 44:

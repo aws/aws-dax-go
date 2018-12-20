@@ -18,6 +18,9 @@ package client
 import (
 	"bytes"
 	"fmt"
+	"sort"
+	"strings"
+
 	"github.com/aws/aws-dax-go/dax/internal/cbor"
 	"github.com/aws/aws-dax-go/dax/internal/lru"
 	"github.com/aws/aws-dax-go/dax/internal/parser"
@@ -25,8 +28,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"sort"
-	"strings"
+	"github.com/gofrs/uuid"
 )
 
 const daxServiceId = 1
@@ -42,14 +44,16 @@ const (
 	services_N1016793520_1_Id              = -1016793520
 
 	// DynamoDB Data
-	batchGetItem_N697851100_1_Id  = -697851100
-	batchWriteItem_116217951_1_Id = 116217951
-	getItem_263244906_1_Id        = 263244906
-	putItem_N2106490455_1_Id      = -2106490455
-	deleteItem_1013539361_1_Id    = 1013539361
-	updateItem_1425579023_1_Id    = 1425579023
-	query_N931250863_1_Id         = -931250863
-	scan_N1875390620_1_Id         = -1875390620
+	transactWriteItems_N1160037738_1_Id = -1160037738
+	transactGetItems_1866287579_1_Id    = 1866287579
+	batchGetItem_N697851100_1_Id        = -697851100
+	batchWriteItem_116217951_1_Id       = 116217951
+	getItem_263244906_1_Id              = 263244906
+	putItem_N2106490455_1_Id            = -2106490455
+	deleteItem_1013539361_1_Id          = 1013539361
+	updateItem_1425579023_1_Id          = 1425579023
+	query_N931250863_1_Id               = -931250863
+	scan_N1875390620_1_Id               = -1875390620
 
 	// DynamoDB Control
 	createTable_N313431286_1_Id    = -313431286
@@ -80,6 +84,7 @@ const (
 	requestParamSegment
 	requestParamTotalSegments
 	requestParamRequestItems
+	requestParamRequestItemsClientRequestToken
 )
 
 const (
@@ -106,6 +111,35 @@ const (
 	selectAllProjectedAttributes
 	selectCount
 	selectSpecificAttributes
+)
+
+const (
+	getOperation = iota + 1
+	putOperation
+	exchangeOperation
+	insertOperation
+	replaceOperation
+	updateOperation
+	deleteOperation
+	removeOperation
+	partialUpdateOperation
+	batchGetOperation
+	batchOperation
+	checkOperation
+	transactWriteOperation
+	transactGetOperation
+	scanOperation
+	queryOperation
+	createTableOperation
+	deleteTableOperation
+	describeTableOperation
+	listTablesOperation
+	updateTableOperation
+)
+
+const (
+	returnValueOnConditionCheckFailureNone = iota + 1
+	returnValueOnConditionCheckFailureAllOld
 )
 
 const maxWriteBatchSize = 25
@@ -504,6 +538,350 @@ func encodeBatchGetItemInput(ctx aws.Context, input *dynamodb.BatchGetItemInput,
 	return encodeItemOperationOptionalParams(nil, input.ReturnConsumedCapacity, nil, nil, nil, nil, nil, nil, nil, writer)
 }
 
+func encodeTransactWriteItemsInput(ctx aws.Context, input *dynamodb.TransactWriteItemsInput, keySchema *lru.Lru, attrNamesListToId *lru.Lru, writer *cbor.Writer) error {
+	if input == nil {
+		return awserr.New(request.ParamRequiredErrCode, "input cannot be nil", nil)
+	}
+	var err error
+	if err = input.Validate(); err != nil {
+		return err
+	}
+
+	if err = encodeServiceAndMethod(transactWriteItems_N1160037738_1_Id, writer); err != nil {
+		return err
+	}
+
+	var operationsBuf, tableNamesBuf, keysBuf, valuesBuf, conditionExpressionsBuf,
+		updateExpressionsBuf, rvOnConditionCheckFailureBuf bytes.Buffer
+	operationWriter := cbor.NewWriter(&operationsBuf)
+	tableNamesWriter := cbor.NewWriter(&tableNamesBuf)
+	keysWriter := cbor.NewWriter(&keysBuf)
+	valuesWriter := cbor.NewWriter(&valuesBuf)
+	conditionExpressionsWriter := cbor.NewWriter(&conditionExpressionsBuf)
+	updateExpressionsWriter := cbor.NewWriter(&updateExpressionsBuf)
+	rvOnConditionCheckFailureWriter := cbor.NewWriter(&rvOnConditionCheckFailureBuf)
+
+	len := len(input.TransactItems)
+	if err = operationWriter.WriteArrayHeader(len); err != nil {
+		return err
+	}
+	if err = tableNamesWriter.WriteArrayHeader(len); err != nil {
+		return err
+	}
+	if err = keysWriter.WriteArrayHeader(len); err != nil {
+		return err
+	}
+	if err = valuesWriter.WriteArrayHeader(len); err != nil {
+		return err
+	}
+	if err = conditionExpressionsWriter.WriteArrayHeader(len); err != nil {
+		return err
+	}
+	if err = updateExpressionsWriter.WriteArrayHeader(len); err != nil {
+		return err
+	}
+	if err = rvOnConditionCheckFailureWriter.WriteArrayHeader(len); err != nil {
+		return err
+	}
+
+	defer func() {
+		operationWriter.Close()
+		tableNamesWriter.Close()
+		keysWriter.Close()
+		valuesWriter.Close()
+		conditionExpressionsWriter.Close()
+		updateExpressionsWriter.Close()
+		rvOnConditionCheckFailureWriter.Close()
+	}()
+
+	tableKeySet := make(map[string]bool)
+	for _, twi := range input.TransactItems {
+		var operation int
+		var tableName *string
+		var item map[string]*dynamodb.AttributeValue
+		var conditionExpression *string
+		var updateExpression *string
+		var expressionAttributeNames map[string]*string
+		var expressionAttributeValues map[string]*dynamodb.AttributeValue
+		var rvOnConditionCheckFailure *string
+		opCount := 0
+		if check := twi.ConditionCheck; check != nil {
+			opCount++
+			operation = checkOperation
+			conditionExpression = check.ConditionExpression
+			expressionAttributeNames = check.ExpressionAttributeNames
+			expressionAttributeValues = check.ExpressionAttributeValues
+			tableName = check.TableName
+			item = check.Key
+			rvOnConditionCheckFailure = check.ReturnValuesOnConditionCheckFailure
+		}
+		if delete := twi.Delete; delete != nil {
+			opCount++
+			operation = deleteOperation
+			conditionExpression = delete.ConditionExpression
+			expressionAttributeNames = delete.ExpressionAttributeNames
+			expressionAttributeValues = delete.ExpressionAttributeValues
+			tableName = delete.TableName
+			item = delete.Key
+			rvOnConditionCheckFailure = delete.ReturnValuesOnConditionCheckFailure
+		}
+		if put := twi.Put; put != nil {
+			opCount++
+			operation = putOperation
+			conditionExpression = put.ConditionExpression
+			expressionAttributeNames = put.ExpressionAttributeNames
+			expressionAttributeValues = put.ExpressionAttributeValues
+			tableName = put.TableName
+			item = put.Item
+			rvOnConditionCheckFailure = put.ReturnValuesOnConditionCheckFailure
+		}
+		if update := twi.Update; update != nil {
+			opCount++
+			operation = partialUpdateOperation
+			conditionExpression = update.ConditionExpression
+			expressionAttributeNames = update.ExpressionAttributeNames
+			expressionAttributeValues = update.ExpressionAttributeValues
+			tableName = update.TableName
+			item = update.Key
+			updateExpression = update.UpdateExpression
+			rvOnConditionCheckFailure = update.ReturnValuesOnConditionCheckFailure
+		}
+		if opCount == 0 {
+			return awserr.New(request.ParamRequiredErrCode, "Invalid Request: TransactWriteItemsInput should contain Delete or Put or Update request", nil)
+		}
+		if opCount > 1 {
+			return awserr.New(request.ParamRequiredErrCode, "TransactItems can only contain one of ConditionalCheck, Put, Update or Delete", nil)
+		}
+
+		if err := operationWriter.WriteInt(operation); err != nil {
+			return err
+		}
+		if err := tableNamesWriter.WriteBytes([]byte(*tableName)); err != nil {
+			return err
+		}
+
+		keydef, err := getKeySchema(ctx, keySchema, *tableName)
+		if err != nil {
+			return nil
+		}
+
+		// Check if duplicate [key, tableName] pair exists
+		keyBytes, err := cbor.GetEncodedItemKey(item, keydef)
+		if err != nil {
+			return err
+		}
+		keyBytes = append(keyBytes, []byte(*tableName)...)
+		tableKey := string(keyBytes)
+		_, ok := tableKeySet[tableKey]
+		if ok {
+			return awserr.New(request.ParamRequiredErrCode, "Transaction request cannot include multiple operations on one item", nil)
+		} else {
+			tableKeySet[tableKey] = true
+		}
+
+		if err := cbor.EncodeItemKey(item, keydef, keysWriter); err != nil {
+			return err
+		}
+		switch operation {
+		case checkOperation, deleteOperation, partialUpdateOperation:
+			if err := valuesWriter.WriteNull(); err != nil {
+				return err
+			}
+		case putOperation:
+			if err := encodeNonKeyAttributes(ctx, item, keydef, attrNamesListToId, valuesWriter); err != nil {
+				return err
+			}
+		}
+
+		encoded, err := parseExpressions(conditionExpression, updateExpression, nil, expressionAttributeNames, expressionAttributeValues)
+		if err != nil {
+			return err
+		}
+		if parsedConditionExpr := encoded[parser.ConditionExpr]; parsedConditionExpr != nil {
+			if err := conditionExpressionsWriter.WriteBytes(parsedConditionExpr); err != nil {
+				return err
+			}
+		} else {
+			if err := conditionExpressionsWriter.WriteNull(); err != nil {
+				return err
+			}
+		}
+
+		if parsedUpdateExpr := encoded[parser.UpdateExpr]; parsedUpdateExpr != nil {
+			if err := updateExpressionsWriter.WriteBytes(parsedUpdateExpr); err != nil {
+				return err
+			}
+		} else {
+			if err := updateExpressionsWriter.WriteNull(); err != nil {
+				return err
+			}
+		}
+
+		if rvOnConditionCheckFailure != nil && *rvOnConditionCheckFailure == dynamodb.ReturnValuesOnConditionCheckFailureAllOld {
+			if err := rvOnConditionCheckFailureWriter.WriteInt(returnValueOnConditionCheckFailureAllOld); err != nil {
+				return err
+			}
+		} else {
+			if err := rvOnConditionCheckFailureWriter.WriteInt(returnValueOnConditionCheckFailureNone); err != nil {
+				return err
+			}
+		}
+	}
+
+	if err := operationWriter.Flush(); err != nil {
+		return err
+	}
+	if err := writer.Write(operationsBuf.Bytes()); err != nil {
+		return err
+	}
+	if err := tableNamesWriter.Flush(); err != nil {
+		return err
+	}
+	if err := writer.Write(tableNamesBuf.Bytes()); err != nil {
+		return err
+	}
+	if err := keysWriter.Flush(); err != nil {
+		return err
+	}
+	if err := writer.Write(keysBuf.Bytes()); err != nil {
+		return err
+	}
+	if err := valuesWriter.Flush(); err != nil {
+		return err
+	}
+	if err := writer.Write(valuesBuf.Bytes()); err != nil {
+		return err
+	}
+	// Write null for returnValues
+	if err := writer.WriteNull(); err != nil {
+		return err
+	}
+	if err := rvOnConditionCheckFailureWriter.Flush(); err != nil {
+		return err
+	}
+	if err := writer.Write(rvOnConditionCheckFailureBuf.Bytes()); err != nil {
+		return err
+	}
+	if err := conditionExpressionsWriter.Flush(); err != nil {
+		return err
+	}
+	if err := writer.Write(conditionExpressionsBuf.Bytes()); err != nil {
+		return err
+	}
+	if err := updateExpressionsWriter.Flush(); err != nil {
+		return err
+	}
+	if err := writer.Write(updateExpressionsBuf.Bytes()); err != nil {
+		return err
+	}
+
+	if input.ClientRequestToken == nil {
+		id, err := uuid.NewV4()
+		if err != nil {
+			return err
+		}
+		input.ClientRequestToken = aws.String(id.String())
+	}
+	return encodeItemOperationOptionalParamsWithToken(nil, input.ReturnConsumedCapacity, input.ReturnItemCollectionMetrics, nil, nil, nil, nil, nil, nil, input.ClientRequestToken, writer)
+}
+
+func encodeTransactGetItemsInput(ctx aws.Context, input *dynamodb.TransactGetItemsInput, keySchema *lru.Lru, writer *cbor.Writer) error {
+	if input == nil {
+		return awserr.New(request.ParamRequiredErrCode, "input cannot be nil", nil)
+	}
+	var err error
+	if err = input.Validate(); err != nil {
+		return err
+	}
+
+	if err = encodeServiceAndMethod(transactGetItems_1866287579_1_Id, writer); err != nil {
+		return err
+	}
+
+	var tableNamesBuf, keysBuf, projectionExpressionsBuf bytes.Buffer
+	tableNamesWriter := cbor.NewWriter(&tableNamesBuf)
+	keysWriter := cbor.NewWriter(&keysBuf)
+	projectionExpressionsWriter := cbor.NewWriter(&projectionExpressionsBuf)
+
+	len := len(input.TransactItems)
+	if err = tableNamesWriter.WriteArrayHeader(len); err != nil {
+		return err
+	}
+	if err = keysWriter.WriteArrayHeader(len); err != nil {
+		return err
+	}
+	if err = projectionExpressionsWriter.WriteArrayHeader(len); err != nil {
+		return err
+	}
+
+	defer func() {
+		tableNamesWriter.Close()
+		keysWriter.Close()
+		projectionExpressionsWriter.Close()
+	}()
+
+	for _, tgi := range input.TransactItems {
+		var tableName *string
+		var key map[string]*dynamodb.AttributeValue
+		var projectionExpression *string
+		var expressionAttributeNames map[string]*string
+		get := tgi.Get
+		tableName = get.TableName
+		key = get.Key
+		expressionAttributeNames = get.ExpressionAttributeNames
+		projectionExpression = get.ProjectionExpression
+
+		if err := tableNamesWriter.WriteBytes([]byte(*tableName)); err != nil {
+			return err
+		}
+
+		keydef, err := getKeySchema(ctx, keySchema, *tableName)
+		if err != nil {
+			return nil
+		}
+
+		if err := cbor.EncodeItemKey(key, keydef, keysWriter); err != nil {
+			return err
+		}
+
+		encoded, err := parseExpressions(nil, nil, projectionExpression, expressionAttributeNames, nil)
+		if err != nil {
+			return err
+		}
+
+		if parsedProjectionExpr := encoded[parser.ProjectionExpr]; parsedProjectionExpr != nil {
+			if err := projectionExpressionsWriter.WriteBytes(parsedProjectionExpr); err != nil {
+				return err
+			}
+		} else {
+			if err := projectionExpressionsWriter.WriteNull(); err != nil {
+				return err
+			}
+		}
+	}
+
+	if err := tableNamesWriter.Flush(); err != nil {
+		return err
+	}
+	if err := writer.Write(tableNamesBuf.Bytes()); err != nil {
+		return err
+	}
+	if err := keysWriter.Flush(); err != nil {
+		return err
+	}
+	if err := writer.Write(keysBuf.Bytes()); err != nil {
+		return err
+	}
+	if err := projectionExpressionsWriter.Flush(); err != nil {
+		return err
+	}
+	if err := writer.Write(projectionExpressionsBuf.Bytes()); err != nil {
+		return err
+	}
+
+	return encodeItemOperationOptionalParams(nil, input.ReturnConsumedCapacity, nil, nil, nil, nil, nil, nil, nil, writer)
+}
+
 func encodeCompoundKey(key map[string]*dynamodb.AttributeValue, writer *cbor.Writer) error {
 	var buf bytes.Buffer
 	w := cbor.NewWriter(&buf)
@@ -663,8 +1041,8 @@ func encodeScanQueryOptionalParams(ctx aws.Context, index, selection, returnCons
 	return writer.WriteStreamBreak()
 }
 
-func encodeItemOperationOptionalParams(returnValues, returnConsumedCapacity, returnItemCollectionMetrics *string, consistentRead *bool,
-	projectionExp, conditionalExpr, updateExpr *string, exprAttrNames map[string]*string, exprAttrValues map[string]*dynamodb.AttributeValue, writer *cbor.Writer) error {
+func encodeItemOperationOptionalParamsWithToken(returnValues, returnConsumedCapacity, returnItemCollectionMetrics *string, consistentRead *bool,
+	projectionExp, conditionalExpr, updateExpr *string, exprAttrNames map[string]*string, exprAttrValues map[string]*dynamodb.AttributeValue, clientRequestToken *string, writer *cbor.Writer) error {
 	if err := writer.WriteMapStreamHeader(); err != nil {
 		return err
 	}
@@ -706,21 +1084,11 @@ func encodeItemOperationOptionalParams(returnValues, returnConsumedCapacity, ret
 	}
 
 	if conditionalExpr != nil || updateExpr != nil || projectionExp != nil {
-		expressions := make(map[int]string)
-		if conditionalExpr != nil {
-			expressions[parser.ConditionExpr] = *conditionalExpr
-		}
-		if updateExpr != nil {
-			expressions[parser.UpdateExpr] = *updateExpr
-		}
-		if projectionExp != nil {
-			expressions[parser.ProjectionExpr] = *projectionExp
-		}
-		encoder := parser.NewExpressionEncoder(expressions, exprAttrNames, exprAttrValues)
-		if _, err := encoder.Parse(); err != nil {
+		encoded, err := parseExpressions(conditionalExpr, updateExpr, projectionExp, exprAttrNames, exprAttrValues)
+		if err != nil {
 			return err
 		}
-		for k := range expressions {
+		for k := range encoded {
 			var e int
 			switch k {
 			case parser.ConditionExpr:
@@ -732,20 +1100,50 @@ func encodeItemOperationOptionalParams(returnValues, returnConsumedCapacity, ret
 			default:
 				continue
 			}
-			var buf bytes.Buffer
-			if err := encoder.Write(k, &buf); err != nil {
-				return nil
-			}
 			if err := writer.WriteInt(e); err != nil {
 				return err
 			}
-			if err := writer.WriteBytes(buf.Bytes()); err != nil {
+			if err := writer.WriteBytes(encoded[k]); err != nil {
 				return err
 			}
 		}
 	}
 
+	if clientRequestToken != nil {
+		if err := writer.WriteInt(requestParamRequestItemsClientRequestToken); err != nil {
+			return err
+		}
+		if err := writer.WriteString(*clientRequestToken); err != nil {
+			return err
+		}
+	}
+
 	return writer.WriteStreamBreak()
+}
+
+func encodeItemOperationOptionalParams(returnValues, returnConsumedCapacity, returnItemCollectionMetrics *string, consistentRead *bool,
+	projectionExp, conditionalExpr, updateExpr *string, exprAttrNames map[string]*string, exprAttrValues map[string]*dynamodb.AttributeValue, writer *cbor.Writer) error {
+	return encodeItemOperationOptionalParamsWithToken(returnValues, returnConsumedCapacity, returnItemCollectionMetrics, consistentRead,
+		projectionExp, conditionalExpr, updateExpr, exprAttrNames, exprAttrValues, nil, writer)
+}
+
+func parseExpressions(conditionalExpr, updateExpr, projectionExp *string, exprAttrNames map[string]*string, exprAttrValues map[string]*dynamodb.AttributeValue) (map[int][]byte, error) {
+	expressions := make(map[int]string)
+	if conditionalExpr != nil {
+		expressions[parser.ConditionExpr] = *conditionalExpr
+	}
+	if updateExpr != nil {
+		expressions[parser.UpdateExpr] = *updateExpr
+	}
+	if projectionExp != nil {
+		expressions[parser.ProjectionExpr] = *projectionExp
+	}
+	encoder := parser.NewExpressionEncoder(expressions, exprAttrNames, exprAttrValues)
+	encoded, err := encoder.Parse()
+	if err != nil {
+		return nil, err
+	}
+	return encoded, nil
 }
 
 func encodeServiceAndMethod(method int, writer *cbor.Writer) error {

@@ -231,6 +231,58 @@ func (d *Dax) BatchGetItemRequest(input *dynamodb.BatchGetItemInput) (*request.R
 	return req, output
 }
 
+func (d *Dax) TransactWriteItems(input *dynamodb.TransactWriteItemsInput) (*dynamodb.TransactWriteItemsOutput, error) {
+	return d.TransactWriteItemsWithContext(nil, input)
+}
+
+func (d *Dax) TransactWriteItemsWithContext(ctx aws.Context, input *dynamodb.TransactWriteItemsInput, opts ...request.Option) (*dynamodb.TransactWriteItemsOutput, error) {
+	o, cfn, err := d.config.requestOptions(false, ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+	if cfn != nil {
+		defer cfn()
+	}
+	return d.client.TransactWriteItemsWithOptions(input, &dynamodb.TransactWriteItemsOutput{}, o)
+}
+
+func (d *Dax) TransactWriteItemsRequest(input *dynamodb.TransactWriteItemsInput) (*request.Request, *dynamodb.TransactWriteItemsOutput) {
+	op := &request.Operation{Name: client.OpTransactWriteItems}
+	if input == nil {
+		input = &dynamodb.TransactWriteItemsInput{}
+	}
+	output := &dynamodb.TransactWriteItemsOutput{}
+	opt := client.RequestOptions{Context: aws.BackgroundContext()}
+	req := d.client.NewDaxRequest(op, input, output, opt)
+	return req, output
+}
+
+func (d *Dax) TransactGetItems(input *dynamodb.TransactGetItemsInput) (*dynamodb.TransactGetItemsOutput, error) {
+	return d.TransactGetItemsWithContext(nil, input)
+}
+
+func (d *Dax) TransactGetItemsWithContext(ctx aws.Context, input *dynamodb.TransactGetItemsInput, opts ...request.Option) (*dynamodb.TransactGetItemsOutput, error) {
+	o, cfn, err := d.config.requestOptions(false, ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+	if cfn != nil {
+		defer cfn()
+	}
+	return d.client.TransactGetItemsWithOptions(input, &dynamodb.TransactGetItemsOutput{}, o)
+}
+
+func (d *Dax) TransactGetItemsRequest(input *dynamodb.TransactGetItemsInput) (*request.Request, *dynamodb.TransactGetItemsOutput) {
+	op := &request.Operation{Name: client.OpTransactGetItems}
+	if input == nil {
+		input = &dynamodb.TransactGetItemsInput{}
+	}
+	output := &dynamodb.TransactGetItemsOutput{}
+	opt := client.RequestOptions{Context: aws.BackgroundContext()}
+	req := d.client.NewDaxRequest(op, input, output, opt)
+	return req, output
+}
+
 func (d *Dax) BatchGetItemPages(*dynamodb.BatchGetItemInput, func(*dynamodb.BatchGetItemOutput, bool) bool) error {
 	return d.unImpl()
 }

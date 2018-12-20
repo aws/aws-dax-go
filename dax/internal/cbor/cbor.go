@@ -334,6 +334,17 @@ func (r *Reader) ReadMapLength() (int, error) {
 	return int(value), err
 }
 
+func (r *Reader) ReadBytesLength() (int, error) {
+	hdr, value, err := r.readTypeHeader()
+	if err != nil {
+		return 0, err
+	}
+	if err = r.verifyMajorType(hdr, Bytes); err != nil {
+		return 0, err
+	}
+	return int(value), err
+}
+
 func (r *Reader) ReadArrayLength() (int, error) {
 	hdr, value, err := r.readTypeHeader()
 	if err != nil {

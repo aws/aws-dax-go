@@ -29,14 +29,22 @@ import (
 var ErrMissingKey = awserr.New(request.ParamRequiredErrCode, "One of the required keys was not given a value", nil)
 
 func EncodeItemKey(item map[string]*dynamodb.AttributeValue, keydef []dynamodb.AttributeDefinition, writer *Writer) error {
+	keyBytes, err := GetEncodedItemKey(item, keydef)
+	if err != nil {
+		return err
+	}
+	return writer.WriteBytes(keyBytes)
+}
+
+func GetEncodedItemKey(item map[string]*dynamodb.AttributeValue, keydef []dynamodb.AttributeDefinition) ([]byte, error) {
 	if item == nil {
-		return awserr.New(request.InvalidParameterErrCode, "item cannot be nil", nil)
+		return nil, awserr.New(request.InvalidParameterErrCode, "item cannot be nil", nil)
 	}
 
 	hk := keydef[0]
 	hkval, ok := item[*hk.AttributeName]
 	if !ok {
-		return ErrMissingKey
+		return nil, ErrMissingKey
 	}
 
 	var buf bytes.Buffer
@@ -48,102 +56,102 @@ func EncodeItemKey(item map[string]*dynamodb.AttributeValue, keydef []dynamodb.A
 		case dynamodb.ScalarAttributeTypeS:
 			sp := hkval.S
 			if sp == nil {
-				return ErrMissingKey
+				return nil, ErrMissingKey
 			}
 			if err := w.Write([]byte(*sp)); err != nil {
-				return err
+				return nil, err
 			}
 		case dynamodb.ScalarAttributeTypeN:
 			if hkval.N == nil {
-				return ErrMissingKey
+				return nil, ErrMissingKey
 			}
 			if err := EncodeAttributeValue(hkval, w); err != nil {
-				return err
+				return nil, err
 			}
 		case dynamodb.ScalarAttributeTypeB:
 			b := hkval.B
 			if b == nil {
-				return ErrMissingKey
+				return nil, ErrMissingKey
 			}
 			if err := w.Write(b); err != nil {
-				return err
+				return nil, err
 			}
 		default:
-			return awserr.New(request.InvalidParameterErrCode, fmt.Sprintf("Unsupported KeyType encountered in Hash Attribute: "+*hk.AttributeType), nil)
+			return nil, awserr.New(request.InvalidParameterErrCode, fmt.Sprintf("Unsupported KeyType encountered in Hash Attribute: "+*hk.AttributeType), nil)
 		}
 	} else {
 		switch *hk.AttributeType {
 		case dynamodb.ScalarAttributeTypeS:
 			sp := hkval.S
 			if sp == nil {
-				return ErrMissingKey
+				return nil, ErrMissingKey
 			}
 			if err := w.WriteString(*sp); err != nil {
-				return err
+				return nil, err
 			}
 		case dynamodb.ScalarAttributeTypeN:
 			if hkval.N == nil {
-				return ErrMissingKey
+				return nil, ErrMissingKey
 			}
 			if err := EncodeAttributeValue(hkval, w); err != nil {
-				return err
+				return nil, err
 			}
 		case dynamodb.ScalarAttributeTypeB:
 			b := hkval.B
 			if b == nil {
-				return ErrMissingKey
+				return nil, ErrMissingKey
 			}
 			if err := w.WriteBytes(b); err != nil {
-				return err
+				return nil, err
 			}
 		default:
-			return awserr.New(request.InvalidParameterErrCode, fmt.Sprintf("Unsupported KeyType encountered in Hash Attribute: "+*hk.AttributeType), nil)
+			return nil, awserr.New(request.InvalidParameterErrCode, fmt.Sprintf("Unsupported KeyType encountered in Hash Attribute: "+*hk.AttributeType), nil)
 		}
 
 		rk := keydef[1]
 		rkval, ok := item[*rk.AttributeName]
 		if !ok {
-			return ErrMissingKey
+			return nil, ErrMissingKey
 		}
 		switch *rk.AttributeType {
 		case dynamodb.ScalarAttributeTypeS:
 			sp := rkval.S
 			if sp == nil {
-				return ErrMissingKey
+				return nil, ErrMissingKey
 			}
 			if err := w.Write([]byte(*sp)); err != nil {
-				return err
+				return nil, err
 			}
 		case dynamodb.ScalarAttributeTypeN:
 			n := rkval.N
 			if n == nil {
-				return ErrMissingKey
+				return nil, ErrMissingKey
 			}
 			d := new(Decimal)
 			d, ok := d.SetString(*n)
 			if !ok {
-				return awserr.New(request.InvalidParameterErrCode, fmt.Sprintf("invalid number "+*n), nil)
+				return nil, awserr.New(request.InvalidParameterErrCode, fmt.Sprintf("invalid number "+*n), nil)
 			}
 			if _, err := EncodeLexDecimal(d, w.bw); err != nil {
-				return err
+				return nil, err
 			}
 		case dynamodb.ScalarAttributeTypeB:
 			b := rkval.B
 			if b == nil {
-				return ErrMissingKey
+				return nil, ErrMissingKey
 			}
 			if err := w.Write(b); err != nil {
-				return err
+				return nil, err
 			}
 		default:
-			return awserr.New(request.InvalidParameterErrCode, fmt.Sprintf("Unsupported KeyType encountered in Range Attribute: "+*rk.AttributeType), nil)
+			return nil, awserr.New(request.InvalidParameterErrCode, fmt.Sprintf("Unsupported KeyType encountered in Range Attribute: "+*rk.AttributeType), nil)
 		}
 	}
 
 	if err := w.Flush(); err != nil {
-		return err
+		return nil, err
 	}
-	return writer.WriteBytes(buf.Bytes())
+	return buf.Bytes(), nil
 }
 
 func DecodeItemKey(reader *Reader, keydef []dynamodb.AttributeDefinition) (map[string]*dynamodb.AttributeValue, error) {
