@@ -262,7 +262,7 @@ func (d *Dax) TransactGetItems(input *dynamodb.TransactGetItemsInput) (*dynamodb
 }
 
 func (d *Dax) TransactGetItemsWithContext(ctx aws.Context, input *dynamodb.TransactGetItemsInput, opts ...request.Option) (*dynamodb.TransactGetItemsOutput, error) {
-	o, cfn, err := d.config.requestOptions(false, ctx, opts...)
+	o, cfn, err := d.config.requestOptions(true, ctx, opts...)
 	if err != nil {
 		return nil, err
 	}

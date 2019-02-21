@@ -596,6 +596,9 @@ func encodeTransactWriteItemsInput(ctx aws.Context, input *dynamodb.TransactWrit
 
 	tableKeySet := make(map[string]bool)
 	for _, twi := range input.TransactItems {
+		if twi == nil {
+			return awserr.New(request.ParamRequiredErrCode, "TransactWriteItem cannot be nil", nil)
+		}
 		var operation int
 		var tableName *string
 		var item map[string]*dynamodb.AttributeValue
@@ -821,6 +824,9 @@ func encodeTransactGetItemsInput(ctx aws.Context, input *dynamodb.TransactGetIte
 	}()
 
 	for _, tgi := range input.TransactItems {
+		if tgi == nil {
+			return awserr.New(request.ParamRequiredErrCode, "TransactGetItem cannot be nil", nil)
+		}
 		var tableName *string
 		var key map[string]*dynamodb.AttributeValue
 		var projectionExpression *string
@@ -837,7 +843,7 @@ func encodeTransactGetItemsInput(ctx aws.Context, input *dynamodb.TransactGetIte
 
 		keydef, err := getKeySchema(ctx, keySchema, *tableName)
 		if err != nil {
-			return nil
+			return err
 		}
 
 		if err := cbor.EncodeItemKey(key, keydef, keysWriter); err != nil {
