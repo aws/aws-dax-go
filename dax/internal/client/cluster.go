@@ -18,12 +18,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/defaults"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"io"
 	"math/rand"
 	"net"
@@ -31,6 +25,13 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/defaults"
+	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
 type serviceEndpoint struct {
@@ -291,14 +292,31 @@ func (cc *ClusterDaxClient) send(req *request.Request) {
 
 func (cc *ClusterDaxClient) retry(op string, action func(client DaxAPI, o RequestOptions) error, opt RequestOptions) error {
 	ctx := cc.newContext(opt)
-	attempts := opt.MaxRetries + 1
+
+	var sleepFun func() error
+	if opt.RetryDelay > 0 {
+		retryDelay := opt.RetryDelay
+		if opt.SleepDelayFn == nil {
+			sleepFun = func() error {
+				return aws.SleepWithContext(ctx, retryDelay)
+			}
+		} else {
+			sleepFun = func() error {
+				opt.SleepDelayFn(retryDelay)
+				return nil
+			}
+		}
+	}
+
+	attempts := opt.MaxRetries
 	opt.MaxRetries = 0 // disable retries on single node client
 
 	var err error
 	var client DaxAPI
-	for i := 0; i < attempts; i++ {
+	// Start from 0 to accomodate for the initial request
+	for i := 0; i <= attempts; i++ {
 		if i > 0 && opt.Logger != nil && opt.LogLevel.Matches(aws.LogDebugWithRequestRetries) {
-			opt.Logger.Log(fmt.Sprintf("DEBUG: Retrying Request %s/%s, attempt %d", service, op, i+1))
+			opt.Logger.Log(fmt.Sprintf("DEBUG: Retrying Request %s/%s, attempt %d", service, op, i))
 		}
 		client, err = cc.cluster.client(client)
 		if err != nil && !cc.retryable(err) {
@@ -312,11 +330,9 @@ func (cc *ClusterDaxClient) retry(op string, action func(client DaxAPI, o Reques
 				return err
 			}
 		}
-		d := opt.RetryDelay
-		if d > 0 {
-			if s := opt.SleepDelayFn; s != nil {
-				s(d)
-			} else if err = aws.SleepWithContext(ctx, d); err != nil {
+
+		if i != attempts && sleepFun != nil {
+			if err := sleepFun(); err != nil {
 				return awserr.New(request.CanceledErrorCode, "request context canceled", err)
 			}
 		}

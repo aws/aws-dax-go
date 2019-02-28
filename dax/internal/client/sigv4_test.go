@@ -17,9 +17,10 @@ package client
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws/credentials"
 	"testing"
 	"time"
+
+	"github.com/aws/aws-sdk-go/aws/credentials"
 )
 
 func TestSigV4(t *testing.T) {
@@ -40,7 +41,12 @@ func TestSigV4(t *testing.T) {
 	}
 
 	// repeat with session token
-	creds = credentials.Value{"ak", "sk", "st", ""}
+	creds = credentials.Value{
+		AccessKeyID:     "ak",
+		SecretAccessKey: "sk",
+		SessionToken:    "st",
+		ProviderName:    "",
+	}
 	actualStringToSign, actualSignature = generateSigV4WithTime(creds, endpoint, region, payload, time)
 	if actualStringToSign != stringToSign {
 		t.Errorf("expected %v, got %v", stringToSign, actualStringToSign)

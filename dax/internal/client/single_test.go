@@ -1,19 +1,21 @@
 package client
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"github.com/aws/aws-dax-go/dax/internal/cbor"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/request"
 	"net"
 	"reflect"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/aws/aws-dax-go/dax/internal/cbor"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/request"
 )
 
 func TestExecuteErrorHandling(t *testing.T) {
@@ -93,6 +95,195 @@ func TestExecuteErrorHandling(t *testing.T) {
 			t.Errorf("expected %v calls, got %v", c.ec, c.conn.cc)
 		}
 		cli.Close()
+	}
+}
+
+func TestRetryPropogatesContextError(t *testing.T) {
+	client, clientErr := newSingleClientWithOptions(":9121", "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1)
+	defer client.Close()
+	if clientErr != nil {
+		t.Fatalf("unexpected error %v", clientErr)
+	}
+
+	client.pool.connectFn = func(a, n string) (net.Conn, error) {
+		return &mockConn{rd: []byte{cbor.Array + 0}}, nil
+	}
+	client.pool.closeTubeImmediately = true
+
+	ctx, cancel := context.WithCancel(aws.BackgroundContext())
+	requestOptions := RequestOptions{
+		MaxRetries: 2,
+		Context:    ctx,
+	}
+
+	writer := func(writer *cbor.Writer) error { return nil }
+	reader := func(reader *cbor.Reader) error { return nil }
+
+	// Cancel context to fail the execution
+	cancel()
+	err := client.executeWithRetries(OpGetItem, requestOptions, writer, reader)
+
+	// Context related error should be returned
+	awsError, ok := err.(awserr.Error)
+	if !ok {
+		t.Fatal("Error type is not awserr.Error")
+	}
+
+	if awsError.Code() != request.CanceledErrorCode || awsError.OrigErr() != context.Canceled {
+		t.Errorf("aws error doesn't match expected. %v", awsError)
+	}
+}
+
+func TestRetryPropogatesOtherErrors(t *testing.T) {
+	client, clientErr := newSingleClientWithOptions(":9121", "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1)
+	defer client.Close()
+	if clientErr != nil {
+		t.Fatalf("unexpected error %v", clientErr)
+	}
+
+	client.pool.connectFn = func(a, n string) (net.Conn, error) {
+		return &mockConn{rd: []byte{cbor.Array + 0}}, nil
+	}
+	client.pool.closeTubeImmediately = true
+
+	requestOptions := RequestOptions{
+		MaxRetries: 1,
+	}
+	expectedError := errors.New("IO")
+
+	writer := func(writer *cbor.Writer) error { return nil }
+	reader := func(reader *cbor.Reader) error { return errors.New("IO") }
+
+	err := client.executeWithRetries(OpGetItem, requestOptions, writer, reader)
+
+	// IO error should be returned
+	awsError, ok := err.(awserr.Error)
+	if !ok {
+		t.Fatal("Error type is not awserr.Error")
+	}
+
+	if awsError.OrigErr() == nil {
+		t.Fatal("Original error is empty")
+	}
+
+	if awsError.Code() != "UnknownError" || awsError.OrigErr().Error() != expectedError.Error() {
+		t.Errorf("aws error doesn't match expected. %v", awsError)
+	}
+}
+
+func TestRetryPropogatesOtherErrorsWithDelay(t *testing.T) {
+	client, clientErr := newSingleClientWithOptions(":9121", "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1)
+	defer client.Close()
+	if clientErr != nil {
+		t.Fatalf("unexpected error %v", clientErr)
+	}
+
+	client.pool.connectFn = func(a, n string) (net.Conn, error) {
+		return &mockConn{rd: []byte{cbor.Array + 0}}, nil
+	}
+	client.pool.closeTubeImmediately = true
+
+	requestOptions := RequestOptions{
+		MaxRetries: 1,
+		RetryDelay: 1,
+	}
+	expectedError := errors.New("IO")
+
+	writer := func(writer *cbor.Writer) error { return nil }
+	reader := func(reader *cbor.Reader) error { return expectedError }
+
+	err := client.executeWithRetries(OpGetItem, requestOptions, writer, reader)
+
+	// IO error should be returned
+	awsError, ok := err.(awserr.Error)
+	if !ok {
+		t.Fatal("Error type is not awserr.Error")
+	}
+
+	if awsError.OrigErr() == nil {
+		t.Fatal("Original error is empty")
+	}
+
+	if awsError.Code() != "UnknownError" || awsError.OrigErr().Error() != expectedError.Error() {
+		t.Errorf("aws error doesn't match expected. %v", awsError)
+	}
+}
+
+func TestRetrySleepCycleCount(t *testing.T) {
+	client, clientErr := newSingleClientWithOptions(":9121", "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1)
+	defer client.Close()
+	if clientErr != nil {
+		t.Fatalf("unexpected error %v", clientErr)
+	}
+
+	client.pool.connectFn = func(a, n string) (net.Conn, error) {
+		return &mockConn{rd: []byte{cbor.Array + 0}}, nil
+	}
+	client.pool.closeTubeImmediately = true
+
+	sleepCallCount := 0
+	requestOptions := RequestOptions{
+		MaxRetries:   0,
+		RetryDelay:   0,
+		SleepDelayFn: func(d time.Duration) { sleepCallCount++ },
+	}
+
+	writer := func(writer *cbor.Writer) error { return nil }
+	reader := func(reader *cbor.Reader) error { return errors.New("IO") }
+	client.executeWithRetries(OpGetItem, requestOptions, writer, reader)
+
+	if sleepCallCount != 0 {
+		t.Fatalf("Sleep was called %d times, but expected none", sleepCallCount)
+	}
+
+	requestOptions.MaxRetries = 3
+	requestOptions.RetryDelay = 1
+	client.executeWithRetries(OpGetItem, requestOptions, writer, reader)
+
+	if sleepCallCount != requestOptions.MaxRetries {
+		t.Fatalf("Sleep was called %d times, but expected %d", sleepCallCount, requestOptions.MaxRetries)
+	}
+}
+
+func TestRetryLastError(t *testing.T) {
+	client, clientErr := newSingleClientWithOptions(":9121", "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1)
+	defer client.Close()
+	if clientErr != nil {
+		t.Fatalf("unexpected error %v", clientErr)
+	}
+
+	client.pool.connectFn = func(a, n string) (net.Conn, error) {
+		return &mockConn{rd: []byte{cbor.Array + 0}}, nil
+	}
+	client.pool.closeTubeImmediately = true
+
+	var sleepCallCount uint
+	requestOptions := RequestOptions{
+		MaxRetries:   2,
+		RetryDelay:   1,
+		SleepDelayFn: func(d time.Duration) { sleepCallCount++ },
+	}
+
+	writer := func(writer *cbor.Writer) error { return nil }
+	reader := func(reader *cbor.Reader) error {
+		if sleepCallCount == 1 {
+			return errors.New("IO")
+		} else {
+			return errors.New("LastError")
+		}
+	}
+	err := client.executeWithRetries(OpGetItem, requestOptions, writer, reader)
+	awsError, ok := err.(awserr.Error)
+	if !ok {
+		t.Fatal("Error type is not awserr.Error")
+	}
+
+	if awsError.OrigErr() == nil {
+		t.Fatal("Original error is empty")
+	}
+
+	if awsError.Code() != "UnknownError" || awsError.OrigErr().Error() != "LastError" {
+		t.Fatalf("aws error doesn't match expected. %v", awsError)
 	}
 }
 

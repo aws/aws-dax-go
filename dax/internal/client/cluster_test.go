@@ -18,13 +18,14 @@ package client
 import (
 	"errors"
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"net"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
 func testTaskExecutor(t *testing.T) { // disabled as test is time sensitive
@@ -109,6 +110,61 @@ func TestClusterDaxClient_retry(t *testing.T) {
 				t.Errorf("unexpected success %d %d", successfulAttempt, maxAttempts)
 			}
 		}
+	}
+}
+
+func TestClusterDaxClient_retrySleepCycleCount(t *testing.T) {
+	cluster, _ := newTestCluster([]string{"127.0.0.1:8111"})
+	cluster.update([]serviceEndpoint{{hostname: "localhost", port: 8121}})
+	cc := ClusterDaxClient{config: DefaultConfig(), cluster: cluster}
+
+	action := func(client DaxAPI, o RequestOptions) error {
+		return errors.New("error")
+	}
+
+	var sleepCallCount int
+	opt := RequestOptions{
+		MaxRetries:   0,
+		RetryDelay:   0,
+		SleepDelayFn: func(d time.Duration) { sleepCallCount++ },
+	}
+
+	cc.retry("op", action, opt)
+
+	if sleepCallCount != 0 {
+		t.Fatalf("Sleep was called %d times, but expected none", sleepCallCount)
+	}
+
+	opt.MaxRetries = 3
+	opt.RetryDelay = 1
+
+	cc.retry("op", action, opt)
+
+	if sleepCallCount != opt.MaxRetries {
+		t.Fatalf("Sleep was called %d times, but expected %d", sleepCallCount, opt.MaxRetries)
+	}
+}
+
+func TestClusterDaxClient_retryReturnsLastError(t *testing.T) {
+	cluster, _ := newTestCluster([]string{"127.0.0.1:8111"})
+	cluster.update([]serviceEndpoint{{hostname: "localhost", port: 8121}})
+	cc := ClusterDaxClient{config: DefaultConfig(), cluster: cluster}
+
+	callCount := 0
+	action := func(client DaxAPI, o RequestOptions) error {
+		callCount++
+		return fmt.Errorf("Error_%d", callCount)
+	}
+
+	opt := RequestOptions{
+		MaxRetries: 2,
+		RetryDelay: 1,
+	}
+
+	err := cc.retry("op", action, opt)
+	expectedError := fmt.Errorf("Error_%d", callCount)
+	if err.Error() != expectedError.Error() {
+		t.Fatalf("Wrong error. Expected %v, but got %v", expectedError, err)
 	}
 }
 

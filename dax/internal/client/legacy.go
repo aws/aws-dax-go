@@ -17,10 +17,11 @@ package client
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"strings"
 )
 
 const (
@@ -520,7 +521,6 @@ func appendComparisonCondition(in []byte, a string, op string, avl []*dynamodb.A
 		}
 		return appendArithmeticComparisonCondition(in, a, eop, avl, subs, vars)
 	}
-	return in, subs, vars, nil
 }
 
 func appendBetweenCondition(in []byte, a string, op string, avl []*dynamodb.AttributeValue, subs map[string]*string, vars map[string]*dynamodb.AttributeValue) ([]byte, map[string]*string, map[string]*dynamodb.AttributeValue, error) {

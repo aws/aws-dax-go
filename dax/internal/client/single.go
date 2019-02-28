@@ -18,6 +18,8 @@ package client
 import (
 	"bytes"
 	"fmt"
+	"time"
+
 	"github.com/aws/aws-dax-go/dax/internal/cbor"
 	"github.com/aws/aws-dax-go/dax/internal/lru"
 	"github.com/aws/aws-sdk-go/aws"
@@ -26,7 +28,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"time"
 )
 
 const (
@@ -602,32 +603,44 @@ func (client *SingleDaxClient) newContext(o RequestOptions) aws.Context {
 
 func (client *SingleDaxClient) executeWithRetries(op string, o RequestOptions, encoder func(writer *cbor.Writer) error, decoder func(reader *cbor.Reader) error) error {
 	ctx := client.newContext(o)
-	attempts := o.MaxRetries + 1
+
+	var sleepFun func() error
+	if o.RetryDelay > 0 {
+		retryDelay := o.RetryDelay
+		if o.SleepDelayFn == nil {
+			sleepFun = func() error {
+				return aws.SleepWithContext(ctx, retryDelay)
+			}
+		} else {
+			sleepFun = func() error {
+				o.SleepDelayFn(retryDelay)
+				return nil
+			}
+		}
+	}
 
 	var err error
-	for i := 0; i < attempts; i++ {
+	attempts := o.MaxRetries
+	// Start from 0 to accomodate for the initial request
+	for i := 0; i <= attempts; i++ {
 		if i > 0 && o.Logger != nil && o.LogLevel.Matches(aws.LogDebugWithRequestRetries) {
-			o.Logger.Log(fmt.Sprintf("DEBUG: Retrying Request %s/%s, attempt %d", service, op, i+1))
+			o.Logger.Log(fmt.Sprintf("DEBUG: Retrying Request %s/%s, attempt %d", service, op, i))
 		}
+
 		if err = client.executeWithContext(ctx, op, encoder, decoder); err == nil {
 			return nil
 		} else if ctx != nil && err == ctx.Err() {
 			return awserr.New(request.CanceledErrorCode, "request context canceled", err)
 		}
-		d := o.RetryDelay
-		if d > 0 {
-			if s := o.SleepDelayFn; s != nil {
-				s(d)
-			} else if err = aws.SleepWithContext(ctx, d); err != nil {
+
+		if i != attempts && sleepFun != nil {
+			if err := sleepFun(); err != nil {
 				return awserr.New(request.CanceledErrorCode, "request context canceled", err)
 			}
 		}
 	}
-	if err != nil {
-		return translateError(err)
-	} else {
-		return awserr.New("UnknownError", "ran out of retries", nil)
-	}
+	// Return the last error occurred
+	return translateError(err)
 }
 
 func (client *SingleDaxClient) executeWithContext(ctx aws.Context, op string, encoder func(writer *cbor.Writer) error, decoder func(reader *cbor.Reader) error) error {
