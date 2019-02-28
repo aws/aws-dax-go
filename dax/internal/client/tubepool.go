@@ -51,19 +51,18 @@ func newTubePool(address string) *tubePool {
 	return newTubePoolWithOptions(address, defaultTubePoolOptions)
 }
 
-func newTubePoolWithOptions(a string, options tubePoolOptions) *tubePool {
+func newTubePoolWithOptions(address string, options tubePoolOptions) *tubePool {
 	if options.maxConcurrentConnAttempts <= 0 {
 		options.maxConcurrentConnAttempts = defaultTubePoolOptions.maxConcurrentConnAttempts
 	}
-	pool := tubePool{
-		address:   a,
+	return &tubePool{
+		address:   address,
 		gate:      make(gate, options.maxConcurrentConnAttempts),
 		errCh:     make(chan error),
 		waiters:   make(chan *tube),
 		timeout:   options.timeout,
 		connectFn: connect,
 	}
-	return &pool
 }
 
 func (p *tubePool) get() (*tube, error) {
@@ -124,7 +123,11 @@ func (p *tubePool) getWithContext(ctx context.Context, highPriority bool) (*tube
 				return tube, nil
 			}
 		case err := <-p.errCh:
-			return nil, err
+			// if channel was closed, the error will be nil
+			if err != nil {
+				return nil, err
+			}
+			return nil, os.ErrClosed
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
@@ -168,6 +171,8 @@ func (p *tubePool) put(tube *tube) {
 
 	if p.closed {
 		tube.Close()
+		// Waiters channel was already closed in Close
+		return
 	}
 
 	if p.waiters != nil {
@@ -198,7 +203,7 @@ func (p *tubePool) discard(tube *tube) {
 	}()
 }
 
-func (p *tubePool) setDeadline(tube *tube, ctx context.Context) error {
+func (p *tubePool) setDeadline(ctx context.Context, tube *tube) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -214,6 +219,11 @@ func (p *tubePool) setDeadline(tube *tube, ctx context.Context) error {
 func (p *tubePool) Close() error {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
+
+	if p.closed {
+		return nil
+	}
+
 	p.closed = true
 
 	t := p.top

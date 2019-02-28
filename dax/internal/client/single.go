@@ -648,7 +648,7 @@ func (client *SingleDaxClient) executeWithContext(ctx aws.Context, op string, en
 	if err != nil {
 		return err
 	}
-	if err = client.pool.setDeadline(tube, ctx); err != nil {
+	if err = client.pool.setDeadline(ctx, tube); err != nil {
 		return err
 	}
 

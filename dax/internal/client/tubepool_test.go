@@ -17,10 +17,11 @@ package client
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -223,11 +224,24 @@ func TestTubePool_Close(t *testing.T) {
 		t.Fatalf("cached connection was not terminated")
 	}
 
+	if tubeCount := countTubes(pool); tubeCount != 0 {
+		t.Fatalf("Closed pool is not empty. Pool size: %d", tubeCount)
+	}
+
+	// We should be able to Close multiple times
+	if err := pool.Close(); err != nil {
+		t.Errorf("Must return nil if pool is already closed")
+	}
+
 	pool.put(tubes[1])
 	select {
 	case <-endConnNotifier:
 	case <-time.After(time.Millisecond * localConnTimeoutMillis):
 		t.Fatalf("tube returned to a closed pool was not terminated")
+	}
+
+	if tubeCount := countTubes(pool); tubeCount != 0 {
+		t.Fatalf("Tube returned to a closed pool changed its size. Pool size: %d", tubeCount)
 	}
 }
 
@@ -295,6 +309,40 @@ func TestConnectionPriority(t *testing.T) {
 	wg.Wait()
 }
 
+func TestGetWithClosedErrorChannel(t *testing.T) {
+	endpoint := ":8185"
+	listener, err := startServer(endpoint, nil, nil, drainAndCloseConn)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	defer listener.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{1, 10 * time.Second})
+	pool.connectFn = func(network, address string) (net.Conn, error) {
+		wg.Done()
+		// Block indefinetely to mimic a long connection
+		for {
+
+		}
+	}
+
+	go func() {
+		wg.Wait()
+		pool.Close()
+	}()
+
+	tube, err := pool.getWithContext(context.Background(), false)
+	if tube != nil {
+		t.Fatalf("Expected nil tube")
+	}
+
+	if err != os.ErrClosed {
+		t.Fatalf("Expected os.ErrClosed error but got %v", err)
+	}
+}
+
 func TestGate(t *testing.T) {
 	size := 3
 	g := make(gate, size)
@@ -342,7 +390,7 @@ func startServer(endpoint string, startConnNotifier chan net.Conn, endConnNotifi
 	connectionHandler func(conn net.Conn, endConnNotifier chan net.Conn)) (net.Listener, error) {
 	listener, err := net.Listen(network, endpoint)
 	if err != nil {
-		return nil, errors.New("cannot create server")
+		return nil, fmt.Errorf("cannot create server due to %v", err)
 	}
 
 	go func() {
