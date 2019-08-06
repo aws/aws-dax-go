@@ -16,6 +16,7 @@
 package dax
 
 import (
+	"context"
 	"io"
 
 	"github.com/aws/aws-dax-go/dax/internal/client"
@@ -292,20 +293,60 @@ func (d *Dax) BatchGetItemPagesWithContext(aws.Context, *dynamodb.BatchGetItemIn
 	return d.unImpl()
 }
 
-func (d *Dax) QueryPages(*dynamodb.QueryInput, func(*dynamodb.QueryOutput, bool) bool) error {
-	return d.unImpl()
+func (d *Dax) QueryPages(input *dynamodb.QueryInput, fn func(*dynamodb.QueryOutput, bool) bool) error {
+	return d.QueryPagesWithContext(context.Background(), input, fn)
 }
 
-func (d *Dax) QueryPagesWithContext(aws.Context, *dynamodb.QueryInput, func(*dynamodb.QueryOutput, bool) bool, ...request.Option) error {
-	return d.unImpl()
+func (d *Dax) QueryPagesWithContext(ctx aws.Context, input *dynamodb.QueryInput, fn func(*dynamodb.QueryOutput, bool) bool, opts ...request.Option) error {
+	out, err := d.QueryWithContext(ctx, input, opts...)
+	if err != nil {
+		return err
+	}
+
+	fn(out, out.LastEvaluatedKey == nil)
+
+	for out.LastEvaluatedKey != nil {
+		input.ExclusiveStartKey = out.LastEvaluatedKey
+		out, err = d.QueryWithContext(ctx, input, opts...)
+		if err != nil {
+			return err
+		}
+
+		isLastPage := out.LastEvaluatedKey != nil
+		if !fn(out, isLastPage) {
+			break
+		}
+	}
+
+	return nil
 }
 
-func (d *Dax) ScanPages(*dynamodb.ScanInput, func(*dynamodb.ScanOutput, bool) bool) error {
-	return d.unImpl()
+func (d *Dax) ScanPages(input *dynamodb.ScanInput, fn func(*dynamodb.ScanOutput, bool) bool) error {
+	return d.ScanPagesWithContext(context.Background(), input, fn)
 }
 
-func (d *Dax) ScanPagesWithContext(aws.Context, *dynamodb.ScanInput, func(*dynamodb.ScanOutput, bool) bool, ...request.Option) error {
-	return d.unImpl()
+func (d *Dax) ScanPagesWithContext(ctx aws.Context, input *dynamodb.ScanInput, fn func(*dynamodb.ScanOutput, bool) bool, opts ...request.Option) error {
+	out, err := d.ScanWithContext(ctx, input, opts...)
+	if err != nil {
+		return err
+	}
+
+	fn(out, out.LastEvaluatedKey == nil)
+
+	for out.LastEvaluatedKey != nil {
+		input.ExclusiveStartKey = out.LastEvaluatedKey
+		out, err = d.ScanWithContext(ctx, input, opts...)
+		if err != nil {
+			return err
+		}
+
+		isLastPage := out.LastEvaluatedKey != nil
+		if !fn(out, isLastPage) {
+			break
+		}
+	}
+
+	return nil
 }
 
 func (d *Dax) CreateBackup(*dynamodb.CreateBackupInput) (*dynamodb.CreateBackupOutput, error) {
