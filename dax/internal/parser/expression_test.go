@@ -18,12 +18,13 @@ package parser
 import (
 	"bytes"
 	"encoding/hex"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"log"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
 func TestExpressionEncoder(t *testing.T) {
@@ -189,6 +190,12 @@ func TestExpressionEncoder(t *testing.T) {
 			in:   "DELETE Color :p",
 			vars: map[string]*dynamodb.AttributeValue{":p": &dynamodb.AttributeValue{N: aws.String("5")}},
 			out:  fromHex("0x8301818315821265436F6C6F728211008105"),
+		},
+		{
+			typ:  UpdateExpr,
+			in:   "DELETE Color :p, Color_2 :p",
+			vars: map[string]*dynamodb.AttributeValue{":p": &dynamodb.AttributeValue{N: aws.String("5")}},
+			out:  fromHex("0x8301828315821265436F6C6F728211008315821267436F6C6F725F328211008105"),
 		},
 	}
 

@@ -18,15 +18,16 @@ package parser
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"strconv"
+	"strings"
+
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	"github.com/aws/aws-dax-go/dax/internal/cbor"
 	"github.com/aws/aws-dax-go/dax/internal/parser/generated"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"io"
-	"strconv"
-	"strings"
 )
 
 const (
@@ -464,7 +465,7 @@ func (e *ExpressionEncoder) ExitAdd_action(ctx *generated.Add_actionContext) {
 	e.push(e.encodeFunction(opAddAction, []sexpr{p, v}))
 }
 
-func (e *ExpressionEncoder) ExitDelete_section(ctx *generated.Delete_sectionContext) {
+func (e *ExpressionEncoder) ExitDelete_action(ctx *generated.Delete_actionContext) {
 	if e.err != nil { // bail out
 		return
 	}
