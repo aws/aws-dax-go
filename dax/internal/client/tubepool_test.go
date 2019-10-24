@@ -26,6 +26,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 const localConnTimeoutMillis = 10
@@ -433,4 +435,46 @@ func countTubes(pool *tubePool) int {
 		head = head.next
 	}
 	return count
+}
+
+func TestTubePoolDiscard(t *testing.T) {
+
+	timeout := 5 * time.Second
+
+	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, timeout})
+	p.connectFn = func(a, n string) (net.Conn, error) {
+		return &mockConn{}, nil
+	}
+	// artificially enter the gate to prevent new connections
+	entered := p.gate.tryEnter()
+	require.True(t, entered)
+
+	var startedWg sync.WaitGroup
+	startedWg.Add(1)
+
+	ch := make(chan struct {
+		*tube
+		error
+	})
+	go func() {
+		startedWg.Done()
+		t, err := p.get()
+		ch <- struct {
+			*tube
+			error
+		}{t, err}
+	}()
+	startedWg.Wait()
+	// wait some extra time to make sure the caller has entered waiters queue
+	time.Sleep(2 * time.Second)
+
+	// release the gate to allow woken waiters to establish a new connection
+	p.gate.exit()
+	tt, err := newTube(&mockConn{})
+	require.NoError(t, err)
+	p.discard(tt)
+
+	result := <-ch
+	require.NoError(t, result.error)
+	require.NotNil(t, result.tube)
 }

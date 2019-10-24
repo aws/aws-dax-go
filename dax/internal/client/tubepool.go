@@ -25,6 +25,8 @@ import (
 
 const network = "tcp"
 
+// Acts as the gate to create new tubes
+// and keeps track of tubes which are currently not in use.
 type tubePool struct {
 	address              string
 	gate                 gate
@@ -47,10 +49,12 @@ type tubePoolOptions struct {
 
 var defaultTubePoolOptions = tubePoolOptions{10, time.Second * 5}
 
+// Creates a new pool using defaultTubePoolOptions and associated with given address.
 func newTubePool(address string) *tubePool {
 	return newTubePoolWithOptions(address, defaultTubePoolOptions)
 }
 
+// Creates a new pool with provided options associated with the given address.
 func newTubePoolWithOptions(address string, options tubePoolOptions) *tubePool {
 	if options.maxConcurrentConnAttempts <= 0 {
 		options.maxConcurrentConnAttempts = defaultTubePoolOptions.maxConcurrentConnAttempts
@@ -65,6 +69,7 @@ func newTubePoolWithOptions(address string, options tubePoolOptions) *tubePool {
 	}
 }
 
+// Gets a new or reuses existing tube with timeout context set to tubePool#timeout
 func (p *tubePool) get() (*tube, error) {
 	ctx := context.Background()
 	if p.timeout > 0 {
@@ -75,6 +80,8 @@ func (p *tubePool) get() (*tube, error) {
 	return p.getWithContext(ctx, false)
 }
 
+// Gets a new or reuses existing tube with provided context.
+// Create a new tube even if pool reached maxConcurrentConnAttempts if highPriority is true.
 func (p *tubePool) getWithContext(ctx context.Context, highPriority bool) (*tube, error) {
 	for {
 		p.mutex.Lock()
@@ -103,12 +110,10 @@ func (p *tubePool) getWithContext(ctx context.Context, highPriority bool) (*tube
 		p.mutex.Unlock()
 
 		var done chan *tube
-		if highPriority {
-			done = make(chan *tube)
-		}
 		if p.gate.tryEnter() {
 			go p.allocAndReleaseGate(done, true)
 		} else if highPriority {
+			done = make(chan *tube)
 			go p.allocAndReleaseGate(done, false)
 		}
 
@@ -134,6 +139,8 @@ func (p *tubePool) getWithContext(ctx context.Context, highPriority bool) (*tube
 	}
 }
 
+// Allocates a new tube and optionally releases the gate.
+// If done channel isn't nil the new tube will be send there as opposed to idle tubes stack.
 func (p *tubePool) allocAndReleaseGate(done chan *tube, releaseGate bool) {
 	tube, err := p.alloc()
 	if releaseGate {
@@ -161,6 +168,10 @@ func (p *tubePool) allocAndReleaseGate(done chan *tube, releaseGate bool) {
 	}
 }
 
+// Returns a previously allocated tube back into the pool.
+// Tube will be closed if the pool is closed
+// or it will be handed over to a waiter if any
+// or it will be added to the idle tubes stack.
 func (p *tubePool) put(tube *tube) {
 	if tube == nil {
 		return
@@ -190,19 +201,38 @@ func (p *tubePool) put(tube *tube) {
 	return
 }
 
+// Discards the given tube indicating that it must no longer be used and has to be closed.
 func (p *tubePool) discard(tube *tube) {
 	if tube == nil {
 		return
 	}
 	if p.closeTubeImmediately {
 		tube.Close()
-		return
+	} else {
+		go func() {
+			tube.Close()
+		}()
 	}
-	go func() {
-		tube.Close()
-	}()
+
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	// Waiters enter the waiting queue when there's no existing tube
+	// or when they failed to acquire a permit to create a new tube.
+	// There's also a chance the newly created tube was stolen and
+	// the thief must return it back into the pool or discard it.
+	if p.waiters != nil {
+		select {
+		case p.waiters <- nil: // wake up a single waiter, if any
+			return
+		default:
+			close(p.waiters) // or unblock all future waiters who are yet to enter the waiters queue
+			p.waiters = nil
+		}
+	}
 }
 
+// Sets the deadline on the underlying net.Conn object
 func (p *tubePool) setDeadline(ctx context.Context, tube *tube) error {
 	select {
 	case <-ctx.Done():
@@ -216,6 +246,7 @@ func (p *tubePool) setDeadline(ctx context.Context, tube *tube) error {
 	return tube.setDeadline(deadline)
 }
 
+// Closes the pool and tubes in the pool.
 func (p *tubePool) Close() error {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
@@ -242,6 +273,7 @@ func (p *tubePool) Close() error {
 	return nil
 }
 
+// Closes tubes which weren't used since the last time this method was called.
 func (p *tubePool) reapIdleConnections() {
 	p.mutex.Lock()
 
@@ -262,6 +294,7 @@ func (p *tubePool) reapIdleConnections() {
 	p.closeAll(reapHead)
 }
 
+// Allocates a new tube by establishing a new connection and performing initialization.
 func (p *tubePool) alloc() (*tube, error) {
 	conn, err := p.connectFn(network, p.address)
 	if err != nil {
@@ -269,6 +302,7 @@ func (p *tubePool) alloc() (*tube, error) {
 	}
 	tube, err := newTube(conn)
 	if err != nil {
+		tube.Close()
 		return nil, err
 	}
 	if err = tube.init(); err != nil {
@@ -278,6 +312,7 @@ func (p *tubePool) alloc() (*tube, error) {
 	return tube, nil
 }
 
+// Traverses the passed stack and closes all tubes in it.
 func (p *tubePool) closeAll(head *tube) {
 	var next *tube
 	for head != nil {
@@ -288,8 +323,12 @@ func (p *tubePool) closeAll(head *tube) {
 	}
 }
 
+// Represents a semaphore limiting the total number of in-flight connection attempts.
+// Being a channel it must be initialized with the desired limit as the buffer size.
 type gate chan struct{}
 
+// Returns true if we successfully acquired a permit, false otherwise
+// gate#exit() must be called once the permit is no longer needed
 func (g gate) tryEnter() bool {
 	select {
 	case g <- struct{}{}:
@@ -299,6 +338,7 @@ func (g gate) tryEnter() bool {
 	}
 }
 
+// Exits the gate effectively returning a permit back into the pool
 func (g gate) exit() {
 	select { // do not block
 	case <-g:

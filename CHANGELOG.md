@@ -1,3 +1,7 @@
+Release v1.1.3 (2019-11-08)
+===
+* Fix potential for goroutine starvation where a goroutine can get stuck waiting for an available socket to do a request.
+
 Release v1.1.2 (2019-10-08)
 ===
 * Fix error thrown from executing an Updateitem() request with multiple Delete actions
