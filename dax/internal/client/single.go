@@ -621,7 +621,7 @@ func (client *SingleDaxClient) executeWithRetries(op string, o RequestOptions, e
 
 	var err error
 	attempts := o.MaxRetries
-	// Start from 0 to accomodate for the initial request
+	// Start from 0 to accommodate for the initial request
 	for i := 0; i <= attempts; i++ {
 		if i > 0 && o.Logger != nil && o.LogLevel.Matches(aws.LogDebugWithRequestRetries) {
 			o.Logger.Log(fmt.Sprintf("DEBUG: Retrying Request %s/%s, attempt %d", service, op, i))
@@ -644,48 +644,48 @@ func (client *SingleDaxClient) executeWithRetries(op string, o RequestOptions, e
 }
 
 func (client *SingleDaxClient) executeWithContext(ctx aws.Context, op string, encoder func(writer *cbor.Writer) error, decoder func(reader *cbor.Reader) error) error {
-	tube, err := client.pool.getWithContext(ctx, client.isHighPriority(op))
+	t, err := client.pool.getWithContext(ctx, client.isHighPriority(op))
 	if err != nil {
 		return err
 	}
-	if err = client.pool.setDeadline(ctx, tube); err != nil {
-		client.pool.discard(tube)
+	if err = client.pool.setDeadline(ctx, t); err != nil {
+		client.pool.discard(t)
 		return err
 	}
 
-	if err = client.auth(tube); err != nil {
-		client.pool.discard(tube)
+	if err = client.auth(t); err != nil {
+		client.pool.discard(t)
 		return err
 	}
 
-	writer := tube.cborWriter
-	if err = encoder(tube.cborWriter); err != nil {
+	writer := t.CborWriter()
+	if err = encoder(writer); err != nil {
 		// Validation errors will cause pool to be discarded as there is no guarantee
 		// that the validation was performed before any data was written into tube
-		client.pool.discard(tube)
+		client.pool.discard(t)
 		return err
 	}
 	if err := writer.Flush(); err != nil {
-		client.pool.discard(tube)
+		client.pool.discard(t)
 		return err
 	}
 
-	reader := tube.cborReader
+	reader := t.CborReader()
 	ex, err := decodeError(reader)
 	if err != nil { // decode or network error
-		client.pool.discard(tube)
+		client.pool.discard(t)
 		return err
 	}
 	if ex != nil { // user or server error
-		client.recycleTube(tube, ex)
+		client.recycleTube(t, ex)
 		return ex
 	}
 
 	err = decoder(reader)
 	if err != nil {
-		client.pool.discard(tube)
+		client.pool.discard(t)
 	} else {
-		client.pool.put(tube)
+		client.pool.put(t)
 	}
 	return err
 }
@@ -699,8 +699,8 @@ func (client *SingleDaxClient) isHighPriority(op string) bool {
 	}
 }
 
-func (client *SingleDaxClient) recycleTube(tube *tube, err error) {
-	if tube == nil {
+func (client *SingleDaxClient) recycleTube(t tube, err error) {
+	if t == nil {
 		return
 	}
 
@@ -712,32 +712,32 @@ func (client *SingleDaxClient) recycleTube(tube *tube, err error) {
 		d, ok := err.(*daxRequestFailure)
 		recycle = ok
 		if ok && d.authError() {
-			tube.setAuthExpiryUnix(time.Now().Unix())
+			t.SetAuthExpiryUnix(time.Now().Unix())
 		}
 	}
 	if recycle {
-		client.pool.put(tube)
+		client.pool.put(t)
 	} else {
-		client.pool.discard(tube)
+		client.pool.discard(t)
 	}
 }
-func (client *SingleDaxClient) auth(tube *tube) error {
+func (client *SingleDaxClient) auth(t tube) error {
 	// TODO credentials.Get() cause a throughput drop of ~25 with 250 goroutines with DefaultCredentialChain (only instance profile credentials available)
 	creds, err := client.credentials.Get()
 	if err != nil {
 		return err
 	}
 	now := time.Now().UTC()
-	if tube.compareAndSwapAuthId(creds.AccessKeyID) || tube.getAuthExpiryUnix() <= now.Unix() {
+	if t.CompareAndSwapAuthID(creds.AccessKeyID) || t.AuthExpiryUnix() <= now.Unix() {
 		stringToSign, signature := generateSigV4WithTime(creds, daxAddress, client.region, "", now)
-		writer := tube.cborWriter
+		writer := t.CborWriter()
 		if err := encodeAuthInput(creds.AccessKeyID, creds.SessionToken, stringToSign, signature, userAgent, writer); err != nil {
 			return err
 		}
 		if err := writer.Flush(); err != nil {
 			return err
 		}
-		tube.setAuthExpiryUnix(now.Unix() + client.tubeAuthWindowSecs)
+		t.SetAuthExpiryUnix(now.Unix() + client.tubeAuthWindowSecs)
 	}
 	return nil
 }

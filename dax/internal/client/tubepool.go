@@ -36,10 +36,11 @@ type tubePool struct {
 	closeTubeImmediately bool
 
 	mutex      sync.Mutex
-	closed     bool  // protected by mutex
-	top        *tube // protected by mutex
-	lastActive *tube // protected by mutex
-	waiters    chan *tube
+	closed     bool    // protected by mutex
+	top        tube    // protected by mutex
+	lastActive tube    // protected by mutex
+	session    session // protected by mutex
+	waiters    chan tube
 }
 
 type tubePoolOptions struct {
@@ -63,14 +64,14 @@ func newTubePoolWithOptions(address string, options tubePoolOptions) *tubePool {
 		address:   address,
 		gate:      make(gate, options.maxConcurrentConnAttempts),
 		errCh:     make(chan error),
-		waiters:   make(chan *tube),
+		waiters:   make(chan tube),
 		timeout:   options.timeout,
 		connectFn: connect,
 	}
 }
 
 // Gets a new or reuses existing tube with timeout context set to tubePool#timeout
-func (p *tubePool) get() (*tube, error) {
+func (p *tubePool) get() (tube, error) {
 	ctx := context.Background()
 	if p.timeout > 0 {
 		var cancelFn func()
@@ -82,7 +83,7 @@ func (p *tubePool) get() (*tube, error) {
 
 // Gets a new or reuses existing tube with provided context.
 // Create a new tube even if pool reached maxConcurrentConnAttempts if highPriority is true.
-func (p *tubePool) getWithContext(ctx context.Context, highPriority bool) (*tube, error) {
+func (p *tubePool) getWithContext(ctx context.Context, highPriority bool) (tube, error) {
 	for {
 		p.mutex.Lock()
 		if p.closed {
@@ -92,29 +93,30 @@ func (p *tubePool) getWithContext(ctx context.Context, highPriority bool) (*tube
 
 		// look for idle tubes in stack
 		if p.top != nil {
-			tube := p.top
-			p.top = tube.next
-			if p.lastActive == tube {
+			t := p.top
+			p.top = t.Next()
+			if p.lastActive == t {
 				p.lastActive = p.top
 			}
-			tube.next = nil
+			t.SetNext(nil)
 			p.mutex.Unlock()
-			return tube, nil
+			return t, nil
 		}
 
 		// no tubes in stack, create wait channel
 		if p.waiters == nil {
-			p.waiters = make(chan *tube)
+			p.waiters = make(chan tube)
 		}
 		waitCh := p.waiters
+		session := p.session
 		p.mutex.Unlock()
 
-		var done chan *tube
+		var done chan tube
 		if p.gate.tryEnter() {
-			go p.allocAndReleaseGate(done, true)
+			go p.allocAndReleaseGate(session, done, true)
 		} else if highPriority {
-			done = make(chan *tube)
-			go p.allocAndReleaseGate(done, false)
+			done = make(chan tube)
+			go p.allocAndReleaseGate(session, done, false)
 		}
 
 		select {
@@ -141,8 +143,8 @@ func (p *tubePool) getWithContext(ctx context.Context, highPriority bool) (*tube
 
 // Allocates a new tube and optionally releases the gate.
 // If done channel isn't nil the new tube will be send there as opposed to idle tubes stack.
-func (p *tubePool) allocAndReleaseGate(done chan *tube, releaseGate bool) {
-	tube, err := p.alloc()
+func (p *tubePool) allocAndReleaseGate(session int64, done chan tube, releaseGate bool) {
+	tube, err := p.alloc(session)
 	if releaseGate {
 		p.gate.exit()
 	}
@@ -169,26 +171,26 @@ func (p *tubePool) allocAndReleaseGate(done chan *tube, releaseGate bool) {
 }
 
 // Returns a previously allocated tube back into the pool.
-// Tube will be closed if the pool is closed
-// or it will be handed over to a waiter if any
-// or it will be added to the idle tubes stack.
-func (p *tubePool) put(tube *tube) {
-	if tube == nil {
+// Tube will be closed if the pool is closed or its coming from a different session
+// Otherwise it will be handed over to a waiter, if any
+// or it will be added on top of the idle tubes stack.
+func (p *tubePool) put(t tube) {
+	if t == nil {
 		return
 	}
 
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
-	if p.closed {
-		tube.Close()
+	if p.closed || t.Session() != p.session {
+		t.Close()
 		// Waiters channel was already closed in Close
 		return
 	}
 
 	if p.waiters != nil {
 		select {
-		case p.waiters <- tube:
+		case p.waiters <- t:
 			return
 		default:
 			close(p.waiters) // unblock future waiters
@@ -196,26 +198,31 @@ func (p *tubePool) put(tube *tube) {
 		}
 	}
 
-	tube.next = p.top
-	p.top = tube
-	return
+	t.SetNext(p.top)
+	p.top = t
 }
 
-// Discards the given tube indicating that it must no longer be used and has to be closed.
-func (p *tubePool) discard(tube *tube) {
-	if tube == nil {
+// Closes the specified tube, and if the tube is using the same version as the current session,
+// then also closes all other idle tubes and performs a version bump.
+func (p *tubePool) discard(t tube) {
+	if t == nil {
 		return
 	}
 	if p.closeTubeImmediately {
-		tube.Close()
+		t.Close()
 	} else {
 		go func() {
-			tube.Close()
+			t.Close()
 		}()
 	}
 
 	p.mutex.Lock()
-	defer p.mutex.Unlock()
+
+	var head tube
+	if t.Session() == p.session {
+		p.sessionBump()
+		head = p.clearIdleConnections()
+	}
 
 	// Waiters enter the waiting queue when there's no existing tube
 	// or when they failed to acquire a permit to create a new tube.
@@ -224,16 +231,18 @@ func (p *tubePool) discard(tube *tube) {
 	if p.waiters != nil {
 		select {
 		case p.waiters <- nil: // wake up a single waiter, if any
-			return
+			break
 		default:
 			close(p.waiters) // or unblock all future waiters who are yet to enter the waiters queue
 			p.waiters = nil
 		}
 	}
+	p.mutex.Unlock()
+	p.closeAll(head)
 }
 
 // Sets the deadline on the underlying net.Conn object
-func (p *tubePool) setDeadline(ctx context.Context, tube *tube) error {
+func (p *tubePool) setDeadline(ctx context.Context, tube tube) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -243,51 +252,51 @@ func (p *tubePool) setDeadline(ctx context.Context, tube *tube) error {
 	if d, ok := ctx.Deadline(); ok {
 		deadline = d
 	}
-	return tube.setDeadline(deadline)
+	return tube.SetDeadline(deadline)
 }
 
-// Closes the pool and tubes in the pool.
+// Closes the pool and all idle tubes in it.
 func (p *tubePool) Close() error {
 	p.mutex.Lock()
-	defer p.mutex.Unlock()
 
-	if p.closed {
-		return nil
+	var head tube
+	if !p.closed {
+		p.closed = true
+		p.sessionBump()
+		head = p.clearIdleConnections()
+		if p.waiters != nil {
+			close(p.waiters)
+			p.waiters = nil
+		}
+		close(p.errCh)
+		// cannot close(p.gate) as send on closed channel will panic. new connections will be closed immediately.
 	}
+	p.mutex.Unlock()
+	p.closeAll(head)
+	return nil
+}
 
-	p.closed = true
-
-	t := p.top
-	for t != nil {
-		t.Close()
-		t = t.next
-	}
+// Resets the idle tube stack by detaching existing tubes from it.
+// p.mutex must be held when calling this method
+func (p *tubePool) clearIdleConnections() tube {
+	head := p.top
 	p.top = nil
 	p.lastActive = nil
-	if p.waiters != nil {
-		close(p.waiters)
-		p.waiters = nil
-	}
-	close(p.errCh)
-	// cannot close(p.gate) as send on closed channel will panic. new connections will be closed immediately.
-	return nil
+	return head
 }
 
 // Closes tubes which weren't used since the last time this method was called.
 func (p *tubePool) reapIdleConnections() {
 	p.mutex.Lock()
 
-	if p.closed {
-		p.mutex.Unlock()
-		return
+	var reapHead tube
+	if !p.closed {
+		if p.lastActive != nil {
+			reapHead = p.lastActive.Next()
+			p.lastActive.SetNext(nil)
+		}
+		p.lastActive = p.top
 	}
-
-	var reapHead *tube
-	if p.lastActive != nil {
-		reapHead = p.lastActive.next
-		p.lastActive.next = nil
-	}
-	p.lastActive = p.top
 	p.mutex.Unlock()
 
 	// closing tubes synchronously as this method is expected to be called from a background goroutine
@@ -295,32 +304,34 @@ func (p *tubePool) reapIdleConnections() {
 }
 
 // Allocates a new tube by establishing a new connection and performing initialization.
-func (p *tubePool) alloc() (*tube, error) {
+func (p *tubePool) alloc(session int64) (tube, error) {
 	conn, err := p.connectFn(network, p.address)
 	if err != nil {
 		return nil, err
 	}
-	tube, err := newTube(conn)
+	t, err := newTube(conn, session)
 	if err != nil {
-		tube.Close()
 		return nil, err
 	}
-	if err = tube.init(); err != nil {
-		tube.Close()
-		return nil, err
-	}
-	return tube, nil
+	return t, nil
 }
 
 // Traverses the passed stack and closes all tubes in it.
-func (p *tubePool) closeAll(head *tube) {
-	var next *tube
+func (p *tubePool) closeAll(head tube) {
+	var next tube
 	for head != nil {
-		next = head.next
-		head.next = nil
+		next = head.Next()
+		head.SetNext(nil)
 		head.Close()
 		head = next
 	}
+}
+
+// Increases the session version.
+// Recycled or newly created tubes with the old session will be immediately closed
+// p.mutex must be held when calling this method
+func (p *tubePool) sessionBump() {
+	p.session++
 }
 
 // Represents a semaphore limiting the total number of in-flight connection attempts.

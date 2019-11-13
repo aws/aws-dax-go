@@ -1,3 +1,7 @@
+Release v1.1.4 (2019-11-13)
+===
+* Add a notion of session to the socket pool and associated sockets. It allows to close idle sockets on an error.
+
 Release v1.1.3 (2019-11-08)
 ===
 * Fix potential for goroutine starvation where a goroutine can get stuck waiting for an available socket to do a request.

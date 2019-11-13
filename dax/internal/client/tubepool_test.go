@@ -27,8 +27,57 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-dax-go/dax/internal/cbor"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
+
+type mockTube struct {
+	mock.Mock
+}
+
+func (m *mockTube) Init() error {
+	args := m.Called()
+	return args.Error(0)
+}
+func (m *mockTube) AuthExpiryUnix() int64 {
+	args := m.Called()
+	return args.Get(0).(int64)
+}
+func (m *mockTube) SetAuthExpiryUnix(exp int64) {
+	m.Called(exp)
+}
+func (m *mockTube) CompareAndSwapAuthID(auth string) bool {
+	args := m.Called(auth)
+	return args.Bool(0)
+}
+func (m *mockTube) SetDeadline(time time.Time) error {
+	args := m.Called(time)
+	return args.Error(0)
+}
+func (m *mockTube) Session() session {
+	args := m.Called()
+	return args.Get(0).(session)
+}
+func (m *mockTube) Next() tube {
+	args := m.Called()
+	return args.Get(0).(tube)
+}
+func (m *mockTube) SetNext(next tube) {
+	m.Called(next)
+}
+func (m *mockTube) CborReader() *cbor.Reader {
+	args := m.Called()
+	return args.Get(0).(*cbor.Reader)
+}
+func (m *mockTube) CborWriter() *cbor.Writer {
+	args := m.Called()
+	return args.Get(0).(*cbor.Writer)
+}
+func (m *mockTube) Close() error {
+	args := m.Called()
+	return args.Error(0)
+}
 
 const localConnTimeoutMillis = 10
 
@@ -71,7 +120,7 @@ func TestTubePoolConnectionCache(t *testing.T) {
 	// verify new connections are established if cached tube not available
 	expectedConnections = 0
 	attempts = 3
-	tubes := make([]*tube, attempts)
+	tubes := make([]tube, attempts)
 	for i := 0; i < attempts; i++ {
 		tube, err := pool.get()
 		tubes[i] = tube
@@ -137,7 +186,7 @@ func TestTubePool_reapIdleTubes(t *testing.T) {
 	pool := newTubePool(endpoint)
 
 	tubeCount := 10
-	tubes := make([]*tube, tubeCount)
+	tubes := make([]tube, tubeCount)
 	for i := 0; i < tubeCount; i++ {
 		tubes[i], err = pool.get()
 		if err != nil {
@@ -154,14 +203,14 @@ func TestTubePool_reapIdleTubes(t *testing.T) {
 		t.Errorf("expected cached tube count %v, actual %v", tubeCount, countTubes(pool))
 	}
 
-	active := make([]*tube, 0, tubeCount)
+	active := make([]tube, 0, tubeCount)
 	activeCount := 5
 	for i := 0; i < activeCount; i++ {
 		tb, err := pool.get()
 		if err != nil {
 			t.Errorf("unexpected error %v", err)
 		}
-		active = append([]*tube{tb}, active...)
+		active = append([]tube{tb}, active...)
 	}
 
 	pool.reapIdleConnections()
@@ -204,7 +253,7 @@ func TestTubePool_Close(t *testing.T) {
 	defer listener.Close()
 
 	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{1, time.Second * 1})
-	tubes := make([]*tube, 2)
+	tubes := make([]tube, 2)
 	for i := 0; i < 2; i++ {
 		tubes[i], err = pool.get()
 		if err != nil {
@@ -432,16 +481,26 @@ func countTubes(pool *tubePool) int {
 	count := 0
 	for head != nil {
 		count++
-		head = head.next
+		head = head.Next()
 	}
 	return count
 }
 
-func TestTubePoolDiscard(t *testing.T) {
+func TestTubePool_DiscardBumpsSession(t *testing.T) {
+	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, 5 * time.Second})
+	origSession := p.session
 
-	timeout := 5 * time.Second
+	tt := &mockTube{}
+	tt.On("Session").Return(p.session).Once()
+	tt.On("Close").Return(nil).Once()
+	p.discard(tt)
 
-	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, timeout})
+	require.NotEqual(t, origSession, p.session)
+}
+
+func TestTubePool_DiscardWakesUpWaiters(t *testing.T) {
+
+	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, 5 * time.Second})
 	p.connectFn = func(a, n string) (net.Conn, error) {
 		return &mockConn{}, nil
 	}
@@ -453,14 +512,14 @@ func TestTubePoolDiscard(t *testing.T) {
 	startedWg.Add(1)
 
 	ch := make(chan struct {
-		*tube
+		tube
 		error
 	})
 	go func() {
 		startedWg.Done()
 		t, err := p.get()
 		ch <- struct {
-			*tube
+			tube
 			error
 		}{t, err}
 	}()
@@ -470,11 +529,38 @@ func TestTubePoolDiscard(t *testing.T) {
 
 	// release the gate to allow woken waiters to establish a new connection
 	p.gate.exit()
-	tt, err := newTube(&mockConn{})
-	require.NoError(t, err)
+	tt := &mockTube{}
+	tt.On("Session").Return(p.session).Once()
+	tt.On("Close").Return(nil).Once()
+
 	p.discard(tt)
 
 	result := <-ch
 	require.NoError(t, result.error)
 	require.NotNil(t, result.tube)
+}
+
+func TestTubePool_PutClosesTubesIfPoolIsClosed(t *testing.T) {
+	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, 5 * time.Second})
+	p.closed = true
+
+	tt := &mockTube{}
+	tt.On("Session").Return(p.session).Maybe()
+	tt.On("Close").Return(nil).Once()
+
+	p.put(tt)
+
+	tt.AssertExpectations(t)
+}
+
+func TestTubePool_PutClosesTubesFromDifferentSession(t *testing.T) {
+	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, 5 * time.Second})
+
+	tt := &mockTube{}
+	tt.On("Session").Return(p.session + 100)
+	tt.On("Close").Return(nil).Once()
+
+	p.put(tt)
+
+	tt.AssertExpectations(t)
 }
