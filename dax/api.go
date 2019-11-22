@@ -463,6 +463,19 @@ func (d *Dax) DescribeTableRequest(*dynamodb.DescribeTableInput) (r *request.Req
 	return
 }
 
+func (d *Dax) DescribeTableReplicaAutoScaling(*dynamodb.DescribeTableReplicaAutoScalingInput) (*dynamodb.DescribeTableReplicaAutoScalingOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) DescribeTableReplicaAutoScalingWithContext(aws.Context, *dynamodb.DescribeTableReplicaAutoScalingInput, ...request.Option) (*dynamodb.DescribeTableReplicaAutoScalingOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) DescribeTableReplicaAutoScalingRequest(*dynamodb.DescribeTableReplicaAutoScalingInput) (r *request.Request, o *dynamodb.DescribeTableReplicaAutoScalingOutput) {
+	d.unImpl()
+	return
+}
+
 func (d *Dax) DescribeTimeToLive(*dynamodb.DescribeTimeToLiveInput) (*dynamodb.DescribeTimeToLiveOutput, error) {
 	return nil, d.unImpl()
 }
@@ -636,6 +649,19 @@ func (d *Dax) UpdateTableWithContext(aws.Context, *dynamodb.UpdateTableInput, ..
 }
 
 func (d *Dax) UpdateTableRequest(*dynamodb.UpdateTableInput) (r *request.Request, o *dynamodb.UpdateTableOutput) {
+	d.unImpl()
+	return
+}
+
+func (d *Dax) UpdateTableReplicaAutoScaling(*dynamodb.UpdateTableReplicaAutoScalingInput) (*dynamodb.UpdateTableReplicaAutoScalingOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) UpdateTableReplicaAutoScalingWithContext(aws.Context, *dynamodb.UpdateTableReplicaAutoScalingInput, ...request.Option) (*dynamodb.UpdateTableReplicaAutoScalingOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) UpdateTableReplicaAutoScalingRequest(*dynamodb.UpdateTableReplicaAutoScalingInput) (r *request.Request, o *dynamodb.UpdateTableReplicaAutoScalingOutput) {
 	d.unImpl()
 	return
 }
