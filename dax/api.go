@@ -16,11 +16,12 @@
 package dax
 
 import (
+	"io"
+
 	"github.com/aws/aws-dax-go/dax/internal/client"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"io"
 )
 
 func (d *Dax) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
@@ -398,6 +399,19 @@ func (d *Dax) DescribeContinuousBackupsRequest(*dynamodb.DescribeContinuousBacku
 	return
 }
 
+func (d *Dax) DescribeContributorInsights(*dynamodb.DescribeContributorInsightsInput) (*dynamodb.DescribeContributorInsightsOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) DescribeContributorInsightsWithContext(aws.Context, *dynamodb.DescribeContributorInsightsInput, ...request.Option) (*dynamodb.DescribeContributorInsightsOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) DescribeContributorInsightsRequest(*dynamodb.DescribeContributorInsightsInput) (r *request.Request, o *dynamodb.DescribeContributorInsightsOutput) {
+	d.unImpl()
+	return
+}
+
 func (d *Dax) DescribeEndpoints(*dynamodb.DescribeEndpointsInput) (*dynamodb.DescribeEndpointsOutput, error) {
 	return nil, d.unImpl()
 }
@@ -500,6 +514,27 @@ func (d *Dax) ListBackupsWithContext(aws.Context, *dynamodb.ListBackupsInput, ..
 func (d *Dax) ListBackupsRequest(*dynamodb.ListBackupsInput) (r *request.Request, o *dynamodb.ListBackupsOutput) {
 	d.unImpl()
 	return
+}
+
+func (d *Dax) ListContributorInsights(*dynamodb.ListContributorInsightsInput) (*dynamodb.ListContributorInsightsOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) ListContributorInsightsWithContext(aws.Context, *dynamodb.ListContributorInsightsInput, ...request.Option) (*dynamodb.ListContributorInsightsOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) ListContributorInsightsRequest(*dynamodb.ListContributorInsightsInput) (r *request.Request, o *dynamodb.ListContributorInsightsOutput) {
+	d.unImpl()
+	return
+}
+
+func (d *Dax) ListContributorInsightsPages(*dynamodb.ListContributorInsightsInput, func(*dynamodb.ListContributorInsightsOutput, bool) bool) error {
+	return d.unImpl()
+}
+
+func (d *Dax) ListContributorInsightsPagesWithContext(aws.Context, *dynamodb.ListContributorInsightsInput, func(*dynamodb.ListContributorInsightsOutput, bool) bool, ...request.Option) error {
+	return d.unImpl()
 }
 
 func (d *Dax) ListGlobalTables(*dynamodb.ListGlobalTablesInput) (*dynamodb.ListGlobalTablesOutput, error) {
@@ -610,6 +645,19 @@ func (d *Dax) UpdateContinuousBackupsWithContext(aws.Context, *dynamodb.UpdateCo
 }
 
 func (d *Dax) UpdateContinuousBackupsRequest(*dynamodb.UpdateContinuousBackupsInput) (r *request.Request, o *dynamodb.UpdateContinuousBackupsOutput) {
+	d.unImpl()
+	return
+}
+
+func (d *Dax) UpdateContributorInsights(*dynamodb.UpdateContributorInsightsInput) (*dynamodb.UpdateContributorInsightsOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) UpdateContributorInsightsWithContext(aws.Context, *dynamodb.UpdateContributorInsightsInput, ...request.Option) (*dynamodb.UpdateContributorInsightsOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) UpdateContributorInsightsRequest(*dynamodb.UpdateContributorInsightsInput) (r *request.Request, o *dynamodb.UpdateContributorInsightsOutput) {
 	d.unImpl()
 	return
 }
