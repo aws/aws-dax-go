@@ -298,21 +298,16 @@ func (d *Dax) QueryPages(input *dynamodb.QueryInput, fn func(*dynamodb.QueryOutp
 }
 
 func (d *Dax) QueryPagesWithContext(ctx aws.Context, input *dynamodb.QueryInput, fn func(*dynamodb.QueryOutput, bool) bool, opts ...request.Option) error {
-	out, err := d.QueryWithContext(ctx, input, opts...)
-	if err != nil {
-		return err
-	}
+	lastEvaluatedKey := input.ExclusiveStartKey
 
-	fn(out, out.LastEvaluatedKey == nil)
-
-	for out.LastEvaluatedKey != nil {
-		input.ExclusiveStartKey = out.LastEvaluatedKey
-		out, err = d.QueryWithContext(ctx, input, opts...)
+	for {
+		out, err := d.QueryWithContext(ctx, input, opts...)
 		if err != nil {
 			return err
 		}
 
-		isLastPage := out.LastEvaluatedKey != nil
+		lastEvaluatedKey = out.LastEvaluatedKey
+		isLastPage := lastEvaluatedKey == nil
 		if !fn(out, isLastPage) {
 			break
 		}
@@ -326,21 +321,16 @@ func (d *Dax) ScanPages(input *dynamodb.ScanInput, fn func(*dynamodb.ScanOutput,
 }
 
 func (d *Dax) ScanPagesWithContext(ctx aws.Context, input *dynamodb.ScanInput, fn func(*dynamodb.ScanOutput, bool) bool, opts ...request.Option) error {
-	out, err := d.ScanWithContext(ctx, input, opts...)
-	if err != nil {
-		return err
-	}
+	lastEvaluatedKey := input.ExclusiveStartKey
 
-	fn(out, out.LastEvaluatedKey == nil)
-
-	for out.LastEvaluatedKey != nil {
-		input.ExclusiveStartKey = out.LastEvaluatedKey
-		out, err = d.ScanWithContext(ctx, input, opts...)
+	for {
+		out, err := d.ScanWithContext(ctx, input, opts...)
 		if err != nil {
 			return err
 		}
 
-		isLastPage := out.LastEvaluatedKey != nil
+		lastEvaluatedKey = out.LastEvaluatedKey
+		isLastPage := lastEvaluatedKey == nil
 		if !fn(out, isLastPage) {
 			break
 		}
