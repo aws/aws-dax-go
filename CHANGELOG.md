@@ -1,3 +1,7 @@
+Release v1.1.5 (2020-01-16)
+===
+* Add retry logic for throttling exceptions and support for newer aws-sdk-go v1.25.48
+
 Release v1.1.4 (2019-11-13)
 ===
 * Add a notion of session to the socket pool and associated sockets. It allows to close idle sockets on an error.

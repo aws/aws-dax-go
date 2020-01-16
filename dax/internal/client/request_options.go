@@ -16,19 +16,23 @@
 package client
 
 import (
+	"time"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/client/metadata"
 	"github.com/aws/aws-sdk-go/aws/request"
-	"time"
 )
 
 type RequestOptions struct {
 	LogLevel aws.LogLevelType
 	Logger   aws.Logger
 
-	RetryDelay   time.Duration
-	MaxRetries   int
+	RetryDelay time.Duration
+	//Retryer implements equal jitter backoff stratergy for throttled requests
+	Retryer    DaxRetryer
+	MaxRetries int
+	//SleepDelayFn is used for non-throttled retryable requests
 	SleepDelayFn func(time.Duration)
 	Context      aws.Context
 }

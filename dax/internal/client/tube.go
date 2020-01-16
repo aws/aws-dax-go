@@ -25,7 +25,7 @@ import (
 )
 
 const magic = "J7yne5G"
-const agent = "DaxGoClient-1.1.4"
+const agent = "DaxGoClient-1.1.5"
 
 var optional = map[string]string{"UserAgent": agent}
 

@@ -19,11 +19,12 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"net"
+
 	"github.com/aws/aws-dax-go/dax/internal/cbor"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"net"
 )
 
 const (
@@ -60,10 +61,6 @@ func newDaxTransactionCanceledFailure(codes []int, errorCode, message, requestId
 		cancellationReasonMsgs:  cancellationReasonMsgs,
 		cancellationReasonItems: cancellationReasonItems,
 	}
-}
-
-func (f *daxRequestFailure) retryable() bool {
-	return len(f.codes) > 0 && (f.codes[0] == 1 || f.codes[0] == 2) || inferErrorCode(f.codes) == dynamodb.ErrCodeTransactionInProgressException
 }
 
 func (f *daxRequestFailure) recoverable() bool {

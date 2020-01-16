@@ -311,6 +311,8 @@ func (cc *ClusterDaxClient) retry(op string, action func(client DaxAPI, o Reques
 	attempts := opt.MaxRetries
 	opt.MaxRetries = 0 // disable retries on single node client
 
+	var req request.Request
+	var ok bool
 	var err error
 	var client DaxAPI
 	// Start from 0 to accomodate for the initial request
@@ -319,21 +321,33 @@ func (cc *ClusterDaxClient) retry(op string, action func(client DaxAPI, o Reques
 			opt.Logger.Log(fmt.Sprintf("DEBUG: Retrying Request %s/%s, attempt %d", service, op, i))
 		}
 		client, err = cc.cluster.client(client)
-		if err != nil && !cc.retryable(err) {
-			return err
+		if err != nil {
+			if req, ok = cc.shouldRetry(opt, err); !ok {
+				return err
+			}
 		}
 
 		if err == nil {
 			if err = action(client, opt); err == nil {
 				return nil
-			} else if !cc.retryable(err) {
+			} else if req, ok = cc.shouldRetry(opt, err); !ok {
 				return err
 			}
 		}
 
-		if i != attempts && sleepFun != nil {
-			if err := sleepFun(); err != nil {
-				return awserr.New(request.CanceledErrorCode, "request context canceled", err)
+		if i != attempts {
+			req.RetryCount = i + 1
+			delay := opt.Retryer.RetryRules(&req)
+			if delay != 0 {
+				if opt.SleepDelayFn == nil {
+					aws.SleepWithContext(ctx, delay)
+				} else {
+					opt.SleepDelayFn(delay)
+				}
+			} else if sleepFun != nil {
+				if err := sleepFun(); err != nil {
+					return awserr.New(request.CanceledErrorCode, "request context canceled", err)
+				}
 			}
 		}
 	}
@@ -347,11 +361,14 @@ func (cc *ClusterDaxClient) newContext(o RequestOptions) aws.Context {
 	return aws.BackgroundContext()
 }
 
-func (cc *ClusterDaxClient) retryable(err error) bool {
-	if daxErr, ok := err.(*daxRequestFailure); ok {
-		return daxErr.retryable()
+func (cc *ClusterDaxClient) shouldRetry(o RequestOptions, err error) (request.Request, bool) {
+	req := request.Request{}
+	req.Error = err
+	if _, ok := err.(*daxRequestFailure); ok {
+		retry := o.Retryer.ShouldRetry(&req)
+		return req, retry
 	}
-	return true
+	return req, true
 }
 
 type cluster struct {
