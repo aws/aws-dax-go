@@ -1,4 +1,8 @@
-Release v1.1.5 (2020-01-16)
+Release v1.1.6 (2020-01-31)
+===
+* Add logic for QueryPages, QueryPagesWithContext, ScanPages, ScanPagesWithContext
+
+Release v1.1.5
 ===
 * Add retry logic for throttling exceptions and support for newer aws-sdk-go v1.25.48
 

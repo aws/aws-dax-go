@@ -292,20 +292,56 @@ func (d *Dax) BatchGetItemPagesWithContext(aws.Context, *dynamodb.BatchGetItemIn
 	return d.unImpl()
 }
 
-func (d *Dax) QueryPages(*dynamodb.QueryInput, func(*dynamodb.QueryOutput, bool) bool) error {
-	return d.unImpl()
+func (d *Dax) QueryPages(input *dynamodb.QueryInput, fn func(*dynamodb.QueryOutput, bool) bool) error {
+	return d.QueryPagesWithContext(aws.BackgroundContext(), input, fn)
 }
 
-func (d *Dax) QueryPagesWithContext(aws.Context, *dynamodb.QueryInput, func(*dynamodb.QueryOutput, bool) bool, ...request.Option) error {
-	return d.unImpl()
+func (d *Dax) QueryPagesWithContext(ctx aws.Context, input *dynamodb.QueryInput, fn func(*dynamodb.QueryOutput, bool) bool, opts ...request.Option) error {
+	p := request.Pagination {
+		NewRequest: func() (*request.Request, error) {
+			var inCpy *dynamodb.QueryInput
+			if input != nil {
+				tmp := *input
+				inCpy = &tmp
+			}
+			req, _ := d.QueryRequest(inCpy)
+			req.SetContext(ctx)
+			req.ApplyOptions(opts...)
+			return req, nil
+		},
+	}
+	for p.Next() {
+		if !fn(p.Page().(*dynamodb.QueryOutput), !p.HasNextPage()) {
+			break
+		}
+	}
+	return p.Err()
 }
 
-func (d *Dax) ScanPages(*dynamodb.ScanInput, func(*dynamodb.ScanOutput, bool) bool) error {
-	return d.unImpl()
+func (d *Dax) ScanPages(input *dynamodb.ScanInput, fn func(*dynamodb.ScanOutput, bool) bool) error {
+	return d.ScanPagesWithContext(aws.BackgroundContext(), input, fn)
 }
 
-func (d *Dax) ScanPagesWithContext(aws.Context, *dynamodb.ScanInput, func(*dynamodb.ScanOutput, bool) bool, ...request.Option) error {
-	return d.unImpl()
+func (d *Dax) ScanPagesWithContext(ctx aws.Context, input *dynamodb.ScanInput, fn func(*dynamodb.ScanOutput, bool) bool, opts ...request.Option) error {
+	p := request.Pagination {
+		NewRequest: func() (*request.Request, error) {
+			var inCpy *dynamodb.ScanInput
+			if input != nil {
+				tmp := *input
+				inCpy = &tmp
+			}
+			req, _ := d.ScanRequest(inCpy)
+			req.SetContext(ctx)
+			req.ApplyOptions(opts...)
+			return req, nil
+		},
+	}
+	for p.Next() {
+		if !fn(p.Page().(*dynamodb.ScanOutput), !p.HasNextPage()) {
+			break
+		}
+	}
+	return p.Err()
 }
 
 func (d *Dax) CreateBackup(*dynamodb.CreateBackupInput) (*dynamodb.CreateBackupOutput, error) {
