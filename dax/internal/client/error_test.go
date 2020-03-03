@@ -102,19 +102,19 @@ func TestDecodeTransactionCanceledException(t *testing.T) {
 		t.Errorf("unexpected error %v", err)
 	}
 
-	d, ok := e.(*daxTransactionCanceledFailure)
+	d, ok := e.(*DaxTransactionCanceledFailure)
 	if !ok {
-		t.Errorf("expected daxTransactionCanceledFailure type")
+		t.Errorf("expected DaxTransactionCanceledFailure type")
 	}
 
-	expected := &daxTransactionCanceledFailure{
+	expected := &DaxTransactionCanceledFailure{
 		daxRequestFailure: daxRequestFailure{
 			RequestFailure: awserr,
 			codes:          errcode,
 		},
-		cancellationReasonCodes: reasonCodes,
-		cancellationReasonMsgs:  reasonMsgs,
-		cancellationReasonItems: expectedReasonItems,
+		CancellationReasonCodes: reasonCodes,
+		CancellationReasonMsgs:  reasonMsgs,
+		CancellationReasonItems: expectedReasonItems,
 	}
 
 	if !reflect.DeepEqual(expected, d) {

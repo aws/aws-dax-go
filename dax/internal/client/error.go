@@ -39,11 +39,11 @@ type daxRequestFailure struct {
 	codes []int
 }
 
-type daxTransactionCanceledFailure struct {
+type DaxTransactionCanceledFailure struct {
 	daxRequestFailure
-	cancellationReasonCodes []string
-	cancellationReasonMsgs  []string
-	cancellationReasonItems []byte
+	CancellationReasonCodes []string
+	CancellationReasonMsgs  []string
+	CancellationReasonItems []byte
 }
 
 func newDaxRequestFailure(codes []int, errorCode, message, requestId string, statusCode int) *daxRequestFailure {
@@ -54,12 +54,12 @@ func newDaxRequestFailure(codes []int, errorCode, message, requestId string, sta
 }
 
 func newDaxTransactionCanceledFailure(codes []int, errorCode, message, requestId string, statusCode int,
-	cancellationReasonCodes, cancellationReasonMsgs []string, cancellationReasonItems []byte) *daxTransactionCanceledFailure {
-	return &daxTransactionCanceledFailure{
+	cancellationReasonCodes, cancellationReasonMsgs []string, cancellationReasonItems []byte) *DaxTransactionCanceledFailure {
+	return &DaxTransactionCanceledFailure{
 		daxRequestFailure:       *newDaxRequestFailure(codes, errorCode, message, requestId, statusCode),
-		cancellationReasonCodes: cancellationReasonCodes,
-		cancellationReasonMsgs:  cancellationReasonMsgs,
-		cancellationReasonItems: cancellationReasonItems,
+		CancellationReasonCodes: cancellationReasonCodes,
+		CancellationReasonMsgs:  cancellationReasonMsgs,
+		CancellationReasonItems: cancellationReasonItems,
 	}
 }
 
