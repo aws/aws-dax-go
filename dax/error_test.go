@@ -13,7 +13,7 @@
   permissions and limitations under the License.
 */
 
-package client
+package dax
 
 import (
 	"bytes"
