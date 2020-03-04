@@ -18,12 +18,12 @@ package client
 import (
 	"fmt"
 
-	"github.com/aws/aws-dax-go/dax/internal/cbor"
-	"github.com/aws/aws-dax-go/dax/internal/lru"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/dmartin1/aws-dax-go/dax/internal/cbor"
+	"github.com/dmartin1/aws-dax-go/dax/internal/lru"
 )
 
 const (
@@ -175,7 +175,7 @@ func decodeDefineKeySchemaOutput(reader *cbor.Reader) ([]dynamodb.AttributeDefin
 }
 
 func decodePutItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.PutItemInput, keySchemaCache *lru.Lru, attrListIdToNames *lru.Lru, output *dynamodb.PutItemOutput) (*dynamodb.PutItemOutput, error) {
-	if consumed, err := consumeNil(reader); err != nil {
+	if consumed, err := ConsumeNil(reader); err != nil {
 		return output, err
 	} else if consumed {
 		return output, nil
@@ -227,7 +227,7 @@ func decodePutItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.P
 }
 
 func decodeDeleteItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.DeleteItemInput, keySchemaCache *lru.Lru, attrListIdToNames *lru.Lru, output *dynamodb.DeleteItemOutput) (*dynamodb.DeleteItemOutput, error) {
-	if consumed, err := consumeNil(reader); err != nil {
+	if consumed, err := ConsumeNil(reader); err != nil {
 		return output, err
 	} else if consumed {
 		return output, nil
@@ -274,7 +274,7 @@ func decodeDeleteItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamod
 }
 
 func decodeUpdateItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.UpdateItemInput, keySchemaCache *lru.Lru, attrListIdToNames *lru.Lru, output *dynamodb.UpdateItemOutput) (*dynamodb.UpdateItemOutput, error) {
-	if consumed, err := consumeNil(reader); err != nil {
+	if consumed, err := ConsumeNil(reader); err != nil {
 		return output, err
 	} else if consumed {
 		return output, nil
@@ -334,7 +334,7 @@ func decodeUpdateItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamod
 }
 
 func decodeGetItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.GetItemInput, attrListIdToNames *lru.Lru, output *dynamodb.GetItemOutput) (*dynamodb.GetItemOutput, error) {
-	if consumed, err := consumeNil(reader); err != nil {
+	if consumed, err := ConsumeNil(reader); err != nil {
 		return output, err
 	} else if consumed {
 		return output, nil
@@ -433,7 +433,7 @@ func (o *scanQueryOutput) queryOutput(output *dynamodb.QueryOutput) *dynamodb.Qu
 }
 
 func decodeScanQueryOutput(ctx aws.Context, reader *cbor.Reader, table string, indexed bool, projection *string, exprAttrNames map[string]*string, keySchemaCache *lru.Lru, attrNamesListToId *lru.Lru) (*scanQueryOutput, error) {
-	if consumed, err := consumeNil(reader); err != nil {
+	if consumed, err := ConsumeNil(reader); err != nil {
 		return nil, err
 	} else if consumed {
 		return nil, nil
@@ -491,7 +491,7 @@ func decodeBatchWriteItemOutput(ctx aws.Context, reader *cbor.Reader, keySchemaC
 	if output != nil {
 		output.UnprocessedItems = map[string][]*dynamodb.WriteRequest{}
 	}
-	if consumed, err := consumeNil(reader); err != nil {
+	if consumed, err := ConsumeNil(reader); err != nil {
 		return output, err
 	} else if consumed {
 		return output, nil
@@ -595,7 +595,7 @@ func decodeBatchWriteItemOutput(ctx aws.Context, reader *cbor.Reader, keySchemaC
 }
 
 func decodeBatchGetItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.BatchGetItemInput, keySchemaCache *lru.Lru, attrNamesListToId *lru.Lru, output *dynamodb.BatchGetItemOutput) (*dynamodb.BatchGetItemOutput, error) {
-	if consumed, err := consumeNil(reader); err != nil {
+	if consumed, err := ConsumeNil(reader); err != nil {
 		return output, err
 	} else if consumed {
 		return output, nil
@@ -863,7 +863,7 @@ func decodeTransactGetItemsOutput(ctx aws.Context, reader *cbor.Reader, input *d
 }
 
 func decodeScanQueryItems(ctx aws.Context, reader *cbor.Reader, table string, keySchemaCache *lru.Lru, attrNamesListToId *lru.Lru, projectionOrdinals []documentPath) ([]map[string]*dynamodb.AttributeValue, error) {
-	consumed, err := consumeNil(reader)
+	consumed, err := ConsumeNil(reader)
 	if err != nil {
 		return nil, err
 	}
@@ -1001,7 +1001,7 @@ func consumeMap(reader *cbor.Reader, consumer func(int, *cbor.Reader) error) err
 	return nil
 }
 
-func consumeNil(reader *cbor.Reader) (bool, error) {
+func ConsumeNil(reader *cbor.Reader) (bool, error) {
 	hdr, err := reader.PeekHeader()
 	if err != nil {
 		return false, err
@@ -1030,7 +1030,7 @@ func consumeBreak(reader *cbor.Reader) (bool, error) {
 }
 
 func decodeKey(reader *cbor.Reader, keys []dynamodb.AttributeDefinition) (map[string]*dynamodb.AttributeValue, error) {
-	consumed, err := consumeNil(reader)
+	consumed, err := ConsumeNil(reader)
 	if err != nil {
 		return nil, err
 	}
@@ -1045,7 +1045,7 @@ func decodeKey(reader *cbor.Reader, keys []dynamodb.AttributeDefinition) (map[st
 }
 
 func decodeCompoundKey(reader *cbor.Reader) (map[string]*dynamodb.AttributeValue, error) {
-	consumed, err := consumeNil(reader)
+	consumed, err := ConsumeNil(reader)
 	if err != nil {
 		return nil, err
 	}
@@ -1179,7 +1179,7 @@ func decodeAttributeProjection(ctx aws.Context, reader *cbor.Reader, attrListIdT
 }
 
 func decodeConsumedCapacity(reader *cbor.Reader) (*dynamodb.ConsumedCapacity, error) {
-	consumed, err := consumeNil(reader)
+	consumed, err := ConsumeNil(reader)
 	if err != nil {
 		return nil, err
 	}
@@ -1205,7 +1205,7 @@ func decodeConsumedCapacity(reader *cbor.Reader) (*dynamodb.ConsumedCapacity, er
 	}
 	cc.CapacityUnits = aws.Float64(c)
 
-	consumed, err = consumeNil(reader)
+	consumed, err = ConsumeNil(reader)
 	if err != nil {
 		return nil, err
 	}
@@ -1232,7 +1232,7 @@ func decodeConsumedCapacity(reader *cbor.Reader) (*dynamodb.ConsumedCapacity, er
 }
 
 func decodeConsumedCapacityExtended(reader *cbor.Reader) (*dynamodb.ConsumedCapacity, error) {
-	consumed, err := consumeNil(reader)
+	consumed, err := ConsumeNil(reader)
 	if err != nil {
 		return nil, err
 	}
@@ -1297,7 +1297,7 @@ func decodeConsumedCapacityExtended(reader *cbor.Reader) (*dynamodb.ConsumedCapa
 }
 
 func decodeCapacity(reader *cbor.Reader) (*dynamodb.Capacity, error) {
-	consumed, err := consumeNil(reader)
+	consumed, err := ConsumeNil(reader)
 	if err != nil {
 		return nil, err
 	}
@@ -1338,7 +1338,7 @@ func decodeCapacity(reader *cbor.Reader) (*dynamodb.Capacity, error) {
 }
 
 func decodeIndexConsumedCapacity(reader *cbor.Reader, extended bool) (map[string]*dynamodb.Capacity, error) {
-	consumed, err := consumeNil(reader)
+	consumed, err := ConsumeNil(reader)
 	if err != nil {
 		return nil, err
 	}
@@ -1378,7 +1378,7 @@ func decodeIndexConsumedCapacity(reader *cbor.Reader, extended bool) (map[string
 }
 
 func decodeItemCollectionMetrics(reader *cbor.Reader, partitionKey string) (*dynamodb.ItemCollectionMetrics, error) {
-	consumed, err := consumeNil(reader)
+	consumed, err := ConsumeNil(reader)
 	if err != nil {
 		return nil, err
 	}

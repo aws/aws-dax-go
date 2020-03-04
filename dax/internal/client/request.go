@@ -21,13 +21,13 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/aws/aws-dax-go/dax/internal/cbor"
-	"github.com/aws/aws-dax-go/dax/internal/lru"
-	"github.com/aws/aws-dax-go/dax/internal/parser"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/dmartin1/aws-dax-go/dax/internal/cbor"
+	"github.com/dmartin1/aws-dax-go/dax/internal/lru"
+	"github.com/dmartin1/aws-dax-go/dax/internal/parser"
 	"github.com/gofrs/uuid"
 )
 

@@ -18,6 +18,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"github.com/dmartin1/aws-dax-go/dax/daxerr"
 	"io"
 	"math/rand"
 	"net"
@@ -364,7 +365,7 @@ func (cc *ClusterDaxClient) newContext(o RequestOptions) aws.Context {
 func (cc *ClusterDaxClient) shouldRetry(o RequestOptions, err error) (request.Request, bool) {
 	req := request.Request{}
 	req.Error = err
-	if _, ok := err.(*daxRequestFailure); ok {
+	if _, ok := err.(*daxerr.DaxRequestFailure); ok {
 		retry := o.Retryer.ShouldRetry(&req)
 		return req, retry
 	}

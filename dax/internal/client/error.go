@@ -13,18 +13,19 @@
   permissions and limitations under the License.
 */
 
-package dax
+package client
 
 import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"github.com/dmartin1/aws-dax-go/dax/daxerr"
 	"net"
 
-	"github.com/aws/aws-dax-go/dax/internal/cbor"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/dmartin1/aws-dax-go/dax/internal/cbor"
 )
 
 const (
@@ -34,42 +35,21 @@ const (
 	ErrCodeUnknown             = "Unknown"
 )
 
-type daxRequestFailure struct {
-	awserr.RequestFailure
-	codes []int
-}
-
-type DaxTransactionCanceledFailure struct {
-	daxRequestFailure
-	CancellationReasonCodes []string
-	CancellationReasonMsgs  []string
-	CancellationReasonItems []byte
-}
-
-func newDaxRequestFailure(codes []int, errorCode, message, requestId string, statusCode int) *daxRequestFailure {
-	return &daxRequestFailure{
+func newDaxRequestFailure(codes []int, errorCode, message, requestId string, statusCode int) *daxerr.DaxRequestFailure {
+	return &daxerr.DaxRequestFailure{
 		RequestFailure: awserr.NewRequestFailure(awserr.New(errorCode, message, nil), statusCode, requestId),
-		codes:          codes,
+		Codes:          codes,
 	}
 }
 
 func newDaxTransactionCanceledFailure(codes []int, errorCode, message, requestId string, statusCode int,
-	cancellationReasonCodes, cancellationReasonMsgs []string, cancellationReasonItems []byte) *DaxTransactionCanceledFailure {
-	return &DaxTransactionCanceledFailure{
-		daxRequestFailure:       *newDaxRequestFailure(codes, errorCode, message, requestId, statusCode),
+	cancellationReasonCodes, cancellationReasonMsgs []string, cancellationReasonItems []byte) *daxerr.DaxTransactionCanceledFailure {
+	return &daxerr.DaxTransactionCanceledFailure{
+		DaxRequestFailure:       *newDaxRequestFailure(codes, errorCode, message, requestId, statusCode),
 		CancellationReasonCodes: cancellationReasonCodes,
 		CancellationReasonMsgs:  cancellationReasonMsgs,
 		CancellationReasonItems: cancellationReasonItems,
 	}
-}
-
-func (f *daxRequestFailure) recoverable() bool {
-	return len(f.codes) > 0 && f.codes[0] == 2
-}
-
-func (f *daxRequestFailure) authError() bool {
-	return len(f.codes) > 3 && (f.codes[1] == 23 && f.codes[2] == 31 &&
-		(f.codes[3] == 32 || f.codes[3] == 33 || f.codes[3] == 34))
 }
 
 func translateError(err error) awserr.Error {
@@ -178,7 +158,7 @@ func decodeError(reader *cbor.Reader) (awserr.Error, error) {
 			var itemsBuf bytes.Buffer
 			itemsWriter := bufio.NewWriter(&itemsBuf)
 			for i := 0; i < cancellationReasonsLen; i++ {
-				if consumed, err := consumeNil(reader); err != nil {
+				if consumed, err := ConsumeNil(reader); err != nil {
 					return nil, err
 				} else if !consumed {
 					cancellationReasonCodes[i], err = reader.ReadString()
@@ -186,7 +166,7 @@ func decodeError(reader *cbor.Reader) (awserr.Error, error) {
 						return nil, err
 					}
 				}
-				if consumed, err := consumeNil(reader); err != nil {
+				if consumed, err := ConsumeNil(reader); err != nil {
 					return nil, err
 				} else if !consumed {
 					cancellationReasonMsgs[i], err = reader.ReadString()
@@ -194,7 +174,7 @@ func decodeError(reader *cbor.Reader) (awserr.Error, error) {
 						return nil, err
 					}
 				}
-				if consumed, err := consumeNil(reader); err != nil {
+				if consumed, err := ConsumeNil(reader); err != nil {
 					return nil, err
 				} else if !consumed {
 					bytes, err := reader.ReadBytes()

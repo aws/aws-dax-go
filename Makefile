@@ -1,7 +1,7 @@
 MAKEFILE    := $(realpath $(lastword $(MAKEFILE_LIST)))
 ROOT_DIR    := $(shell dirname $(MAKEFILE))
 GOPATH      := $(ROOT_DIR)/gopath
-SRC_LINK    := $(GOPATH)/src/github.com/aws/aws-dax-go
+SRC_LINK    := $(GOPATH)/src/github.com/dmartin1/aws-dax-go
 
 DEP_INSTALL_DIRECTORY := $(GOPATH)/bin
 INSTALL_DIRECTORY     := $(DEP_INSTALL_DIRECTORY)

@@ -18,7 +18,7 @@ package parser
 import (
 	"fmt"
 	"github.com/antlr/antlr4/runtime/Go/antlr"
-	"github.com/aws/aws-dax-go/dax/internal/parser/generated"
+	"github.com/dmartin1/aws-dax-go/dax/internal/parser/generated"
 )
 
 const (

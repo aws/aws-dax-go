@@ -16,6 +16,7 @@
 package client
 
 import (
+	"github.com/dmartin1/aws-dax-go/dax/daxerr"
 	"math/rand"
 	"time"
 
@@ -62,8 +63,8 @@ func (r DaxRetryer) RetryRules(req *request.Request) time.Duration {
 
 //ShouldRetry returns true if the request should be retried.
 func (r DaxRetryer) ShouldRetry(req *request.Request) bool {
-	daxErr := req.Error.(*daxRequestFailure)
-	return len(daxErr.codes) > 0 && (daxErr.codes[0] == 1 || daxErr.codes[0] == 2) || req.IsErrorThrottle()
+	daxErr := req.Error.(*daxerr.DaxRequestFailure)
+	return len(daxErr.Codes) > 0 && (daxErr.Codes[0] == 1 || daxErr.Codes[0] == 2) || req.IsErrorThrottle()
 }
 
 // MaxRetries returns the number of maximum retries the service will use to make

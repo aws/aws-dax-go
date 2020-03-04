@@ -17,11 +17,11 @@ package dax
 
 import (
 	"context"
-	"github.com/aws/aws-dax-go/dax/internal/client"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
+	"github.com/dmartin1/aws-dax-go/dax/internal/client"
 	"time"
 )
 

@@ -18,10 +18,10 @@ package dax
 import (
 	"io"
 
-	"github.com/aws/aws-dax-go/dax/internal/client"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/dmartin1/aws-dax-go/dax/internal/client"
 )
 
 func (d *Dax) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
@@ -297,7 +297,7 @@ func (d *Dax) QueryPages(input *dynamodb.QueryInput, fn func(*dynamodb.QueryOutp
 }
 
 func (d *Dax) QueryPagesWithContext(ctx aws.Context, input *dynamodb.QueryInput, fn func(*dynamodb.QueryOutput, bool) bool, opts ...request.Option) error {
-	p := request.Pagination {
+	p := request.Pagination{
 		NewRequest: func() (*request.Request, error) {
 			var inCpy *dynamodb.QueryInput
 			if input != nil {
@@ -323,7 +323,7 @@ func (d *Dax) ScanPages(input *dynamodb.ScanInput, fn func(*dynamodb.ScanOutput,
 }
 
 func (d *Dax) ScanPagesWithContext(ctx aws.Context, input *dynamodb.ScanInput, fn func(*dynamodb.ScanOutput, bool) bool, opts ...request.Option) error {
-	p := request.Pagination {
+	p := request.Pagination{
 		NewRequest: func() (*request.Request, error) {
 			var inCpy *dynamodb.ScanInput
 			if input != nil {

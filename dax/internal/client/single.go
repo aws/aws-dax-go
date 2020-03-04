@@ -18,16 +18,17 @@ package client
 import (
 	"bytes"
 	"fmt"
+	"github.com/dmartin1/aws-dax-go/dax/daxerr"
 	"time"
 
-	"github.com/aws/aws-dax-go/dax/internal/cbor"
-	"github.com/aws/aws-dax-go/dax/internal/lru"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/client/metadata"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/dmartin1/aws-dax-go/dax/internal/cbor"
+	"github.com/dmartin1/aws-dax-go/dax/internal/lru"
 )
 
 const (
@@ -709,9 +710,9 @@ func (client *SingleDaxClient) recycleTube(t tube, err error) {
 		recycle = true
 	} else {
 		// IO streams are guaranteed to be completely drained only on daxRequestException
-		d, ok := err.(*daxRequestFailure)
+		d, ok := err.(*daxerr.DaxRequestFailure)
 		recycle = ok
-		if ok && d.authError() {
+		if ok && d.AuthError() {
 			t.SetAuthExpiryUnix(time.Now().Unix())
 		}
 	}

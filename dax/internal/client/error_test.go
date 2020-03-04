@@ -13,14 +13,15 @@
   permissions and limitations under the License.
 */
 
-package dax
+package client
 
 import (
 	"bytes"
 	"errors"
-	"github.com/aws/aws-dax-go/dax/internal/cbor"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/dmartin1/aws-dax-go/dax/daxerr"
+	"github.com/dmartin1/aws-dax-go/dax/internal/cbor"
 	"net"
 	"reflect"
 	"testing"
@@ -50,14 +51,14 @@ func TestDecodeError(t *testing.T) {
 		t.Errorf("unexpected error %v", err)
 	}
 
-	d, ok := e.(*daxRequestFailure)
+	d, ok := e.(*daxerr.DaxRequestFailure)
 	if !ok {
 		t.Errorf("expected daxRequestFailure type")
 	}
 
-	expected := &daxRequestFailure{
+	expected := &daxerr.DaxRequestFailure{
 		RequestFailure: awserr,
-		codes:          errcode,
+		Codes:          errcode,
 	}
 
 	if !reflect.DeepEqual(expected, d) {
@@ -102,15 +103,15 @@ func TestDecodeTransactionCanceledException(t *testing.T) {
 		t.Errorf("unexpected error %v", err)
 	}
 
-	d, ok := e.(*DaxTransactionCanceledFailure)
+	d, ok := e.(*daxerr.DaxTransactionCanceledFailure)
 	if !ok {
-		t.Errorf("expected DaxTransactionCanceledFailure type")
+		t.Errorf("expected daxTransactionCanceledFailure type")
 	}
 
-	expected := &DaxTransactionCanceledFailure{
-		daxRequestFailure: daxRequestFailure{
+	expected := &daxerr.DaxTransactionCanceledFailure{
+		DaxRequestFailure: daxerr.DaxRequestFailure{
 			RequestFailure: awserr,
-			codes:          errcode,
+			Codes:          errcode,
 		},
 		CancellationReasonCodes: reasonCodes,
 		CancellationReasonMsgs:  reasonMsgs,
@@ -142,14 +143,14 @@ func TestDecodeErrorInfer(t *testing.T) {
 		t.Errorf("unexpected error %v", err)
 	}
 
-	d, ok := e.(*daxRequestFailure)
+	d, ok := e.(*daxerr.DaxRequestFailure)
 	if !ok {
 		t.Errorf("expected daxRequestFailure type")
 	}
 
-	expected := &daxRequestFailure{
+	expected := &daxerr.DaxRequestFailure{
 		RequestFailure: awserr,
-		codes:          errcode,
+		Codes:          errcode,
 	}
 
 	if !reflect.DeepEqual(expected, d) {
@@ -181,14 +182,14 @@ func TestDecodeNilErrorDetail(t *testing.T) {
 		t.Errorf("unexpected error %v", err)
 	}
 
-	d, ok := e.(*daxRequestFailure)
+	d, ok := e.(*daxerr.DaxRequestFailure)
 	if !ok {
 		t.Errorf("expected daxRequestFailure type")
 	}
 
-	expected := &daxRequestFailure{
+	expected := &daxerr.DaxRequestFailure{
 		RequestFailure: awserr,
-		codes:          errcode,
+		Codes:          errcode,
 	}
 
 	if !reflect.DeepEqual(expected, d) {
