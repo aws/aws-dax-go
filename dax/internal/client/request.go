@@ -538,7 +538,7 @@ func encodeBatchGetItemInput(ctx aws.Context, input *dynamodb.BatchGetItemInput,
 	return encodeItemOperationOptionalParams(nil, input.ReturnConsumedCapacity, nil, nil, nil, nil, nil, nil, nil, writer)
 }
 
-func encodeTransactWriteItemsInput(ctx aws.Context, input *dynamodb.TransactWriteItemsInput, keySchema *lru.Lru, attrNamesListToId *lru.Lru, writer *cbor.Writer) error {
+func encodeTransactWriteItemsInput(ctx aws.Context, input *dynamodb.TransactWriteItemsInput, keySchema *lru.Lru, attrNamesListToId *lru.Lru, writer *cbor.Writer, extractedKeys []map[string]*dynamodb.AttributeValue) error {
 	if input == nil {
 		return awserr.New(request.ParamRequiredErrCode, "input cannot be nil", nil)
 	}
@@ -561,26 +561,27 @@ func encodeTransactWriteItemsInput(ctx aws.Context, input *dynamodb.TransactWrit
 	updateExpressionsWriter := cbor.NewWriter(&updateExpressionsBuf)
 	rvOnConditionCheckFailureWriter := cbor.NewWriter(&rvOnConditionCheckFailureBuf)
 
-	len := len(input.TransactItems)
-	if err = operationWriter.WriteArrayHeader(len); err != nil {
+	l := len(input.TransactItems)
+
+	if err = operationWriter.WriteArrayHeader(l); err != nil {
 		return err
 	}
-	if err = tableNamesWriter.WriteArrayHeader(len); err != nil {
+	if err = tableNamesWriter.WriteArrayHeader(l); err != nil {
 		return err
 	}
-	if err = keysWriter.WriteArrayHeader(len); err != nil {
+	if err = keysWriter.WriteArrayHeader(l); err != nil {
 		return err
 	}
-	if err = valuesWriter.WriteArrayHeader(len); err != nil {
+	if err = valuesWriter.WriteArrayHeader(l); err != nil {
 		return err
 	}
-	if err = conditionExpressionsWriter.WriteArrayHeader(len); err != nil {
+	if err = conditionExpressionsWriter.WriteArrayHeader(l); err != nil {
 		return err
 	}
-	if err = updateExpressionsWriter.WriteArrayHeader(len); err != nil {
+	if err = updateExpressionsWriter.WriteArrayHeader(l); err != nil {
 		return err
 	}
-	if err = rvOnConditionCheckFailureWriter.WriteArrayHeader(len); err != nil {
+	if err = rvOnConditionCheckFailureWriter.WriteArrayHeader(l); err != nil {
 		return err
 	}
 
@@ -595,13 +596,15 @@ func encodeTransactWriteItemsInput(ctx aws.Context, input *dynamodb.TransactWrit
 	}()
 
 	tableKeySet := make(map[string]bool)
-	for _, twi := range input.TransactItems {
+	for i, twi := range input.TransactItems {
 		if twi == nil {
 			return awserr.New(request.ParamRequiredErrCode, "TransactWriteItem cannot be nil", nil)
 		}
 		var operation int
 		var tableName *string
+		var key map[string]*dynamodb.AttributeValue
 		var item map[string]*dynamodb.AttributeValue
+		var isItem bool = false
 		var conditionExpression *string
 		var updateExpression *string
 		var expressionAttributeNames map[string]*string
@@ -615,7 +618,7 @@ func encodeTransactWriteItemsInput(ctx aws.Context, input *dynamodb.TransactWrit
 			expressionAttributeNames = check.ExpressionAttributeNames
 			expressionAttributeValues = check.ExpressionAttributeValues
 			tableName = check.TableName
-			item = check.Key
+			key = check.Key
 			rvOnConditionCheckFailure = check.ReturnValuesOnConditionCheckFailure
 		}
 		if delete := twi.Delete; delete != nil {
@@ -625,7 +628,7 @@ func encodeTransactWriteItemsInput(ctx aws.Context, input *dynamodb.TransactWrit
 			expressionAttributeNames = delete.ExpressionAttributeNames
 			expressionAttributeValues = delete.ExpressionAttributeValues
 			tableName = delete.TableName
-			item = delete.Key
+			key = delete.Key
 			rvOnConditionCheckFailure = delete.ReturnValuesOnConditionCheckFailure
 		}
 		if put := twi.Put; put != nil {
@@ -636,6 +639,7 @@ func encodeTransactWriteItemsInput(ctx aws.Context, input *dynamodb.TransactWrit
 			expressionAttributeValues = put.ExpressionAttributeValues
 			tableName = put.TableName
 			item = put.Item
+			isItem = true
 			rvOnConditionCheckFailure = put.ReturnValuesOnConditionCheckFailure
 		}
 		if update := twi.Update; update != nil {
@@ -645,10 +649,11 @@ func encodeTransactWriteItemsInput(ctx aws.Context, input *dynamodb.TransactWrit
 			expressionAttributeNames = update.ExpressionAttributeNames
 			expressionAttributeValues = update.ExpressionAttributeValues
 			tableName = update.TableName
-			item = update.Key
+			key = update.Key
 			updateExpression = update.UpdateExpression
 			rvOnConditionCheckFailure = update.ReturnValuesOnConditionCheckFailure
 		}
+
 		if opCount == 0 {
 			return awserr.New(request.ParamRequiredErrCode, "Invalid Request: TransactWriteItemsInput should contain Delete or Put or Update request", nil)
 		}
@@ -669,10 +674,16 @@ func encodeTransactWriteItemsInput(ctx aws.Context, input *dynamodb.TransactWrit
 		}
 
 		// Check if duplicate [key, tableName] pair exists
-		keyBytes, err := cbor.GetEncodedItemKey(item, keydef)
+		var keyBytes []byte
+		if isItem {
+			keyBytes, err = cbor.GetEncodedItemKey(item, keydef)
+		} else {
+			keyBytes, err = cbor.GetEncodedItemKey(key, keydef)
+		}
 		if err != nil {
 			return err
 		}
+		keysWriter.WriteBytes(keyBytes)
 		keyBytes = append(keyBytes, []byte(*tableName)...)
 		tableKey := string(keyBytes)
 		_, ok := tableKeySet[tableKey]
@@ -682,9 +693,6 @@ func encodeTransactWriteItemsInput(ctx aws.Context, input *dynamodb.TransactWrit
 			tableKeySet[tableKey] = true
 		}
 
-		if err := cbor.EncodeItemKey(item, keydef, keysWriter); err != nil {
-			return err
-		}
 		switch operation {
 		case checkOperation, deleteOperation, partialUpdateOperation:
 			if err := valuesWriter.WriteNull(); err != nil {
@@ -694,7 +702,13 @@ func encodeTransactWriteItemsInput(ctx aws.Context, input *dynamodb.TransactWrit
 			if err := encodeNonKeyAttributes(ctx, item, keydef, attrNamesListToId, valuesWriter); err != nil {
 				return err
 			}
+			key = map[string]*dynamodb.AttributeValue{}
+			for _, attrDef := range keydef {
+				key[*attrDef.AttributeName] = item[*attrDef.AttributeName]
+			}
 		}
+
+		extractedKeys[i] = key
 
 		encoded, err := parseExpressions(conditionExpression, updateExpression, nil, expressionAttributeNames, expressionAttributeValues)
 		if err != nil {
@@ -788,7 +802,7 @@ func encodeTransactWriteItemsInput(ctx aws.Context, input *dynamodb.TransactWrit
 	return encodeItemOperationOptionalParamsWithToken(nil, input.ReturnConsumedCapacity, input.ReturnItemCollectionMetrics, nil, nil, nil, nil, nil, nil, input.ClientRequestToken, writer)
 }
 
-func encodeTransactGetItemsInput(ctx aws.Context, input *dynamodb.TransactGetItemsInput, keySchema *lru.Lru, writer *cbor.Writer) error {
+func encodeTransactGetItemsInput(ctx aws.Context, input *dynamodb.TransactGetItemsInput, keySchema *lru.Lru, writer *cbor.Writer, extractedKeys []map[string]*dynamodb.AttributeValue) error {
 	if input == nil {
 		return awserr.New(request.ParamRequiredErrCode, "input cannot be nil", nil)
 	}
@@ -807,6 +821,7 @@ func encodeTransactGetItemsInput(ctx aws.Context, input *dynamodb.TransactGetIte
 	projectionExpressionsWriter := cbor.NewWriter(&projectionExpressionsBuf)
 
 	len := len(input.TransactItems)
+
 	if err = tableNamesWriter.WriteArrayHeader(len); err != nil {
 		return err
 	}
@@ -823,7 +838,7 @@ func encodeTransactGetItemsInput(ctx aws.Context, input *dynamodb.TransactGetIte
 		projectionExpressionsWriter.Close()
 	}()
 
-	for _, tgi := range input.TransactItems {
+	for i, tgi := range input.TransactItems {
 		if tgi == nil {
 			return awserr.New(request.ParamRequiredErrCode, "TransactGetItem cannot be nil", nil)
 		}
@@ -836,6 +851,8 @@ func encodeTransactGetItemsInput(ctx aws.Context, input *dynamodb.TransactGetIte
 		key = get.Key
 		expressionAttributeNames = get.ExpressionAttributeNames
 		projectionExpression = get.ProjectionExpression
+
+		extractedKeys[i] = key
 
 		if err := tableNamesWriter.WriteBytes([]byte(*tableName)); err != nil {
 			return err

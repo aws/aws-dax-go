@@ -1,3 +1,8 @@
+Release v1.2.0 (2020-04-17)
+===
+* Expose CancellationReasons through dynamodb.TransactionCanceledException
+* Add public method to create a DAX Config by merging DAX relevant configurations from an AWS Session
+
 Release v1.1.6 (2020-01-31)
 ===
 * Add logic for QueryPages, QueryPagesWithContext, ScanPages, ScanPagesWithContext

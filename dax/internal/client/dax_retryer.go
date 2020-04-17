@@ -62,8 +62,9 @@ func (r DaxRetryer) RetryRules(req *request.Request) time.Duration {
 
 //ShouldRetry returns true if the request should be retried.
 func (r DaxRetryer) ShouldRetry(req *request.Request) bool {
-	daxErr := req.Error.(*daxRequestFailure)
-	return len(daxErr.codes) > 0 && (daxErr.codes[0] == 1 || daxErr.codes[0] == 2) || req.IsErrorThrottle()
+	daxErr := req.Error.(daxError)
+	codes := daxErr.CodeSequence()
+	return len(codes) > 0 && (codes[0] == 1 || codes[0] == 2) || req.IsErrorThrottle()
 }
 
 // MaxRetries returns the number of maximum retries the service will use to make

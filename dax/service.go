@@ -17,16 +17,17 @@ package dax
 
 import (
 	"context"
+	"time"
+
 	"github.com/aws/aws-dax-go/dax/internal/client"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
-	"time"
 )
 
 // Dax makes requests to the Amazon DAX API, which conforms to the DynamoDB API.
-
+//
 // Dax methods are safe to use concurrently
 type Dax struct {
 	client client.DaxAPI
@@ -47,20 +48,33 @@ type Config struct {
 	Logger   aws.Logger
 }
 
-var defaultConfig = Config{
-	Config: client.DefaultConfig(),
-
-	RequestTimeout: 1 * time.Minute,
-	WriteRetries:   2,
-	ReadRetries:    2,
-	LogLevel:       aws.LogOff,
-	Logger:         aws.NewDefaultLogger(),
-}
-
+// DefaultConfig returns the default DAX configuration.
+//
+// Config.Region and Config.HostPorts still need to be configured properly
+// to start up a DAX client.
 func DefaultConfig() Config {
-	return defaultConfig
+	return Config{
+		Config:         client.DefaultConfig(),
+		RequestTimeout: 1 * time.Minute,
+		WriteRetries:   2,
+		ReadRetries:    2,
+		LogLevel:       aws.LogOff,
+		Logger:         aws.NewDefaultLogger(),
+	}
 }
 
+// NewWithSession creates a new instance of the DAX config with a session.
+//
+// Only configurations relevent to DAX will be used, others will be ignored.
+func NewConfigWithSession(session session.Session) Config {
+	dc := DefaultConfig()
+	if session.Config != nil {
+		dc.mergeFrom(*session.Config)
+	}
+	return dc
+}
+
+// New creates a new instance of the DAX client with a DAX configuration.
 func New(cfg Config) (*Dax, error) {
 	c, err := client.New(cfg.Config)
 	if err != nil {
@@ -69,15 +83,22 @@ func New(cfg Config) (*Dax, error) {
 	return &Dax{client: c, config: cfg}, nil
 }
 
+// NewWithSession creates a new instance of the DAX client with a session.
+//
+// Only configurations relevent to DAX will be used, others will be ignored.
+//
+// Example:
+// 		mySession := session.Must(session.NewSession(
+// 			&aws.Config{
+// 				Region: aws.String("us-east-1"),
+// 				Endpoint: aws.String("mycluster.frfx8h.clustercfg.dax.usw2.amazonaws.com:8111"),
+// 			}))
+//
+// 		// Create a DAX client from just a session.
+// 		svc := dax.NewWithSession(mySession)
 func NewWithSession(session session.Session) (*Dax, error) {
-	if err := client.ValidateHandlers(session.Handlers, false); err != nil {
-		return nil, err
-	}
 	dc := DefaultConfig()
 	if session.Config != nil {
-		if err := client.ValidateConfig(*session.Config, false); err != nil {
-			return nil, err
-		}
 		dc.mergeFrom(*session.Config)
 	}
 	return New(dc)

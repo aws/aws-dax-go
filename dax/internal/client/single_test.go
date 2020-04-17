@@ -65,7 +65,7 @@ func TestExecuteErrorHandling(t *testing.T) {
 			&mockConn{rd: []byte{cbor.Array + 3, cbor.PosInt + 4, cbor.PosInt + 0, cbor.PosInt + 0, cbor.Utf, cbor.Nil}},
 			func(writer *cbor.Writer) error { return nil },
 			nil,
-			newDaxRequestFailure([]int{4, 0, 0}, ErrCodeUnknown, "", "", 400),
+			newDaxRequestFailure([]int{4, 0, 0}, "", "", "", 400),
 			map[string]int{"Write": 2, "Read": 1, "SetDeadline": 1},
 		},
 		{ // no error, do not discard tube
@@ -77,7 +77,7 @@ func TestExecuteErrorHandling(t *testing.T) {
 		},
 	}
 
-	for _, c := range cases {
+	for i, c := range cases {
 		cli, err := newSingleClientWithOptions(":9121", "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1)
 		if err != nil {
 			t.Fatalf("unexpected error %v", err)
@@ -89,10 +89,10 @@ func TestExecuteErrorHandling(t *testing.T) {
 
 		err = cli.executeWithContext(aws.BackgroundContext(), OpGetItem, c.enc, c.dec)
 		if !reflect.DeepEqual(c.ee, err) {
-			t.Errorf("expected error %v, got error %v", c.ee, err)
+			t.Errorf("case[%d] expected error %v, got error %v", i, c.ee, err)
 		}
 		if !reflect.DeepEqual(c.ec, c.conn.cc) {
-			t.Errorf("expected %v calls, got %v", c.ec, c.conn.cc)
+			t.Errorf("case[%d] expected %v calls, got %v", i, c.ec, c.conn.cc)
 		}
 		cli.Close()
 	}

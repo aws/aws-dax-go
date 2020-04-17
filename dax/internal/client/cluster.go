@@ -66,7 +66,7 @@ type Config struct {
 }
 
 func (cfg *Config) validate() error {
-	if len(cfg.HostPorts) == 0 {
+	if cfg.HostPorts == nil || len(cfg.HostPorts) == 0 {
 		return awserr.New(request.ParamRequiredErrCode, "HostPorts is required", nil)
 	}
 	if len(cfg.Region) == 0 {
@@ -290,7 +290,13 @@ func (cc *ClusterDaxClient) send(req *request.Request) {
 	}
 }
 
-func (cc *ClusterDaxClient) retry(op string, action func(client DaxAPI, o RequestOptions) error, opt RequestOptions) error {
+func (cc *ClusterDaxClient) retry(op string, action func(client DaxAPI, o RequestOptions) error, opt RequestOptions) (err error) {
+	defer func() {
+		if daxErr, ok := err.(daxError); ok {
+			err = convertDaxError(daxErr)
+		}
+	}()
+
 	ctx := cc.newContext(opt)
 
 	var sleepFun func() error
@@ -313,7 +319,6 @@ func (cc *ClusterDaxClient) retry(op string, action func(client DaxAPI, o Reques
 
 	var req request.Request
 	var ok bool
-	var err error
 	var client DaxAPI
 	// Start from 0 to accomodate for the initial request
 	for i := 0; i <= attempts; i++ {
@@ -364,7 +369,7 @@ func (cc *ClusterDaxClient) newContext(o RequestOptions) aws.Context {
 func (cc *ClusterDaxClient) shouldRetry(o RequestOptions, err error) (request.Request, bool) {
 	req := request.Request{}
 	req.Error = err
-	if _, ok := err.(*daxRequestFailure); ok {
+	if _, ok := err.(daxError); ok {
 		retry := o.Retryer.ShouldRetry(&req)
 		return req, retry
 	}

@@ -19,14 +19,15 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
 	"log"
 	"math"
 	"math/big"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/request"
 )
 
 func TestCborString(t *testing.T) {
@@ -124,6 +125,70 @@ func TestCborType(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestCborReadRawTypeHeader(t *testing.T) {
+	for _, wt := range []int{PosInt, Utf, Bytes, Map, Array} {
+		var buf bytes.Buffer
+		w := NewWriter(&buf)
+		switch wt {
+		case PosInt:
+			w.WriteInt(0)
+		case Utf:
+			w.WriteString("")
+		case Bytes:
+			w.WriteBytes([]byte{})
+		case Map:
+			w.WriteMapHeader(0)
+		case Array:
+			w.WriteArrayHeader(0)
+		}
+		w.Flush()
+		r := NewReader(&buf)
+
+		o := &bytes.Buffer{}
+		hrd, value, err := r.readRawTypeHeader(o)
+		if err != nil {
+			t.Errorf("expected nil, got %v", err)
+		}
+		nr := NewReader(o)
+		nhrd, nvalue, err := nr.readTypeHeader()
+		if err != nil {
+			t.Errorf("expected nil, got %v", err)
+		}
+		if hrd != nhrd || value != nvalue {
+			t.Errorf("results from readRawTypeHeader and readTypeHeader are different: hdr(%d != %d), value(%d != %d", hrd, nhrd, value, nvalue)
+		}
+		ert := wt
+		rt := hrd & MajorTypeMask
+		if ert != rt {
+			t.Errorf("cbor: expected major type %d, got %d", ert, rt)
+		}
+	}
+}
+
+func TestCborReadRawBytes(t *testing.T) {
+	var buf bytes.Buffer
+	w := NewWriter(&buf)
+	exp := []byte{byte(1)}
+	w.WriteBytes(exp)
+	w.Flush()
+
+	r := NewReader(&buf)
+	var obuf bytes.Buffer
+	if err := r.ReadRawBytes(&obuf); err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+
+	nr := NewReader(&obuf)
+	act, err := nr.ReadBytes()
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+
+	if !reflect.DeepEqual(exp, act) {
+		t.Errorf("expected %v, got %v", exp, err)
 	}
 }
 
@@ -450,6 +515,50 @@ func BenchmarkPeekHeader(b *testing.B) {
 		} else if v != value {
 			b.Errorf("PeekHeader(%v) got %v", value, v)
 		}
+	}
+}
+
+func BenchmarkCborReadRawHeaderValue(b *testing.B) {
+	var buf bytes.Buffer
+	w := NewWriter(&buf)
+	if err := w.WriteInt(0); err != nil {
+		b.Errorf("WriteInt(%v) error = %v, want = nil", 0, err)
+	}
+	w.Flush()
+	bs := buf.Bytes()
+	buf.Reset()
+	br := bytes.NewReader(bs)
+	rdr := NewReader(br)
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		if _, _, err := rdr.readRawTypeHeader(&buf); err != nil {
+			b.Errorf("readRawTypeHeader error expect nil, got %v", err)
+		}
+		buf.Reset()
+		br.Seek(0, 0)
+	}
+}
+
+func BenchmarkCborReadHeaderValue(b *testing.B) {
+	var buf bytes.Buffer
+	w := NewWriter(&buf)
+	if err := w.WriteInt(0); err != nil {
+		b.Errorf("WriteInt(%v) error = %v, want = nil", 0, err)
+	}
+	w.Flush()
+	bs := buf.Bytes()
+	br := bytes.NewReader(bs)
+	rdr := NewReader(br)
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		if _, _, err := rdr.readTypeHeader(); err != nil {
+			b.Errorf("readRawTypeHeader error expect nil, got %v", err)
+		}
+		br.Seek(0, 0)
 	}
 }
 

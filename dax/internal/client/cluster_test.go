@@ -19,13 +19,16 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"reflect"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/stretchr/testify/require"
 )
 
 func testTaskExecutor(t *testing.T) { // disabled as test is time sensitive
@@ -165,6 +168,137 @@ func TestClusterDaxClient_retryReturnsLastError(t *testing.T) {
 	expectedError := fmt.Errorf("Error_%d", callCount)
 	if err.Error() != expectedError.Error() {
 		t.Fatalf("Wrong error. Expected %v, but got %v", expectedError, err)
+	}
+}
+
+func TestClusterDaxClient_retryReturnsCorrectErrorType(t *testing.T) {
+	cluster, _ := newTestCluster([]string{"127.0.0.1:8111"})
+	cluster.update([]serviceEndpoint{{hostname: "localhost", port: 8121}})
+	cc := ClusterDaxClient{config: DefaultConfig(), cluster: cluster}
+
+	message := "Message"
+	statusCode := 0
+	requestID := "RequestID"
+	defaultErrCode := "empty"
+
+	cases := []struct {
+		// input
+		codes []int
+
+		// output
+		errCode string
+		class   reflect.Type
+	}{
+		{
+			codes:   []int{4, 23, 24},
+			errCode: dynamodb.ErrCodeResourceNotFoundException,
+			class:   reflect.TypeOf(&dynamodb.ResourceNotFoundException{}),
+		},
+		{
+			codes:   []int{4, 23, 35},
+			errCode: dynamodb.ErrCodeResourceInUseException,
+			class:   reflect.TypeOf(&dynamodb.ResourceInUseException{}),
+		},
+		{
+			codes:   []int{4, 37, 38, 39, 40},
+			errCode: dynamodb.ErrCodeProvisionedThroughputExceededException,
+			class:   reflect.TypeOf(&dynamodb.ProvisionedThroughputExceededException{}),
+		},
+		{
+			codes:   []int{4, 37, 38, 39, 40},
+			errCode: dynamodb.ErrCodeProvisionedThroughputExceededException,
+			class:   reflect.TypeOf(&dynamodb.ProvisionedThroughputExceededException{}),
+		},
+		{
+			codes:   []int{4, 37, 38, 39, 41},
+			errCode: dynamodb.ErrCodeResourceNotFoundException,
+			class:   reflect.TypeOf(&dynamodb.ResourceNotFoundException{}),
+		},
+		{
+			codes:   []int{4, 37, 38, 39, 43},
+			errCode: dynamodb.ErrCodeConditionalCheckFailedException,
+			class:   reflect.TypeOf(&dynamodb.ConditionalCheckFailedException{}),
+		},
+		{
+			codes:   []int{4, 37, 38, 39, 45},
+			errCode: dynamodb.ErrCodeResourceInUseException,
+			class:   reflect.TypeOf(&dynamodb.ResourceInUseException{}),
+		},
+		{
+			codes:   []int{4, 37, 38, 39, 46},
+			errCode: ErrCodeValidationException,
+			class:   reflect.TypeOf(awserr.NewRequestFailure(nil, 0, "")),
+		},
+		{
+			codes:   []int{4, 37, 38, 39, 47},
+			errCode: dynamodb.ErrCodeInternalServerError,
+			class:   reflect.TypeOf(&dynamodb.InternalServerError{}),
+		},
+		{
+			codes:   []int{4, 37, 38, 39, 48},
+			errCode: dynamodb.ErrCodeItemCollectionSizeLimitExceededException,
+			class:   reflect.TypeOf(&dynamodb.ItemCollectionSizeLimitExceededException{}),
+		},
+		{
+			codes:   []int{4, 37, 38, 39, 49},
+			errCode: dynamodb.ErrCodeLimitExceededException,
+			class:   reflect.TypeOf(&dynamodb.LimitExceededException{}),
+		},
+		{
+			codes:   []int{4, 37, 38, 39, 50},
+			errCode: ErrCodeThrottlingException,
+			class:   reflect.TypeOf(awserr.NewRequestFailure(nil, 0, "")),
+		},
+		{
+			codes:   []int{4, 37, 38, 39, 57},
+			errCode: dynamodb.ErrCodeTransactionConflictException,
+			class:   reflect.TypeOf(&dynamodb.TransactionConflictException{}),
+		},
+		{
+			codes:   []int{4, 37, 38, 39, 58},
+			errCode: dynamodb.ErrCodeTransactionCanceledException,
+			class:   reflect.TypeOf(&dynamodb.TransactionCanceledException{}),
+		},
+		{
+			codes:   []int{4, 37, 38, 39, 59},
+			errCode: dynamodb.ErrCodeTransactionInProgressException,
+			class:   reflect.TypeOf(&dynamodb.TransactionInProgressException{}),
+		},
+		{
+			codes:   []int{4, 37, 38, 39, 60},
+			errCode: dynamodb.ErrCodeIdempotentParameterMismatchException,
+			class:   reflect.TypeOf(&dynamodb.IdempotentParameterMismatchException{}),
+		},
+		{
+			codes:   []int{4, 37, 38, 44},
+			errCode: ErrCodeNotImplemented,
+			class:   reflect.TypeOf(awserr.NewRequestFailure(nil, 0, "")),
+		},
+	}
+
+	for _, c := range cases {
+		action := func(client DaxAPI, o RequestOptions) error {
+			if c.errCode == dynamodb.ErrCodeTransactionCanceledException {
+				return newDaxTransactionCanceledFailure(c.codes, defaultErrCode, message, requestID, statusCode, nil, nil, nil)
+			}
+			return newDaxRequestFailure(c.codes, defaultErrCode, message, requestID, statusCode)
+		}
+
+		opt := RequestOptions{
+			MaxRetries: 0,
+		}
+
+		err := cc.retry("op", action, opt)
+		actualClass := reflect.TypeOf(err)
+		if actualClass != c.class {
+			t.Errorf("conversion of code sequence %v failed: expected %s, but got %s", c.codes, c.class.String(), actualClass.String())
+		}
+		f, _ := err.(awserr.RequestFailure)
+		require.NotNilf(t, f, "conversion of code sequence %v failed: expected implement awserr.Error", c.codes)
+		require.Equal(t, c.errCode, f.Code())
+		require.Equal(t, statusCode, f.StatusCode())
+		require.Equal(t, requestID, f.RequestID())
+		require.Equal(t, message, f.Message())
 	}
 }
 

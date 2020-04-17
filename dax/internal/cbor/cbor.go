@@ -19,11 +19,12 @@ import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
 	"io"
 	"math"
 	"sync"
+
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/request"
 )
 
 const (
@@ -285,6 +286,21 @@ func (r *Reader) ReadString() (string, error) {
 	return string(b), err
 }
 
+func (r *Reader) ReadRawBytes(o io.Writer) error {
+	hdr, value, err := r.readRawTypeHeader(o)
+	if err != nil {
+		return err
+	}
+	if err = r.verifyMajorType(hdr, Bytes); err != nil {
+		return err
+	}
+	lr := io.LimitReader(r.br, int64(value))
+	if _, err = io.Copy(o, lr); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (r *Reader) ReadBytes() ([]byte, error) {
 	// TODO skip tags, indef length bytes
 	hdr, value, err := r.readTypeHeader()
@@ -405,35 +421,63 @@ func (r *Reader) ReadBreak() (err error) {
 	return err
 }
 
-func (r *Reader) readTypeHeader() (hdr int, value uint64, err error) {
+// readRawTypeHeader reads a CBOR type header and also writes the raw bytes to output writer o
+func (r *Reader) readRawTypeHeader(o io.Writer) (hdr int, value uint64, err error) {
 	b, err := r.br.ReadByte()
 	if err != nil {
 		return 0, 0, err
 	}
+
+	// Use the buffer r.buf to store the header byte and write it to output writer o
+	if o != nil {
+		r.buf[0] = b
+		if _, err = o.Write(r.buf[:1]); err != nil {
+			return 0, 0, err
+		}
+	}
+
 	hdr = int(b)
+	c := 0
+
+	// Read the remaining bytes and store them at buffer r.buf
 	switch hdr & MinorTypeMask {
 	default:
 		value = uint64(hdr) & MinorTypeMask
+		return // no more byte to read
 	case Size8:
-		var nb byte
-		nb, err = r.br.ReadByte()
-		if err == nil {
-			value = uint64(nb)
+		c = 1
+		if _, err = io.ReadFull(r.br, r.buf[:c]); err == nil {
+			value = uint64(r.buf[0])
 		}
 	case Size16:
-		if _, err = io.ReadFull(r.br, r.buf[:2]); err == nil {
+		c = 2
+		if _, err = io.ReadFull(r.br, r.buf[:c]); err == nil {
 			value = uint64(binary.BigEndian.Uint16(r.buf))
 		}
 	case Size32:
-		if _, err = io.ReadFull(r.br, r.buf[:4]); err == nil {
+		c = 4
+		if _, err = io.ReadFull(r.br, r.buf[:c]); err == nil {
 			value = uint64(binary.BigEndian.Uint32(r.buf))
 		}
 	case Size64:
-		if _, err = io.ReadFull(r.br, r.buf); err == nil {
+		c = 8
+		if _, err = io.ReadFull(r.br, r.buf[:c]); err == nil {
 			value = binary.BigEndian.Uint64(r.buf)
 		}
 	}
+
+	// Write remaining bytes stored in r.buf to output writer o
+	if o != nil {
+		if _, err = o.Write(r.buf[:c]); err != nil {
+			return 0, 0, err
+		}
+	}
+
 	return
+}
+
+func (r *Reader) readTypeHeader() (hdr int, value uint64, err error) {
+	return r.readRawTypeHeader(nil)
 }
 
 func (r *Reader) verifyMajorType(hdr, exp int) error {

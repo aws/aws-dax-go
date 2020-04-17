@@ -18,12 +18,15 @@ package client
 import (
 	"bytes"
 	"errors"
-	"github.com/aws/aws-dax-go/dax/internal/cbor"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"net"
 	"reflect"
 	"testing"
+
+	"github.com/aws/aws-dax-go/dax/internal/cbor"
+	"github.com/aws/aws-dax-go/dax/internal/lru"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
 func TestDecodeError(t *testing.T) {
@@ -69,13 +72,11 @@ func TestDecodeTransactionCanceledException(t *testing.T) {
 	errcode := []int{4, 37, 38, 39, 58}
 	awserr := awserr.NewRequestFailure(awserr.New(dynamodb.ErrCodeTransactionCanceledException, "TransactionCanceledException Message", nil), 400, "request-1")
 	reasonLen := 2
-	reasonCodes := []string{"reasonCode1", "reasonCode2"}
-	reasonMsgs := []string{"reasonMsg1", "reasonMsg2"}
-	reasonItems := [][]byte{[]byte("reasonItem1"), []byte("reasonItem2")}
-	var expectedReasonItems []byte
-	for _, item := range reasonItems {
-		expectedReasonItems = append(expectedReasonItems, item...)
-	}
+	reasonCodes := []*string{aws.String("reasonCode1"), aws.String("reasonCode2")}
+	reasonMsgs := []*string{aws.String("reasonMsg1"), aws.String("reasonMsg2")}
+	items := []byte{}
+	var expItems []byte
+
 	var b bytes.Buffer
 	w := cbor.NewWriter(&b)
 	w.WriteArrayHeader(len(errcode))
@@ -90,9 +91,20 @@ func TestDecodeTransactionCanceledException(t *testing.T) {
 	w.WriteInt(awserr.StatusCode())
 	w.WriteArrayHeader(3 * reasonLen)
 	for i := 0; i < reasonLen; i++ {
-		w.WriteString(reasonCodes[i])
-		w.WriteString(reasonMsgs[i])
-		w.WriteBytes(reasonItems[i])
+		w.WriteString(*reasonCodes[i])
+		w.WriteString(*reasonMsgs[i])
+		w.WriteBytes(items)
+
+		buf := bytes.Buffer{}
+		nw := cbor.NewWriter(&buf)
+		nw.WriteBytes(items)
+		nw.Flush()
+
+		r := cbor.NewReader(&buf)
+		obuf := bytes.Buffer{}
+		r.ReadRawBytes(&obuf)
+
+		expItems = append(expItems, obuf.Bytes()...)
 	}
 	w.Flush()
 
@@ -108,13 +120,13 @@ func TestDecodeTransactionCanceledException(t *testing.T) {
 	}
 
 	expected := &daxTransactionCanceledFailure{
-		daxRequestFailure: daxRequestFailure{
+		daxRequestFailure: &daxRequestFailure{
 			RequestFailure: awserr,
 			codes:          errcode,
 		},
 		cancellationReasonCodes: reasonCodes,
 		cancellationReasonMsgs:  reasonMsgs,
-		cancellationReasonItems: expectedReasonItems,
+		cancellationReasonItems: expItems,
 	}
 
 	if !reflect.DeepEqual(expected, d) {
@@ -122,38 +134,112 @@ func TestDecodeTransactionCanceledException(t *testing.T) {
 	}
 }
 
-func TestDecodeErrorInfer(t *testing.T) {
-	var b bytes.Buffer
-	errcode := []int{4, 37, 38, 39, 43}
-	awserr := awserr.NewRequestFailure(awserr.New(dynamodb.ErrCodeConditionalCheckFailedException, "ConditionalCheckFailedException Message", nil), 400, "")
-
-	w := cbor.NewWriter(&b)
-	w.WriteArrayHeader(len(errcode))
-	for _, c := range errcode {
-		w.WriteInt(c)
+// TestDecodeTransactionCancellationReasons tests decoding transaction cancellations reasons in daxTransactionCanceledFailure.
+//
+// Specifically, the decoding of items in cancellation reasons are being testing here. It covers three situations:
+//    1. transact item didn't fail conditional check
+//    2. transact item failed conditional check and was configured to return ALL_OLD item
+//    3. transact item failed conditional check and was configured to return NONE item
+func TestDecodeTransactionCancellationReasons(t *testing.T) {
+	expCodes := []int{1, 2, 3, 4}
+	expErrCode := dynamodb.ErrCodeTransactionCanceledException
+	expMsg := "Transaction was cancelled."
+	expReqID := "134213414395861"
+	expStatusCode := 400
+	expCanceledCodes := []*string{
+		aws.String("NONE"),
+		aws.String(dynamodb.ErrCodeConditionalCheckFailedException),
+		aws.String(dynamodb.ErrCodeTransactionInProgressException),
 	}
-	w.WriteString(awserr.Message())
-	w.WriteNull()
+	expCanceledReasons := []*string{
+		nil,
+		aws.String("first reason"),
+		aws.String("second reason"),
+	}
+	keyDef := []dynamodb.AttributeDefinition{
+		{AttributeName: aws.String("hk")},
+	}
+	keys := []map[string]*dynamodb.AttributeValue{
+		{"hk": &dynamodb.AttributeValue{N: aws.String("0")}},
+		{"hk": &dynamodb.AttributeValue{N: aws.String("0")}},
+		{"hk": &dynamodb.AttributeValue{N: aws.String("0")}},
+	}
+	canceledItems := []map[string]*dynamodb.AttributeValue{
+		nil,
+		{"attr": &dynamodb.AttributeValue{N: aws.String("0")}},
+		nil,
+	}
+	attrs := []string{"attr"}
+	attrsToID := &lru.Lru{
+		LoadFunc: func(ctx aws.Context, key lru.Key) (interface{}, error) {
+			return int64(12345), nil
+		},
+		KeyMarshaller: func(key lru.Key) lru.Key {
+			var buf bytes.Buffer
+			w := cbor.NewWriter(&buf)
+			defer w.Close()
+			for _, v := range key.([]string) {
+				w.WriteString(v)
+			}
+			w.Flush()
+			return string(buf.Bytes())
+		},
+	}
+	idToAttrs := &lru.Lru{
+		LoadFunc: func(ctx aws.Context, key lru.Key) (interface{}, error) {
+			return attrs, nil
+		},
+	}
+
+	// nbuf mocks CBOR output from server
+	buf := bytes.Buffer{}
+	w := cbor.NewWriter(&buf)
+	cbor.EncodeItemNonKeyAttributes(nil, canceledItems[1], keyDef, attrsToID, w)
 	w.Flush()
 
-	r := cbor.NewReader(&b)
-	e, err := decodeError(r)
+	nbuf := bytes.Buffer{}
+	nw := cbor.NewWriter(&nbuf)
+	nw.WriteNull()
+	nw.WriteBytes(buf.Bytes())
+	nw.WriteNull()
+	nw.Flush()
+
+	for k, v := range keys[1] {
+		canceledItems[1][k] = v
+	}
+
+	expCancellationReason := []*dynamodb.CancellationReason{
+		&dynamodb.CancellationReason{
+			Code: expCanceledCodes[0],
+		},
+		&dynamodb.CancellationReason{
+			Code:    expCanceledCodes[1],
+			Message: expCanceledReasons[1],
+			Item:    canceledItems[1],
+		},
+		&dynamodb.CancellationReason{
+			Code:    expCanceledCodes[2],
+			Message: expCanceledReasons[2],
+		},
+	}
+
+	expTcErr := newDaxTransactionCanceledFailure(expCodes, expErrCode, expMsg, expReqID, expStatusCode, expCanceledCodes, expCanceledReasons, nbuf.Bytes())
+	expTcErr.cancellationReasons = expCancellationReason
+
+	// tcErr mocks partial decoded output from error.decodeError(*cbor.Reader)
+	tcErr := newDaxTransactionCanceledFailure(expCodes, expErrCode, expMsg, expReqID, expStatusCode, expCanceledCodes, expCanceledReasons, nbuf.Bytes())
+
+	// Method under test
+	cancellationReason, err := decodeTransactionCancellationReasons(nil, tcErr, keys, idToAttrs)
+	tcErr.cancellationReasons = cancellationReason
+
 	if err != nil {
 		t.Errorf("unexpected error %v", err)
 	}
+	tcErr.cancellationReasons = cancellationReason
 
-	d, ok := e.(*daxRequestFailure)
-	if !ok {
-		t.Errorf("expected daxRequestFailure type")
-	}
-
-	expected := &daxRequestFailure{
-		RequestFailure: awserr,
-		codes:          errcode,
-	}
-
-	if !reflect.DeepEqual(expected, d) {
-		t.Errorf("expected %v, got %v", expected, d)
+	if !reflect.DeepEqual(expTcErr, tcErr) {
+		t.Errorf("expected %v, got %v", expTcErr, tcErr)
 	}
 }
 

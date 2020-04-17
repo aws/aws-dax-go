@@ -351,8 +351,9 @@ func (client *SingleDaxClient) BatchGetItemWithOptions(input *dynamodb.BatchGetI
 }
 
 func (client *SingleDaxClient) TransactWriteItemsWithOptions(input *dynamodb.TransactWriteItemsInput, output *dynamodb.TransactWriteItemsOutput, opt RequestOptions) (*dynamodb.TransactWriteItemsOutput, error) {
+	extractedKeys := make([]map[string]*dynamodb.AttributeValue, len(input.TransactItems))
 	encoder := func(writer *cbor.Writer) error {
-		return encodeTransactWriteItemsInput(opt.Context, input, client.keySchema, client.attrNamesListToId, writer)
+		return encodeTransactWriteItemsInput(opt.Context, input, client.keySchema, client.attrNamesListToId, writer, extractedKeys)
 	}
 	var err error
 	decoder := func(reader *cbor.Reader) error {
@@ -360,14 +361,23 @@ func (client *SingleDaxClient) TransactWriteItemsWithOptions(input *dynamodb.Tra
 		return err
 	}
 	if err = client.executeWithRetries(OpBatchWriteItem, opt, encoder, decoder); err != nil {
+		if failure, ok := err.(*daxTransactionCanceledFailure); ok {
+			var cancellationReasons []*dynamodb.CancellationReason
+			if cancellationReasons, err = decodeTransactionCancellationReasons(opt.Context, failure, extractedKeys, client.attrListIdToNames); err != nil {
+				return output, err
+			}
+			failure.cancellationReasons = cancellationReasons
+			return output, failure
+		}
 		return output, err
 	}
 	return output, nil
 }
 
 func (client *SingleDaxClient) TransactGetItemsWithOptions(input *dynamodb.TransactGetItemsInput, output *dynamodb.TransactGetItemsOutput, opt RequestOptions) (*dynamodb.TransactGetItemsOutput, error) {
+	extractedKeys := make([]map[string]*dynamodb.AttributeValue, len(input.TransactItems))
 	encoder := func(writer *cbor.Writer) error {
-		return encodeTransactGetItemsInput(opt.Context, input, client.keySchema, writer)
+		return encodeTransactGetItemsInput(opt.Context, input, client.keySchema, writer, extractedKeys)
 	}
 	var err error
 	decoder := func(reader *cbor.Reader) error {
@@ -375,6 +385,14 @@ func (client *SingleDaxClient) TransactGetItemsWithOptions(input *dynamodb.Trans
 		return err
 	}
 	if err = client.executeWithRetries(OpBatchWriteItem, opt, encoder, decoder); err != nil {
+		if failure, ok := err.(*daxTransactionCanceledFailure); ok {
+			var cancellationReasons []*dynamodb.CancellationReason
+			if cancellationReasons, err = decodeTransactionCancellationReasons(opt.Context, failure, extractedKeys, client.attrListIdToNames); err != nil {
+				return output, err
+			}
+			failure.cancellationReasons = cancellationReasons
+			return output, failure
+		}
 		return output, err
 	}
 	return output, nil
@@ -475,6 +493,28 @@ func (client *SingleDaxClient) build(req *request.Request) {
 			return
 		}
 		if err := encodeBatchWriteItemInput(req.Context(), input, client.keySchema, client.attrNamesListToId, w); err != nil {
+			req.Error = translateError(err)
+			return
+		}
+	case OpTransactGetItems:
+		input, ok := req.Params.(*dynamodb.TransactGetItemsInput)
+		if !ok {
+			req.Error = awserr.New(request.ErrCodeSerialization, "expected *TransactGetItemsInput", nil)
+			return
+		}
+		extractedKeys := make([]map[string]*dynamodb.AttributeValue, len(input.TransactItems))
+		if err := encodeTransactGetItemsInput(req.Context(), input, client.keySchema, w, extractedKeys); err != nil {
+			req.Error = translateError(err)
+			return
+		}
+	case OpTransactWriteItems:
+		input, ok := req.Params.(*dynamodb.TransactWriteItemsInput)
+		if !ok {
+			req.Error = awserr.New(request.ErrCodeSerialization, "expected *TransactWriteItemsInput", nil)
+			return
+		}
+		extractedKeys := make([]map[string]*dynamodb.AttributeValue, len(input.TransactItems))
+		if err := encodeTransactWriteItemsInput(req.Context(), input, client.keySchema, client.attrNamesListToId, w, extractedKeys); err != nil {
 			req.Error = translateError(err)
 			return
 		}
@@ -588,6 +628,30 @@ func (client *SingleDaxClient) send(req *request.Request) {
 			return
 		}
 		req.Data, req.Error = client.BatchWriteItemWithOptions(input, output, opt)
+	case OpTransactGetItems:
+		input, ok := req.Params.(*dynamodb.TransactGetItemsInput)
+		if !ok {
+			req.Error = awserr.New(request.ErrCodeSerialization, "expected *TransactGetItemsInput", nil)
+			return
+		}
+		output, ok := req.Data.(*dynamodb.TransactGetItemsOutput)
+		if !ok {
+			req.Error = awserr.New(request.ErrCodeSerialization, "expected *TransactGetItemsOutput", nil)
+			return
+		}
+		req.Data, req.Error = client.TransactGetItemsWithOptions(input, output, opt)
+	case OpTransactWriteItems:
+		input, ok := req.Params.(*dynamodb.TransactWriteItemsInput)
+		if !ok {
+			req.Error = awserr.New(request.ErrCodeSerialization, "expected *TransactWriteItemsInput", nil)
+			return
+		}
+		output, ok := req.Data.(*dynamodb.TransactWriteItemsOutput)
+		if !ok {
+			req.Error = awserr.New(request.ErrCodeSerialization, "expected *TransactWriteItemsOutput", nil)
+			return
+		}
+		req.Data, req.Error = client.TransactWriteItemsWithOptions(input, output, opt)
 	default:
 		req.Error = awserr.New(request.InvalidParameterErrCode, "unknown op "+req.Operation.Name, nil)
 		return
