@@ -105,7 +105,7 @@ func NewWithSession(session session.Session) (*Dax, error) {
 }
 
 func (c *Config) mergeFrom(ac aws.Config) {
-	if r := ac.MaxRetries; r != nil {
+	if r := ac.MaxRetries; r != nil && *r != aws.UseServiceDefaultRetries {
 		c.WriteRetries = *r
 		c.ReadRetries = *r
 	}
