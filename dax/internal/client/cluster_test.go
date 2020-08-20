@@ -16,18 +16,22 @@
 package client
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
 	"reflect"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -616,6 +620,43 @@ func newTestClusterWithConfig(config Config) (*cluster, *testClientBuilder) {
 
 func setExpectation(cluster *cluster, ep []serviceEndpoint) {
 	cluster.clientBuilder.(*testClientBuilder).ep = ep
+}
+
+func TestCluster_customDialer(t *testing.T) {
+	ours, theirs := net.Pipe()
+	wg := &sync.WaitGroup{}
+	var result []byte
+	go func() {
+		wg.Add(1)
+		defer wg.Done()
+
+		for {
+			buf := make([]byte, 4096)
+			n, _ := ours.Read(buf)
+			result = buf[:n]
+			ours.Close()
+			return
+		}
+	}()
+
+	var dialFn contextDialer = func(ctx context.Context, address string, network string) (net.Conn, error) {
+		return theirs, nil
+	}
+	cfg := Config{
+		MaxPendingConnectionsPerHost: 1,
+		ClusterUpdateInterval:        1 * time.Second,
+		Credentials:                  credentials.NewStaticCredentials("id", "secret", "tok"),
+		DialFn:                       dialFn,
+		Region:                       "us-west-2",
+		HostPorts:                    []string{"localhost:9121"},
+	}
+	cc, err := New(cfg)
+	require.NoError(t, err)
+	cc.GetItemWithOptions(&dynamodb.GetItemInput{TableName: aws.String("MyTable")}, &dynamodb.GetItemOutput{}, RequestOptions{})
+
+	wg.Wait()
+
+	assert.Equal(t, magic, string(result[1:8]), "expected the ClusterClient to write to the connection provided by the custom dialer")
 }
 
 type testClientBuilder struct {

@@ -25,6 +25,8 @@ import (
 
 const network = "tcp"
 
+type contextDialer func(context.Context, string, string) (net.Conn, error)
+
 // Acts as the gate to create new tubes
 // and keeps track of tubes which are currently not in use.
 type tubePool struct {
@@ -32,7 +34,7 @@ type tubePool struct {
 	gate                 gate
 	errCh                chan error
 	timeout              time.Duration
-	connectFn            func(string, string) (net.Conn, error)
+	connectFn            contextDialer
 	closeTubeImmediately bool
 
 	mutex      sync.Mutex
@@ -46,9 +48,14 @@ type tubePool struct {
 type tubePoolOptions struct {
 	maxConcurrentConnAttempts int
 	timeout                   time.Duration
+	dialFn                    contextDialer
 }
 
-var defaultTubePoolOptions = tubePoolOptions{10, time.Second * 5}
+var defaultDialer = &net.Dialer{}
+var defaultTubePoolOptions = tubePoolOptions{
+	maxConcurrentConnAttempts: 10,
+	timeout:                   time.Second * 5,
+}
 
 // Creates a new pool using defaultTubePoolOptions and associated with given address.
 func newTubePool(address string) *tubePool {
@@ -59,6 +66,12 @@ func newTubePool(address string) *tubePool {
 func newTubePoolWithOptions(address string, options tubePoolOptions) *tubePool {
 	if options.maxConcurrentConnAttempts <= 0 {
 		options.maxConcurrentConnAttempts = defaultTubePoolOptions.maxConcurrentConnAttempts
+	}
+	var connect func(context.Context, string, string) (net.Conn, error)
+	if options.dialFn == nil {
+		connect = defaultDialer.DialContext
+	} else {
+		connect = options.dialFn
 	}
 	return &tubePool{
 		address:   address,
@@ -305,7 +318,7 @@ func (p *tubePool) reapIdleConnections() {
 
 // Allocates a new tube by establishing a new connection and performing initialization.
 func (p *tubePool) alloc(session int64) (tube, error) {
-	conn, err := p.connectFn(network, p.address)
+	conn, err := p.connectFn(context.TODO(), network, p.address)
 	if err != nil {
 		return nil, err
 	}
@@ -355,10 +368,6 @@ func (g gate) exit() {
 	case <-g:
 	default:
 	}
-}
-
-func connect(network, address string) (net.Conn, error) {
-	return net.Dial(network, address)
 }
 
 type connectionReaper interface {

@@ -16,6 +16,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestExecuteErrorHandling(t *testing.T) {
@@ -78,11 +80,11 @@ func TestExecuteErrorHandling(t *testing.T) {
 	}
 
 	for i, c := range cases {
-		cli, err := newSingleClientWithOptions(":9121", "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1)
+		cli, err := newSingleClientWithOptions(":9121", "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1, nil)
 		if err != nil {
 			t.Fatalf("unexpected error %v", err)
 		}
-		cli.pool.connectFn = func(a, n string) (net.Conn, error) {
+		cli.pool.connectFn = func(ctx context.Context, a, n string) (net.Conn, error) {
 			return c.conn, nil
 		}
 		cli.pool.closeTubeImmediately = true
@@ -99,13 +101,13 @@ func TestExecuteErrorHandling(t *testing.T) {
 }
 
 func TestRetryPropogatesContextError(t *testing.T) {
-	client, clientErr := newSingleClientWithOptions(":9121", "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1)
+	client, clientErr := newSingleClientWithOptions(":9121", "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1, nil)
 	defer client.Close()
 	if clientErr != nil {
 		t.Fatalf("unexpected error %v", clientErr)
 	}
 
-	client.pool.connectFn = func(a, n string) (net.Conn, error) {
+	client.pool.connectFn = func(ctx context.Context, a, n string) (net.Conn, error) {
 		return &mockConn{rd: []byte{cbor.Array + 0}}, nil
 	}
 	client.pool.closeTubeImmediately = true
@@ -135,13 +137,13 @@ func TestRetryPropogatesContextError(t *testing.T) {
 }
 
 func TestRetryPropogatesOtherErrors(t *testing.T) {
-	client, clientErr := newSingleClientWithOptions(":9121", "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1)
+	client, clientErr := newSingleClientWithOptions(":9121", "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1, nil)
 	defer client.Close()
 	if clientErr != nil {
 		t.Fatalf("unexpected error %v", clientErr)
 	}
 
-	client.pool.connectFn = func(a, n string) (net.Conn, error) {
+	client.pool.connectFn = func(ctx context.Context, a, n string) (net.Conn, error) {
 		return &mockConn{rd: []byte{cbor.Array + 0}}, nil
 	}
 	client.pool.closeTubeImmediately = true
@@ -172,13 +174,13 @@ func TestRetryPropogatesOtherErrors(t *testing.T) {
 }
 
 func TestRetryPropogatesOtherErrorsWithDelay(t *testing.T) {
-	client, clientErr := newSingleClientWithOptions(":9121", "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1)
+	client, clientErr := newSingleClientWithOptions(":9121", "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1, nil)
 	defer client.Close()
 	if clientErr != nil {
 		t.Fatalf("unexpected error %v", clientErr)
 	}
 
-	client.pool.connectFn = func(a, n string) (net.Conn, error) {
+	client.pool.connectFn = func(ctx context.Context, a, n string) (net.Conn, error) {
 		return &mockConn{rd: []byte{cbor.Array + 0}}, nil
 	}
 	client.pool.closeTubeImmediately = true
@@ -210,13 +212,13 @@ func TestRetryPropogatesOtherErrorsWithDelay(t *testing.T) {
 }
 
 func TestRetrySleepCycleCount(t *testing.T) {
-	client, clientErr := newSingleClientWithOptions(":9121", "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1)
+	client, clientErr := newSingleClientWithOptions(":9121", "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1, nil)
 	defer client.Close()
 	if clientErr != nil {
 		t.Fatalf("unexpected error %v", clientErr)
 	}
 
-	client.pool.connectFn = func(a, n string) (net.Conn, error) {
+	client.pool.connectFn = func(ctx context.Context, a, n string) (net.Conn, error) {
 		return &mockConn{rd: []byte{cbor.Array + 0}}, nil
 	}
 	client.pool.closeTubeImmediately = true
@@ -246,13 +248,13 @@ func TestRetrySleepCycleCount(t *testing.T) {
 }
 
 func TestRetryLastError(t *testing.T) {
-	client, clientErr := newSingleClientWithOptions(":9121", "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1)
+	client, clientErr := newSingleClientWithOptions(":9121", "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1, nil)
 	defer client.Close()
 	if clientErr != nil {
 		t.Fatalf("unexpected error %v", clientErr)
 	}
 
-	client.pool.connectFn = func(a, n string) (net.Conn, error) {
+	client.pool.connectFn = func(ctx context.Context, a, n string) (net.Conn, error) {
 		return &mockConn{rd: []byte{cbor.Array + 0}}, nil
 	}
 	client.pool.closeTubeImmediately = true
@@ -285,6 +287,19 @@ func TestRetryLastError(t *testing.T) {
 	if awsError.Code() != "UnknownError" || awsError.OrigErr().Error() != "LastError" {
 		t.Fatalf("aws error doesn't match expected. %v", awsError)
 	}
+}
+
+func TestSingleClient_customDialer(t *testing.T) {
+	conn := &mockConn{}
+	var dialFn contextDialer = func(ctx context.Context, address string, network string) (net.Conn, error) {
+		return conn, nil
+	}
+	client, err := newSingleClientWithOptions(":9121", "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1, dialFn)
+	require.NoError(t, err)
+	defer client.Close()
+
+	c, _ := client.pool.connectFn(context.TODO(), "address", "network")
+	assert.Equal(t, conn, c)
 }
 
 type mockConn struct {

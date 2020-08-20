@@ -92,7 +92,7 @@ func TestTubePoolConnectionCache(t *testing.T) {
 	}
 	defer listener.Close()
 
-	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{10, time.Second * 1})
+	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{maxConcurrentConnAttempts: 10, timeout: time.Second * 1})
 
 	// verify tube is re-used
 	expectedConnections = 1
@@ -252,7 +252,7 @@ func TestTubePool_Close(t *testing.T) {
 	}
 	defer listener.Close()
 
-	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{1, time.Second * 1})
+	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{maxConcurrentConnAttempts: 1, timeout: time.Second * 1})
 	tubes := make([]tube, 2)
 	for i := 0; i < 2; i++ {
 		tubes[i], err = pool.get()
@@ -298,7 +298,7 @@ func TestTubePool_Close(t *testing.T) {
 
 func TestTubePoolError(t *testing.T) {
 	endpoint := ":8184"
-	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{10, time.Second * 1})
+	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{maxConcurrentConnAttempts: 10, timeout: time.Second * 1})
 	_, err := pool.get()
 	if err == nil || !strings.Contains(err.Error(), "connection refused") {
 		t.Errorf("expected 'dial tcp :8184: connection refused', actual '%v'\n", err)
@@ -316,13 +316,13 @@ func TestConnectionPriority(t *testing.T) {
 	maxAttempts := 5
 	var delay sync.WaitGroup
 	delay.Add(maxAttempts + 1)
-	connectFn := func(network, address string) (net.Conn, error) {
+	connectFn := func(ctx context.Context, network, address string) (net.Conn, error) {
 		delay.Done()
 		delay.Wait()
 		return net.Dial(network, address)
 	}
 
-	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{maxAttempts, 1 * time.Second})
+	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{maxConcurrentConnAttempts: maxAttempts, timeout: 1 * time.Second})
 	pool.connectFn = connectFn
 	defer pool.Close()
 
@@ -370,8 +370,8 @@ func TestGetWithClosedErrorChannel(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{1, 10 * time.Second})
-	pool.connectFn = func(network, address string) (net.Conn, error) {
+	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{maxConcurrentConnAttempts: 1, timeout: 10 * time.Second})
+	pool.connectFn = func(ctx context.Context, network, address string) (net.Conn, error) {
 		wg.Done()
 		// Block indefinetely to mimic a long connection
 		for {
@@ -487,7 +487,7 @@ func countTubes(pool *tubePool) int {
 }
 
 func TestTubePool_DiscardBumpsSession(t *testing.T) {
-	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, 5 * time.Second})
+	p := newTubePoolWithOptions(":1234", tubePoolOptions{maxConcurrentConnAttempts: 1, timeout: 5 * time.Second})
 	origSession := p.session
 
 	tt := &mockTube{}
@@ -500,8 +500,8 @@ func TestTubePool_DiscardBumpsSession(t *testing.T) {
 
 func TestTubePool_DiscardWakesUpWaiters(t *testing.T) {
 
-	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, 5 * time.Second})
-	p.connectFn = func(a, n string) (net.Conn, error) {
+	p := newTubePoolWithOptions(":1234", tubePoolOptions{maxConcurrentConnAttempts: 1, timeout: 5 * time.Second})
+	p.connectFn = func(ctx context.Context, a, n string) (net.Conn, error) {
 		return &mockConn{}, nil
 	}
 	// artificially enter the gate to prevent new connections
@@ -541,7 +541,7 @@ func TestTubePool_DiscardWakesUpWaiters(t *testing.T) {
 }
 
 func TestTubePool_PutClosesTubesIfPoolIsClosed(t *testing.T) {
-	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, 5 * time.Second})
+	p := newTubePoolWithOptions(":1234", tubePoolOptions{maxConcurrentConnAttempts: 1, timeout: 5 * time.Second})
 	p.closed = true
 
 	tt := &mockTube{}
@@ -554,7 +554,7 @@ func TestTubePool_PutClosesTubesIfPoolIsClosed(t *testing.T) {
 }
 
 func TestTubePool_PutClosesTubesFromDifferentSession(t *testing.T) {
-	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, 5 * time.Second})
+	p := newTubePoolWithOptions(":1234", tubePoolOptions{maxConcurrentConnAttempts: 1, timeout: 5 * time.Second})
 
 	tt := &mockTube{}
 	tt.On("Session").Return(p.session + 100)

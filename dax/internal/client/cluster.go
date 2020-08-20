@@ -59,6 +59,9 @@ type Config struct {
 	MaxPendingConnectionsPerHost int
 	ClusterUpdateThreshold       time.Duration
 	ClusterUpdateInterval        time.Duration
+	// DialFn is used to specify a custom DialContext function used when connecting to DAX endpoints.
+	// If no value is provided, the system's default Dialer will be used.
+	DialFn func(context.Context, string, string) (net.Conn, error)
 
 	HostPorts   []string
 	Region      string
@@ -399,7 +402,10 @@ func newCluster(cfg Config) (*cluster, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &cluster{seeds: seeds, config: cfg, executor: newExecutor(), clientBuilder: &singleClientBuilder{}}, nil
+	cb := &singleClientBuilder{
+		dialFn: cfg.DialFn,
+	}
+	return &cluster{seeds: seeds, config: cfg, executor: newExecutor(), clientBuilder: cb}, nil
 }
 
 func parseHostPorts(hostPorts []string) ([]hostPort, error) {
@@ -628,11 +634,13 @@ type clientBuilder interface {
 	newClient(net.IP, int, string, *credentials.Credentials, int) (DaxAPI, error)
 }
 
-type singleClientBuilder struct{}
+type singleClientBuilder struct {
+	dialFn contextDialer
+}
 
-func (*singleClientBuilder) newClient(ip net.IP, port int, region string, credentials *credentials.Credentials, maxPendingConnects int) (DaxAPI, error) {
+func (b *singleClientBuilder) newClient(ip net.IP, port int, region string, credentials *credentials.Credentials, maxPendingConnects int) (DaxAPI, error) {
 	endpoint := fmt.Sprintf("%s:%d", ip, port)
-	return newSingleClientWithOptions(endpoint, region, credentials, maxPendingConnects)
+	return newSingleClientWithOptions(endpoint, region, credentials, maxPendingConnects, b.dialFn)
 }
 
 type taskExecutor struct {
