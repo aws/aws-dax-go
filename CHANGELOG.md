@@ -1,6 +1,10 @@
+Release v1.2.1 (2020-09-10)
+===
+* Support clients connecting with a custom dialer
+
 Release v1.2.0 (2020-04-17)
 ===
-* Expose CancellationReasons through dynamodb.TransactionCanceledException
+* Expose TransactionCancellationReasons through dynamodb.TransactionCanceledException
 * Add public method to create a DAX Config by merging DAX relevant configurations from an AWS Session
 
 Release v1.1.6 (2020-01-31)

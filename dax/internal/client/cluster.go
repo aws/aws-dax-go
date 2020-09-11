@@ -63,6 +63,7 @@ type Config struct {
 	HostPorts   []string
 	Region      string
 	Credentials *credentials.Credentials
+	DialContext func(ctx context.Context, network string, address string) (net.Conn, error)
 }
 
 func (cfg *Config) validate() error {
@@ -604,7 +605,7 @@ func (c *cluster) pullEndpoints() ([]serviceEndpoint, error) {
 }
 
 func (c *cluster) pullEndpointsFrom(ip net.IP, port int) ([]serviceEndpoint, error) {
-	client, err := c.clientBuilder.newClient(ip, port, c.config.Region, c.config.Credentials, c.config.MaxPendingConnectionsPerHost)
+	client, err := c.clientBuilder.newClient(ip, port, c.config.Region, c.config.Credentials, c.config.MaxPendingConnectionsPerHost, c.config.DialContext)
 	if err != nil {
 		return nil, err
 	}
@@ -621,18 +622,18 @@ func (c *cluster) closeClient(client DaxAPI) {
 }
 
 func (c *cluster) newSingleClient(cfg serviceEndpoint) (DaxAPI, error) {
-	return c.clientBuilder.newClient(net.IP(cfg.address), cfg.port, c.config.Region, c.config.Credentials, c.config.MaxPendingConnectionsPerHost)
+	return c.clientBuilder.newClient(net.IP(cfg.address), cfg.port, c.config.Region, c.config.Credentials, c.config.MaxPendingConnectionsPerHost, c.config.DialContext)
 }
 
 type clientBuilder interface {
-	newClient(net.IP, int, string, *credentials.Credentials, int) (DaxAPI, error)
+	newClient(net.IP, int, string, *credentials.Credentials, int, dialContext) (DaxAPI, error)
 }
 
 type singleClientBuilder struct{}
 
-func (*singleClientBuilder) newClient(ip net.IP, port int, region string, credentials *credentials.Credentials, maxPendingConnects int) (DaxAPI, error) {
+func (*singleClientBuilder) newClient(ip net.IP, port int, region string, credentials *credentials.Credentials, maxPendingConnects int, dialContextFn dialContext) (DaxAPI, error) {
 	endpoint := fmt.Sprintf("%s:%d", ip, port)
-	return newSingleClientWithOptions(endpoint, region, credentials, maxPendingConnects)
+	return newSingleClientWithOptions(endpoint, region, credentials, maxPendingConnects, dialContextFn)
 }
 
 type taskExecutor struct {

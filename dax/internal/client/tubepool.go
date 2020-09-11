@@ -25,6 +25,8 @@ import (
 
 const network = "tcp"
 
+type dialContext func(ctx context.Context, network string, address string) (net.Conn, error)
+
 // Acts as the gate to create new tubes
 // and keeps track of tubes which are currently not in use.
 type tubePool struct {
@@ -32,7 +34,7 @@ type tubePool struct {
 	gate                 gate
 	errCh                chan error
 	timeout              time.Duration
-	connectFn            func(string, string) (net.Conn, error)
+	dialContext          dialContext
 	closeTubeImmediately bool
 
 	mutex      sync.Mutex
@@ -46,9 +48,12 @@ type tubePool struct {
 type tubePoolOptions struct {
 	maxConcurrentConnAttempts int
 	timeout                   time.Duration
+	dialContext               dialContext
 }
 
-var defaultTubePoolOptions = tubePoolOptions{10, time.Second * 5}
+var defaultDialer = &net.Dialer{}
+
+var defaultTubePoolOptions = tubePoolOptions{10, time.Second * 5, defaultDialer.DialContext}
 
 // Creates a new pool using defaultTubePoolOptions and associated with given address.
 func newTubePool(address string) *tubePool {
@@ -60,13 +65,18 @@ func newTubePoolWithOptions(address string, options tubePoolOptions) *tubePool {
 	if options.maxConcurrentConnAttempts <= 0 {
 		options.maxConcurrentConnAttempts = defaultTubePoolOptions.maxConcurrentConnAttempts
 	}
+
+	if options.dialContext == nil {
+		options.dialContext = defaultTubePoolOptions.dialContext
+	}
+
 	return &tubePool{
-		address:   address,
-		gate:      make(gate, options.maxConcurrentConnAttempts),
-		errCh:     make(chan error),
-		waiters:   make(chan tube),
-		timeout:   options.timeout,
-		connectFn: connect,
+		address:     address,
+		gate:        make(gate, options.maxConcurrentConnAttempts),
+		errCh:       make(chan error),
+		waiters:     make(chan tube),
+		timeout:     options.timeout,
+		dialContext: options.dialContext,
 	}
 }
 
@@ -305,7 +315,7 @@ func (p *tubePool) reapIdleConnections() {
 
 // Allocates a new tube by establishing a new connection and performing initialization.
 func (p *tubePool) alloc(session int64) (tube, error) {
-	conn, err := p.connectFn(network, p.address)
+	conn, err := p.dialContext(context.TODO(), network, p.address)
 	if err != nil {
 		return nil, err
 	}
@@ -355,10 +365,6 @@ func (g gate) exit() {
 	case <-g:
 	default:
 	}
-}
-
-func connect(network, address string) (net.Conn, error) {
-	return net.Dial(network, address)
 }
 
 type connectionReaper interface {

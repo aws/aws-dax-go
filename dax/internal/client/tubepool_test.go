@@ -24,6 +24,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -92,7 +93,7 @@ func TestTubePoolConnectionCache(t *testing.T) {
 	}
 	defer listener.Close()
 
-	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{10, time.Second * 1})
+	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{10, time.Second * 1, defaultDialer.DialContext})
 
 	// verify tube is re-used
 	expectedConnections = 1
@@ -252,7 +253,7 @@ func TestTubePool_Close(t *testing.T) {
 	}
 	defer listener.Close()
 
-	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{1, time.Second * 1})
+	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{1, time.Second * 1, defaultDialer.DialContext})
 	tubes := make([]tube, 2)
 	for i := 0; i < 2; i++ {
 		tubes[i], err = pool.get()
@@ -298,15 +299,34 @@ func TestTubePool_Close(t *testing.T) {
 
 func TestTubePoolError(t *testing.T) {
 	endpoint := ":8184"
-	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{10, time.Second * 1})
+	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{10, time.Second * 1, defaultDialer.DialContext})
 	_, err := pool.get()
 	if err == nil || !strings.Contains(err.Error(), "connection refused") {
 		t.Errorf("expected 'dial tcp :8184: connection refused', actual '%v'\n", err)
 	}
 }
 
-func TestConnectionPriority(t *testing.T) {
+func TestTubePoolErrorWithCustomDialContext(t *testing.T) {
 	endpoint := ":8185"
+	var numDials int64
+	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{10, time.Second * 1, func(ctx context.Context, network, address string) (net.Conn, error) {
+		atomic.AddInt64(&numDials, 1)
+		var d net.Dialer
+		return d.DialContext(ctx, network, address)
+	}})
+	_, err := pool.get()
+	if err == nil || !strings.Contains(err.Error(), "connection refused") {
+		t.Errorf("expected 'dial tcp :8184: connection refused', actual '%v'\n", err)
+	}
+
+	nDials := atomic.LoadInt64(&numDials)
+	if nDials == 0 {
+		t.Error("expected custom dialer to be called, got 0 calls")
+	}
+}
+
+func TestConnectionPriority(t *testing.T) {
+	endpoint := ":8186"
 	listener, err := startServer(endpoint, nil, nil, drainAndCloseConn)
 	if err != nil {
 		t.Fatalf("cannot start server")
@@ -316,14 +336,15 @@ func TestConnectionPriority(t *testing.T) {
 	maxAttempts := 5
 	var delay sync.WaitGroup
 	delay.Add(maxAttempts + 1)
-	connectFn := func(network, address string) (net.Conn, error) {
+	connectFn := func(ctx context.Context, network, address string) (net.Conn, error) {
 		delay.Done()
 		delay.Wait()
-		return net.Dial(network, address)
+		var d net.Dialer
+		return d.DialContext(ctx, network, address)
 	}
 
-	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{maxAttempts, 1 * time.Second})
-	pool.connectFn = connectFn
+	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{maxAttempts, 1 * time.Second, defaultDialer.DialContext})
+	pool.dialContext = connectFn
 	defer pool.Close()
 
 	var wg sync.WaitGroup
@@ -370,8 +391,8 @@ func TestGetWithClosedErrorChannel(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{1, 10 * time.Second})
-	pool.connectFn = func(network, address string) (net.Conn, error) {
+	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{1, 10 * time.Second, defaultDialer.DialContext})
+	pool.dialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
 		wg.Done()
 		// Block indefinetely to mimic a long connection
 		for {
@@ -487,7 +508,7 @@ func countTubes(pool *tubePool) int {
 }
 
 func TestTubePool_DiscardBumpsSession(t *testing.T) {
-	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, 5 * time.Second})
+	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, 5 * time.Second, defaultDialer.DialContext})
 	origSession := p.session
 
 	tt := &mockTube{}
@@ -500,8 +521,8 @@ func TestTubePool_DiscardBumpsSession(t *testing.T) {
 
 func TestTubePool_DiscardWakesUpWaiters(t *testing.T) {
 
-	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, 5 * time.Second})
-	p.connectFn = func(a, n string) (net.Conn, error) {
+	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, 5 * time.Second, defaultDialer.DialContext})
+	p.dialContext = func(ctx context.Context, a, n string) (net.Conn, error) {
 		return &mockConn{}, nil
 	}
 	// artificially enter the gate to prevent new connections
@@ -541,7 +562,7 @@ func TestTubePool_DiscardWakesUpWaiters(t *testing.T) {
 }
 
 func TestTubePool_PutClosesTubesIfPoolIsClosed(t *testing.T) {
-	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, 5 * time.Second})
+	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, 5 * time.Second, defaultDialer.DialContext})
 	p.closed = true
 
 	tt := &mockTube{}
@@ -554,7 +575,7 @@ func TestTubePool_PutClosesTubesIfPoolIsClosed(t *testing.T) {
 }
 
 func TestTubePool_PutClosesTubesFromDifferentSession(t *testing.T) {
-	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, 5 * time.Second})
+	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, 5 * time.Second, defaultDialer.DialContext})
 
 	tt := &mockTube{}
 	tt.On("Session").Return(p.session + 100)

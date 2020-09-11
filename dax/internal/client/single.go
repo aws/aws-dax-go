@@ -78,15 +78,17 @@ type SingleDaxClient struct {
 }
 
 func NewSingleClient(endpoint, region string, credentials *credentials.Credentials) (*SingleDaxClient, error) {
-	return newSingleClientWithOptions(endpoint, region, credentials, -1)
-
+	return newSingleClientWithOptions(endpoint, region, credentials, -1, defaultDialer.DialContext)
 }
 
-func newSingleClientWithOptions(endpoint, region string, credentials *credentials.Credentials, maxPendingConnections int) (*SingleDaxClient, error) {
+func newSingleClientWithOptions(endpoint, region string, credentials *credentials.Credentials, maxPendingConnections int, dialContextFn dialContext) (*SingleDaxClient, error) {
 	po := defaultTubePoolOptions
 	if maxPendingConnections > 0 {
 		po.maxConcurrentConnAttempts = maxPendingConnections
 	}
+
+	po.dialContext = dialContextFn
+
 	client := &SingleDaxClient{
 		region:             region,
 		credentials:        credentials,
