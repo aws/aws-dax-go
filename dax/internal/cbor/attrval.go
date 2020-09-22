@@ -17,13 +17,14 @@ package cbor
 
 import (
 	"fmt"
+	"math/big"
+	"strconv"
+	"strings"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"math/big"
-	"strconv"
-	"strings"
 )
 
 const (
@@ -190,7 +191,14 @@ func DecodeAttributeValue(reader *Reader) (*dynamodb.AttributeValue, error) {
 			m[k] = v
 		}
 		return &dynamodb.AttributeValue{M: m}, nil
-	case PosInt, NegInt:
+	case PosInt:
+		i, err := reader.ReadUint64()
+		if err != nil {
+			return nil, err
+		}
+		n := strconv.FormatUint(i, 10)
+		return &dynamodb.AttributeValue{N: &n}, nil
+	case NegInt:
 		i, err := reader.ReadInt64()
 		if err != nil {
 			return nil, err

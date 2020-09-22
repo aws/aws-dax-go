@@ -508,6 +508,25 @@ func (r *Reader) ReadInt64() (int64, error) {
 	}
 }
 
+func (r *Reader) ReadUint() (uint, error) {
+	v, err := r.ReadUint64()
+	return uint(v), err
+}
+
+func (r *Reader) ReadUint64() (uint64, error) {
+	hdr, value, err := r.readTypeHeader()
+	if err != nil {
+		return 0, err
+	}
+	//TODO skip tags.
+	switch hdr & MajorTypeMask {
+	case PosInt:
+		return uint64(value), nil
+	default:
+		return 0, ErrNaN
+	}
+}
+
 func (r *Reader) Close() error {
 	if r.recycle {
 		bufferedReaderPool.Put(r.br)
