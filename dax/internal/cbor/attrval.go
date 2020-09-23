@@ -17,14 +17,13 @@ package cbor
 
 import (
 	"fmt"
-	"math/big"
-	"strconv"
-	"strings"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"math/big"
+	"strconv"
+	"strings"
 )
 
 const (
