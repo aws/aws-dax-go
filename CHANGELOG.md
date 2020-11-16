@@ -1,3 +1,7 @@
+Release v1.2.2 (2020-11-12)
+===
+* Implement `BatchGetItemPage`, `QueryPage`, and `ScanPage` operations
+
 Release v1.2.1 (2020-09-10)
 ===
 * Support clients connecting with a custom dialer

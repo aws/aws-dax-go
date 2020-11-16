@@ -144,7 +144,15 @@ func (d *Dax) ScanWithContext(ctx aws.Context, input *dynamodb.ScanInput, opts .
 }
 
 func (d *Dax) ScanRequest(input *dynamodb.ScanInput) (*request.Request, *dynamodb.ScanOutput) {
-	op := &request.Operation{Name: client.OpScan}
+	op := &request.Operation{
+		Name: client.OpScan,
+		Paginator: &request.Paginator{
+			InputTokens:     []string{"ExclusiveStartKey"},
+			OutputTokens:    []string{"LastEvaluatedKey"},
+			LimitToken:      "Limit",
+			TruncationToken: "",
+		},
+	}
 	if input == nil {
 		input = &dynamodb.ScanInput{}
 	}
@@ -170,7 +178,15 @@ func (d *Dax) QueryWithContext(ctx aws.Context, input *dynamodb.QueryInput, opts
 }
 
 func (d *Dax) QueryRequest(input *dynamodb.QueryInput) (*request.Request, *dynamodb.QueryOutput) {
-	op := &request.Operation{Name: client.OpQuery}
+	op := &request.Operation{
+		Name: client.OpQuery,
+		Paginator: &request.Paginator{
+			InputTokens:     []string{"ExclusiveStartKey"},
+			OutputTokens:    []string{"LastEvaluatedKey"},
+			LimitToken:      "Limit",
+			TruncationToken: "",
+		},
+	}
 	if input == nil {
 		input = &dynamodb.QueryInput{}
 	}
@@ -222,7 +238,15 @@ func (d *Dax) BatchGetItemWithContext(ctx aws.Context, input *dynamodb.BatchGetI
 }
 
 func (d *Dax) BatchGetItemRequest(input *dynamodb.BatchGetItemInput) (*request.Request, *dynamodb.BatchGetItemOutput) {
-	op := &request.Operation{Name: client.OpBatchGetItem}
+	op := &request.Operation{
+		Name: client.OpBatchGetItem,
+		Paginator: &request.Paginator{
+			InputTokens:     []string{"RequestItems"},
+			OutputTokens:    []string{"UnprocessedKeys"},
+			LimitToken:      "",
+			TruncationToken: "",
+		},
+	}
 	if input == nil {
 		input = &dynamodb.BatchGetItemInput{}
 	}
@@ -284,12 +308,32 @@ func (d *Dax) TransactGetItemsRequest(input *dynamodb.TransactGetItemsInput) (*r
 	return req, output
 }
 
-func (d *Dax) BatchGetItemPages(*dynamodb.BatchGetItemInput, func(*dynamodb.BatchGetItemOutput, bool) bool) error {
-	return d.unImpl()
+func (d *Dax) BatchGetItemPages(input *dynamodb.BatchGetItemInput, fn func(*dynamodb.BatchGetItemOutput, bool) bool) error {
+	return d.BatchGetItemPagesWithContext(aws.BackgroundContext(), input, fn)
 }
 
-func (d *Dax) BatchGetItemPagesWithContext(aws.Context, *dynamodb.BatchGetItemInput, func(*dynamodb.BatchGetItemOutput, bool) bool, ...request.Option) error {
-	return d.unImpl()
+func (d *Dax) BatchGetItemPagesWithContext(ctx aws.Context, input *dynamodb.BatchGetItemInput, fn func(*dynamodb.BatchGetItemOutput, bool) bool, opts ...request.Option) error {
+	p := request.Pagination{
+		NewRequest: func() (*request.Request, error) {
+			var inCpy *dynamodb.BatchGetItemInput
+			if input != nil {
+				tmp := *input
+				inCpy = &tmp
+			}
+			req, _ := d.BatchGetItemRequest(inCpy)
+			req.SetContext(ctx)
+			req.ApplyOptions(opts...)
+			return req, nil
+		},
+	}
+
+	for p.Next() {
+		if !fn(p.Page().(*dynamodb.BatchGetItemOutput), !p.HasNextPage()) {
+			break
+		}
+	}
+
+	return p.Err()
 }
 
 func (d *Dax) QueryPages(input *dynamodb.QueryInput, fn func(*dynamodb.QueryOutput, bool) bool) error {
@@ -297,7 +341,7 @@ func (d *Dax) QueryPages(input *dynamodb.QueryInput, fn func(*dynamodb.QueryOutp
 }
 
 func (d *Dax) QueryPagesWithContext(ctx aws.Context, input *dynamodb.QueryInput, fn func(*dynamodb.QueryOutput, bool) bool, opts ...request.Option) error {
-	p := request.Pagination {
+	p := request.Pagination{
 		NewRequest: func() (*request.Request, error) {
 			var inCpy *dynamodb.QueryInput
 			if input != nil {
@@ -323,7 +367,7 @@ func (d *Dax) ScanPages(input *dynamodb.ScanInput, fn func(*dynamodb.ScanOutput,
 }
 
 func (d *Dax) ScanPagesWithContext(ctx aws.Context, input *dynamodb.ScanInput, fn func(*dynamodb.ScanOutput, bool) bool, opts ...request.Option) error {
-	p := request.Pagination {
+	p := request.Pagination{
 		NewRequest: func() (*request.Request, error) {
 			var inCpy *dynamodb.ScanInput
 			if input != nil {
