@@ -44,6 +44,7 @@ func TestConfigMergeFrom(t *testing.T) {
 			testCase.daxConfig.mergeFrom(testCase.awsConfig)
 			if testCase.daxConfig.WriteRetries != testCase.expectedWriteRetries {
 				t.Errorf("write retries is %d, but expected %d", testCase.daxConfig.WriteRetries, testCase.expectedWriteRetries)
+				t.Errorf("read retries is %d, but expected %d", testCase.daxConfig.ReadRetries, testCase.expectedReadRetries)
 			}
 		})
 	}
