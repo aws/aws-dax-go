@@ -16,6 +16,7 @@
 package dax
 
 import (
+	"errors"
 	"io"
 
 	"github.com/aws/aws-dax-go/dax/internal/client"
@@ -396,9 +397,8 @@ func (d *Dax) CreateBackupWithContext(aws.Context, *dynamodb.CreateBackupInput, 
 	return nil, d.unImpl()
 }
 
-func (d *Dax) CreateBackupRequest(*dynamodb.CreateBackupInput) (r *request.Request, o *dynamodb.CreateBackupOutput) {
-	d.unImpl()
-	return
+func (d *Dax) CreateBackupRequest(*dynamodb.CreateBackupInput) (*request.Request, *dynamodb.CreateBackupOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.CreateBackupOutput{}
 }
 
 func (d *Dax) CreateGlobalTable(*dynamodb.CreateGlobalTableInput) (*dynamodb.CreateGlobalTableOutput, error) {
@@ -409,9 +409,8 @@ func (d *Dax) CreateGlobalTableWithContext(aws.Context, *dynamodb.CreateGlobalTa
 	return nil, d.unImpl()
 }
 
-func (d *Dax) CreateGlobalTableRequest(*dynamodb.CreateGlobalTableInput) (r *request.Request, o *dynamodb.CreateGlobalTableOutput) {
-	d.unImpl()
-	return
+func (d *Dax) CreateGlobalTableRequest(*dynamodb.CreateGlobalTableInput) (*request.Request, *dynamodb.CreateGlobalTableOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.CreateGlobalTableOutput{}
 }
 
 func (d *Dax) CreateTable(*dynamodb.CreateTableInput) (*dynamodb.CreateTableOutput, error) {
@@ -422,9 +421,8 @@ func (d *Dax) CreateTableWithContext(aws.Context, *dynamodb.CreateTableInput, ..
 	return nil, d.unImpl()
 }
 
-func (d *Dax) CreateTableRequest(*dynamodb.CreateTableInput) (r *request.Request, o *dynamodb.CreateTableOutput) {
-	d.unImpl()
-	return
+func (d *Dax) CreateTableRequest(*dynamodb.CreateTableInput) (*request.Request, *dynamodb.CreateTableOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.CreateTableOutput{}
 }
 
 func (d *Dax) DeleteBackup(*dynamodb.DeleteBackupInput) (*dynamodb.DeleteBackupOutput, error) {
@@ -435,9 +433,8 @@ func (d *Dax) DeleteBackupWithContext(aws.Context, *dynamodb.DeleteBackupInput, 
 	return nil, d.unImpl()
 }
 
-func (d *Dax) DeleteBackupRequest(*dynamodb.DeleteBackupInput) (r *request.Request, o *dynamodb.DeleteBackupOutput) {
-	d.unImpl()
-	return
+func (d *Dax) DeleteBackupRequest(*dynamodb.DeleteBackupInput) (*request.Request, *dynamodb.DeleteBackupOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.DeleteBackupOutput{}
 }
 
 func (d *Dax) DeleteTable(*dynamodb.DeleteTableInput) (*dynamodb.DeleteTableOutput, error) {
@@ -448,9 +445,8 @@ func (d *Dax) DeleteTableWithContext(aws.Context, *dynamodb.DeleteTableInput, ..
 	return nil, d.unImpl()
 }
 
-func (d *Dax) DeleteTableRequest(*dynamodb.DeleteTableInput) (r *request.Request, o *dynamodb.DeleteTableOutput) {
-	d.unImpl()
-	return
+func (d *Dax) DeleteTableRequest(*dynamodb.DeleteTableInput) (*request.Request, *dynamodb.DeleteTableOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.DeleteTableOutput{}
 }
 
 func (d *Dax) DescribeBackup(*dynamodb.DescribeBackupInput) (*dynamodb.DescribeBackupOutput, error) {
@@ -461,9 +457,8 @@ func (d *Dax) DescribeBackupWithContext(aws.Context, *dynamodb.DescribeBackupInp
 	return nil, d.unImpl()
 }
 
-func (d *Dax) DescribeBackupRequest(*dynamodb.DescribeBackupInput) (r *request.Request, o *dynamodb.DescribeBackupOutput) {
-	d.unImpl()
-	return
+func (d *Dax) DescribeBackupRequest(*dynamodb.DescribeBackupInput) (*request.Request, *dynamodb.DescribeBackupOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.DescribeBackupOutput{}
 }
 
 func (d *Dax) DescribeContinuousBackups(*dynamodb.DescribeContinuousBackupsInput) (*dynamodb.DescribeContinuousBackupsOutput, error) {
@@ -474,9 +469,8 @@ func (d *Dax) DescribeContinuousBackupsWithContext(aws.Context, *dynamodb.Descri
 	return nil, d.unImpl()
 }
 
-func (d *Dax) DescribeContinuousBackupsRequest(*dynamodb.DescribeContinuousBackupsInput) (r *request.Request, o *dynamodb.DescribeContinuousBackupsOutput) {
-	d.unImpl()
-	return
+func (d *Dax) DescribeContinuousBackupsRequest(*dynamodb.DescribeContinuousBackupsInput) (*request.Request, *dynamodb.DescribeContinuousBackupsOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.DescribeContinuousBackupsOutput{}
 }
 
 func (d *Dax) DescribeContributorInsights(*dynamodb.DescribeContributorInsightsInput) (*dynamodb.DescribeContributorInsightsOutput, error) {
@@ -487,9 +481,8 @@ func (d *Dax) DescribeContributorInsightsWithContext(aws.Context, *dynamodb.Desc
 	return nil, d.unImpl()
 }
 
-func (d *Dax) DescribeContributorInsightsRequest(*dynamodb.DescribeContributorInsightsInput) (r *request.Request, o *dynamodb.DescribeContributorInsightsOutput) {
-	d.unImpl()
-	return
+func (d *Dax) DescribeContributorInsightsRequest(*dynamodb.DescribeContributorInsightsInput) (*request.Request, *dynamodb.DescribeContributorInsightsOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.DescribeContributorInsightsOutput{}
 }
 
 func (d *Dax) DescribeEndpoints(*dynamodb.DescribeEndpointsInput) (*dynamodb.DescribeEndpointsOutput, error) {
@@ -500,9 +493,8 @@ func (d *Dax) DescribeEndpointsWithContext(aws.Context, *dynamodb.DescribeEndpoi
 	return nil, d.unImpl()
 }
 
-func (d *Dax) DescribeEndpointsRequest(*dynamodb.DescribeEndpointsInput) (r *request.Request, o *dynamodb.DescribeEndpointsOutput) {
-	d.unImpl()
-	return
+func (d *Dax) DescribeEndpointsRequest(*dynamodb.DescribeEndpointsInput) (*request.Request, *dynamodb.DescribeEndpointsOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.DescribeEndpointsOutput{}
 }
 
 func (d *Dax) DescribeGlobalTable(*dynamodb.DescribeGlobalTableInput) (*dynamodb.DescribeGlobalTableOutput, error) {
@@ -513,9 +505,8 @@ func (d *Dax) DescribeGlobalTableWithContext(aws.Context, *dynamodb.DescribeGlob
 	return nil, d.unImpl()
 }
 
-func (d *Dax) DescribeGlobalTableRequest(*dynamodb.DescribeGlobalTableInput) (r *request.Request, o *dynamodb.DescribeGlobalTableOutput) {
-	d.unImpl()
-	return
+func (d *Dax) DescribeGlobalTableRequest(*dynamodb.DescribeGlobalTableInput) (*request.Request, *dynamodb.DescribeGlobalTableOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.DescribeGlobalTableOutput{}
 }
 
 func (d *Dax) DescribeGlobalTableSettings(*dynamodb.DescribeGlobalTableSettingsInput) (*dynamodb.DescribeGlobalTableSettingsOutput, error) {
@@ -526,9 +517,8 @@ func (d *Dax) DescribeGlobalTableSettingsWithContext(aws.Context, *dynamodb.Desc
 	return nil, d.unImpl()
 }
 
-func (d *Dax) DescribeGlobalTableSettingsRequest(*dynamodb.DescribeGlobalTableSettingsInput) (r *request.Request, o *dynamodb.DescribeGlobalTableSettingsOutput) {
-	d.unImpl()
-	return
+func (d *Dax) DescribeGlobalTableSettingsRequest(*dynamodb.DescribeGlobalTableSettingsInput) (*request.Request, *dynamodb.DescribeGlobalTableSettingsOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.DescribeGlobalTableSettingsOutput{}
 }
 
 func (d *Dax) DescribeLimits(*dynamodb.DescribeLimitsInput) (*dynamodb.DescribeLimitsOutput, error) {
@@ -539,9 +529,8 @@ func (d *Dax) DescribeLimitsWithContext(aws.Context, *dynamodb.DescribeLimitsInp
 	return nil, d.unImpl()
 }
 
-func (d *Dax) DescribeLimitsRequest(*dynamodb.DescribeLimitsInput) (r *request.Request, o *dynamodb.DescribeLimitsOutput) {
-	d.unImpl()
-	return
+func (d *Dax) DescribeLimitsRequest(*dynamodb.DescribeLimitsInput) (*request.Request, *dynamodb.DescribeLimitsOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.DescribeLimitsOutput{}
 }
 
 func (d *Dax) DescribeTable(*dynamodb.DescribeTableInput) (*dynamodb.DescribeTableOutput, error) {
@@ -552,9 +541,8 @@ func (d *Dax) DescribeTableWithContext(aws.Context, *dynamodb.DescribeTableInput
 	return nil, d.unImpl()
 }
 
-func (d *Dax) DescribeTableRequest(*dynamodb.DescribeTableInput) (r *request.Request, o *dynamodb.DescribeTableOutput) {
-	d.unImpl()
-	return
+func (d *Dax) DescribeTableRequest(*dynamodb.DescribeTableInput) (*request.Request, *dynamodb.DescribeTableOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.DescribeTableOutput{}
 }
 
 func (d *Dax) DescribeTableReplicaAutoScaling(*dynamodb.DescribeTableReplicaAutoScalingInput) (*dynamodb.DescribeTableReplicaAutoScalingOutput, error) {
@@ -565,9 +553,8 @@ func (d *Dax) DescribeTableReplicaAutoScalingWithContext(aws.Context, *dynamodb.
 	return nil, d.unImpl()
 }
 
-func (d *Dax) DescribeTableReplicaAutoScalingRequest(*dynamodb.DescribeTableReplicaAutoScalingInput) (r *request.Request, o *dynamodb.DescribeTableReplicaAutoScalingOutput) {
-	d.unImpl()
-	return
+func (d *Dax) DescribeTableReplicaAutoScalingRequest(*dynamodb.DescribeTableReplicaAutoScalingInput) (*request.Request, *dynamodb.DescribeTableReplicaAutoScalingOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.DescribeTableReplicaAutoScalingOutput{}
 }
 
 func (d *Dax) DescribeTimeToLive(*dynamodb.DescribeTimeToLiveInput) (*dynamodb.DescribeTimeToLiveOutput, error) {
@@ -578,9 +565,104 @@ func (d *Dax) DescribeTimeToLiveWithContext(aws.Context, *dynamodb.DescribeTimeT
 	return nil, d.unImpl()
 }
 
-func (d *Dax) DescribeTimeToLiveRequest(*dynamodb.DescribeTimeToLiveInput) (r *request.Request, o *dynamodb.DescribeTimeToLiveOutput) {
-	d.unImpl()
-	return
+func (d *Dax) DescribeTimeToLiveRequest(*dynamodb.DescribeTimeToLiveInput) (*request.Request, *dynamodb.DescribeTimeToLiveOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.DescribeTimeToLiveOutput{}
+}
+
+func (d *Dax) BatchExecuteStatement(*dynamodb.BatchExecuteStatementInput) (*dynamodb.BatchExecuteStatementOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) BatchExecuteStatementRequest(*dynamodb.BatchExecuteStatementInput) (*request.Request, *dynamodb.BatchExecuteStatementOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.BatchExecuteStatementOutput{}
+}
+
+func (d *Dax) BatchExecuteStatementWithContext(aws.Context, *dynamodb.BatchExecuteStatementInput, ...request.Option) (*dynamodb.BatchExecuteStatementOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) DescribeExport(*dynamodb.DescribeExportInput) (*dynamodb.DescribeExportOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) DescribeExportWithContext(aws.Context, *dynamodb.DescribeExportInput, ...request.Option) (*dynamodb.DescribeExportOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) DescribeExportRequest(*dynamodb.DescribeExportInput) (*request.Request, *dynamodb.DescribeExportOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.DescribeExportOutput{}
+}
+
+func (d *Dax) DescribeKinesisStreamingDestination(*dynamodb.DescribeKinesisStreamingDestinationInput) (*dynamodb.DescribeKinesisStreamingDestinationOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) DescribeKinesisStreamingDestinationWithContext(aws.Context, *dynamodb.DescribeKinesisStreamingDestinationInput, ...request.Option) (*dynamodb.DescribeKinesisStreamingDestinationOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) DescribeKinesisStreamingDestinationRequest(*dynamodb.DescribeKinesisStreamingDestinationInput) (*request.Request, *dynamodb.DescribeKinesisStreamingDestinationOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.DescribeKinesisStreamingDestinationOutput{}
+}
+
+func (d *Dax) DisableKinesisStreamingDestination(*dynamodb.DisableKinesisStreamingDestinationInput) (*dynamodb.DisableKinesisStreamingDestinationOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) DisableKinesisStreamingDestinationWithContext(aws.Context, *dynamodb.DisableKinesisStreamingDestinationInput, ...request.Option) (*dynamodb.DisableKinesisStreamingDestinationOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) DisableKinesisStreamingDestinationRequest(*dynamodb.DisableKinesisStreamingDestinationInput) (*request.Request, *dynamodb.DisableKinesisStreamingDestinationOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.DisableKinesisStreamingDestinationOutput{}
+}
+
+func (d *Dax) EnableKinesisStreamingDestination(*dynamodb.EnableKinesisStreamingDestinationInput) (*dynamodb.EnableKinesisStreamingDestinationOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) EnableKinesisStreamingDestinationWithContext(aws.Context, *dynamodb.EnableKinesisStreamingDestinationInput, ...request.Option) (*dynamodb.EnableKinesisStreamingDestinationOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) EnableKinesisStreamingDestinationRequest(*dynamodb.EnableKinesisStreamingDestinationInput) (*request.Request, *dynamodb.EnableKinesisStreamingDestinationOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.EnableKinesisStreamingDestinationOutput{}
+}
+
+func (d *Dax) ExecuteStatement(*dynamodb.ExecuteStatementInput) (*dynamodb.ExecuteStatementOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) ExecuteStatementWithContext(aws.Context, *dynamodb.ExecuteStatementInput, ...request.Option) (*dynamodb.ExecuteStatementOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) ExecuteStatementRequest(*dynamodb.ExecuteStatementInput) (*request.Request, *dynamodb.ExecuteStatementOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.ExecuteStatementOutput{}
+}
+
+func (d *Dax) ExecuteTransaction(*dynamodb.ExecuteTransactionInput) (*dynamodb.ExecuteTransactionOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) ExecuteTransactionWithContext(aws.Context, *dynamodb.ExecuteTransactionInput, ...request.Option) (*dynamodb.ExecuteTransactionOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) ExecuteTransactionRequest(*dynamodb.ExecuteTransactionInput) (*request.Request, *dynamodb.ExecuteTransactionOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.ExecuteTransactionOutput{}
+}
+
+func (d *Dax) ExportTableToPointInTime(*dynamodb.ExportTableToPointInTimeInput) (*dynamodb.ExportTableToPointInTimeOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) ExportTableToPointInTimeWithContext(aws.Context, *dynamodb.ExportTableToPointInTimeInput, ...request.Option) (*dynamodb.ExportTableToPointInTimeOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) ExportTableToPointInTimeRequest(*dynamodb.ExportTableToPointInTimeInput) (*request.Request, *dynamodb.ExportTableToPointInTimeOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.ExportTableToPointInTimeOutput{}
 }
 
 func (d *Dax) ListBackups(*dynamodb.ListBackupsInput) (*dynamodb.ListBackupsOutput, error) {
@@ -591,9 +673,8 @@ func (d *Dax) ListBackupsWithContext(aws.Context, *dynamodb.ListBackupsInput, ..
 	return nil, d.unImpl()
 }
 
-func (d *Dax) ListBackupsRequest(*dynamodb.ListBackupsInput) (r *request.Request, o *dynamodb.ListBackupsOutput) {
-	d.unImpl()
-	return
+func (d *Dax) ListBackupsRequest(*dynamodb.ListBackupsInput) (*request.Request, *dynamodb.ListBackupsOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.ListBackupsOutput{}
 }
 
 func (d *Dax) ListContributorInsights(*dynamodb.ListContributorInsightsInput) (*dynamodb.ListContributorInsightsOutput, error) {
@@ -604,9 +685,8 @@ func (d *Dax) ListContributorInsightsWithContext(aws.Context, *dynamodb.ListCont
 	return nil, d.unImpl()
 }
 
-func (d *Dax) ListContributorInsightsRequest(*dynamodb.ListContributorInsightsInput) (r *request.Request, o *dynamodb.ListContributorInsightsOutput) {
-	d.unImpl()
-	return
+func (d *Dax) ListContributorInsightsRequest(*dynamodb.ListContributorInsightsInput) (*request.Request, *dynamodb.ListContributorInsightsOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.ListContributorInsightsOutput{}
 }
 
 func (d *Dax) ListContributorInsightsPages(*dynamodb.ListContributorInsightsInput, func(*dynamodb.ListContributorInsightsOutput, bool) bool) error {
@@ -614,6 +694,26 @@ func (d *Dax) ListContributorInsightsPages(*dynamodb.ListContributorInsightsInpu
 }
 
 func (d *Dax) ListContributorInsightsPagesWithContext(aws.Context, *dynamodb.ListContributorInsightsInput, func(*dynamodb.ListContributorInsightsOutput, bool) bool, ...request.Option) error {
+	return d.unImpl()
+}
+
+func (d *Dax) ListExports(*dynamodb.ListExportsInput) (*dynamodb.ListExportsOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) ListExportsWithContext(aws.Context, *dynamodb.ListExportsInput, ...request.Option) (*dynamodb.ListExportsOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) ListExportsRequest(*dynamodb.ListExportsInput) (*request.Request, *dynamodb.ListExportsOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.ListExportsOutput{}
+}
+
+func (d *Dax) ListExportsPages(*dynamodb.ListExportsInput, func(*dynamodb.ListExportsOutput, bool) bool) error {
+	return d.unImpl()
+}
+
+func (d *Dax) ListExportsPagesWithContext(aws.Context, *dynamodb.ListExportsInput, func(*dynamodb.ListExportsOutput, bool) bool, ...request.Option) error {
 	return d.unImpl()
 }
 
@@ -625,9 +725,8 @@ func (d *Dax) ListGlobalTablesWithContext(aws.Context, *dynamodb.ListGlobalTable
 	return nil, d.unImpl()
 }
 
-func (d *Dax) ListGlobalTablesRequest(*dynamodb.ListGlobalTablesInput) (r *request.Request, o *dynamodb.ListGlobalTablesOutput) {
-	d.unImpl()
-	return
+func (d *Dax) ListGlobalTablesRequest(*dynamodb.ListGlobalTablesInput) (*request.Request, *dynamodb.ListGlobalTablesOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.ListGlobalTablesOutput{}
 }
 
 func (d *Dax) ListTables(*dynamodb.ListTablesInput) (*dynamodb.ListTablesOutput, error) {
@@ -638,9 +737,8 @@ func (d *Dax) ListTablesWithContext(aws.Context, *dynamodb.ListTablesInput, ...r
 	return nil, d.unImpl()
 }
 
-func (d *Dax) ListTablesRequest(*dynamodb.ListTablesInput) (r *request.Request, o *dynamodb.ListTablesOutput) {
-	d.unImpl()
-	return
+func (d *Dax) ListTablesRequest(*dynamodb.ListTablesInput) (*request.Request, *dynamodb.ListTablesOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.ListTablesOutput{}
 }
 
 func (d *Dax) ListTablesPages(*dynamodb.ListTablesInput, func(*dynamodb.ListTablesOutput, bool) bool) error {
@@ -659,9 +757,8 @@ func (d *Dax) ListTagsOfResourceWithContext(aws.Context, *dynamodb.ListTagsOfRes
 	return nil, d.unImpl()
 }
 
-func (d *Dax) ListTagsOfResourceRequest(*dynamodb.ListTagsOfResourceInput) (r *request.Request, o *dynamodb.ListTagsOfResourceOutput) {
-	d.unImpl()
-	return
+func (d *Dax) ListTagsOfResourceRequest(*dynamodb.ListTagsOfResourceInput) (*request.Request, *dynamodb.ListTagsOfResourceOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.ListTagsOfResourceOutput{}
 }
 
 func (d *Dax) RestoreTableFromBackup(*dynamodb.RestoreTableFromBackupInput) (*dynamodb.RestoreTableFromBackupOutput, error) {
@@ -672,9 +769,8 @@ func (d *Dax) RestoreTableFromBackupWithContext(aws.Context, *dynamodb.RestoreTa
 	return nil, d.unImpl()
 }
 
-func (d *Dax) RestoreTableFromBackupRequest(*dynamodb.RestoreTableFromBackupInput) (r *request.Request, o *dynamodb.RestoreTableFromBackupOutput) {
-	d.unImpl()
-	return
+func (d *Dax) RestoreTableFromBackupRequest(*dynamodb.RestoreTableFromBackupInput) (*request.Request, *dynamodb.RestoreTableFromBackupOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.RestoreTableFromBackupOutput{}
 }
 
 func (d *Dax) RestoreTableToPointInTime(*dynamodb.RestoreTableToPointInTimeInput) (*dynamodb.RestoreTableToPointInTimeOutput, error) {
@@ -685,9 +781,8 @@ func (d *Dax) RestoreTableToPointInTimeWithContext(aws.Context, *dynamodb.Restor
 	return nil, d.unImpl()
 }
 
-func (d *Dax) RestoreTableToPointInTimeRequest(*dynamodb.RestoreTableToPointInTimeInput) (r *request.Request, o *dynamodb.RestoreTableToPointInTimeOutput) {
-	d.unImpl()
-	return
+func (d *Dax) RestoreTableToPointInTimeRequest(*dynamodb.RestoreTableToPointInTimeInput) (*request.Request, *dynamodb.RestoreTableToPointInTimeOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.RestoreTableToPointInTimeOutput{}
 }
 
 func (d *Dax) TagResource(*dynamodb.TagResourceInput) (*dynamodb.TagResourceOutput, error) {
@@ -698,9 +793,8 @@ func (d *Dax) TagResourceWithContext(aws.Context, *dynamodb.TagResourceInput, ..
 	return nil, d.unImpl()
 }
 
-func (d *Dax) TagResourceRequest(*dynamodb.TagResourceInput) (r *request.Request, o *dynamodb.TagResourceOutput) {
-	d.unImpl()
-	return
+func (d *Dax) TagResourceRequest(*dynamodb.TagResourceInput) (*request.Request, *dynamodb.TagResourceOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.TagResourceOutput{}
 }
 
 func (d *Dax) UntagResource(*dynamodb.UntagResourceInput) (*dynamodb.UntagResourceOutput, error) {
@@ -711,9 +805,8 @@ func (d *Dax) UntagResourceWithContext(aws.Context, *dynamodb.UntagResourceInput
 	return nil, d.unImpl()
 }
 
-func (d *Dax) UntagResourceRequest(*dynamodb.UntagResourceInput) (r *request.Request, o *dynamodb.UntagResourceOutput) {
-	d.unImpl()
-	return
+func (d *Dax) UntagResourceRequest(*dynamodb.UntagResourceInput) (*request.Request, *dynamodb.UntagResourceOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.UntagResourceOutput{}
 }
 
 func (d *Dax) UpdateContinuousBackups(*dynamodb.UpdateContinuousBackupsInput) (*dynamodb.UpdateContinuousBackupsOutput, error) {
@@ -724,9 +817,8 @@ func (d *Dax) UpdateContinuousBackupsWithContext(aws.Context, *dynamodb.UpdateCo
 	return nil, d.unImpl()
 }
 
-func (d *Dax) UpdateContinuousBackupsRequest(*dynamodb.UpdateContinuousBackupsInput) (r *request.Request, o *dynamodb.UpdateContinuousBackupsOutput) {
-	d.unImpl()
-	return
+func (d *Dax) UpdateContinuousBackupsRequest(*dynamodb.UpdateContinuousBackupsInput) (*request.Request, *dynamodb.UpdateContinuousBackupsOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.UpdateContinuousBackupsOutput{}
 }
 
 func (d *Dax) UpdateContributorInsights(*dynamodb.UpdateContributorInsightsInput) (*dynamodb.UpdateContributorInsightsOutput, error) {
@@ -737,9 +829,8 @@ func (d *Dax) UpdateContributorInsightsWithContext(aws.Context, *dynamodb.Update
 	return nil, d.unImpl()
 }
 
-func (d *Dax) UpdateContributorInsightsRequest(*dynamodb.UpdateContributorInsightsInput) (r *request.Request, o *dynamodb.UpdateContributorInsightsOutput) {
-	d.unImpl()
-	return
+func (d *Dax) UpdateContributorInsightsRequest(*dynamodb.UpdateContributorInsightsInput) (*request.Request, *dynamodb.UpdateContributorInsightsOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.UpdateContributorInsightsOutput{}
 }
 
 func (d *Dax) UpdateGlobalTable(*dynamodb.UpdateGlobalTableInput) (*dynamodb.UpdateGlobalTableOutput, error) {
@@ -750,9 +841,8 @@ func (d *Dax) UpdateGlobalTableWithContext(aws.Context, *dynamodb.UpdateGlobalTa
 	return nil, d.unImpl()
 }
 
-func (d *Dax) UpdateGlobalTableRequest(*dynamodb.UpdateGlobalTableInput) (r *request.Request, o *dynamodb.UpdateGlobalTableOutput) {
-	d.unImpl()
-	return
+func (d *Dax) UpdateGlobalTableRequest(*dynamodb.UpdateGlobalTableInput) (*request.Request, *dynamodb.UpdateGlobalTableOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.UpdateGlobalTableOutput{}
 }
 
 func (d *Dax) UpdateGlobalTableSettings(*dynamodb.UpdateGlobalTableSettingsInput) (*dynamodb.UpdateGlobalTableSettingsOutput, error) {
@@ -763,9 +853,8 @@ func (d *Dax) UpdateGlobalTableSettingsWithContext(aws.Context, *dynamodb.Update
 	return nil, d.unImpl()
 }
 
-func (d *Dax) UpdateGlobalTableSettingsRequest(*dynamodb.UpdateGlobalTableSettingsInput) (r *request.Request, o *dynamodb.UpdateGlobalTableSettingsOutput) {
-	d.unImpl()
-	return
+func (d *Dax) UpdateGlobalTableSettingsRequest(*dynamodb.UpdateGlobalTableSettingsInput) (*request.Request, *dynamodb.UpdateGlobalTableSettingsOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.UpdateGlobalTableSettingsOutput{}
 }
 
 func (d *Dax) UpdateTable(*dynamodb.UpdateTableInput) (*dynamodb.UpdateTableOutput, error) {
@@ -776,9 +865,8 @@ func (d *Dax) UpdateTableWithContext(aws.Context, *dynamodb.UpdateTableInput, ..
 	return nil, d.unImpl()
 }
 
-func (d *Dax) UpdateTableRequest(*dynamodb.UpdateTableInput) (r *request.Request, o *dynamodb.UpdateTableOutput) {
-	d.unImpl()
-	return
+func (d *Dax) UpdateTableRequest(*dynamodb.UpdateTableInput) (*request.Request, *dynamodb.UpdateTableOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.UpdateTableOutput{}
 }
 
 func (d *Dax) UpdateTableReplicaAutoScaling(*dynamodb.UpdateTableReplicaAutoScalingInput) (*dynamodb.UpdateTableReplicaAutoScalingOutput, error) {
@@ -789,9 +877,8 @@ func (d *Dax) UpdateTableReplicaAutoScalingWithContext(aws.Context, *dynamodb.Up
 	return nil, d.unImpl()
 }
 
-func (d *Dax) UpdateTableReplicaAutoScalingRequest(*dynamodb.UpdateTableReplicaAutoScalingInput) (r *request.Request, o *dynamodb.UpdateTableReplicaAutoScalingOutput) {
-	d.unImpl()
-	return
+func (d *Dax) UpdateTableReplicaAutoScalingRequest(*dynamodb.UpdateTableReplicaAutoScalingInput) (*request.Request, *dynamodb.UpdateTableReplicaAutoScalingOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.UpdateTableReplicaAutoScalingOutput{}
 }
 
 func (d *Dax) UpdateTimeToLive(*dynamodb.UpdateTimeToLiveInput) (*dynamodb.UpdateTimeToLiveOutput, error) {
@@ -802,9 +889,8 @@ func (d *Dax) UpdateTimeToLiveWithContext(aws.Context, *dynamodb.UpdateTimeToLiv
 	return nil, d.unImpl()
 }
 
-func (d *Dax) UpdateTimeToLiveRequest(*dynamodb.UpdateTimeToLiveInput) (r *request.Request, o *dynamodb.UpdateTimeToLiveOutput) {
-	d.unImpl()
-	return
+func (d *Dax) UpdateTimeToLiveRequest(*dynamodb.UpdateTimeToLiveInput) (*request.Request, *dynamodb.UpdateTimeToLiveOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.UpdateTimeToLiveOutput{}
 }
 
 func (d *Dax) WaitUntilTableExists(*dynamodb.DescribeTableInput) error {
@@ -824,7 +910,7 @@ func (d *Dax) WaitUntilTableNotExistsWithContext(aws.Context, *dynamodb.Describe
 }
 
 func (d *Dax) unImpl() error {
-	panic("unimpl")
+	return errors.New(client.ErrCodeNotImplemented)
 }
 
 func (d *Dax) Close() error {

@@ -1,3 +1,8 @@
+Release v1.2.3 (2020-12-03)
+===
+* Add new (but unimplemented by DAX) DynamoDB operations.
+* Change behavior of unimplemented operations to return an error instead of panicking, per [issue 27](https://github.com/aws/aws-dax-go/issues/27).
+
 Release v1.2.2 (2020-11-12)
 ===
 * Implement `BatchGetItemPage`, `QueryPage`, and `ScanPage` operations

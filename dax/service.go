@@ -17,10 +17,12 @@ package dax
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/aws/aws-dax-go/dax/internal/client"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/client/metadata"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
@@ -145,6 +147,26 @@ func (c *Config) requestOptions(read bool, ctx context.Context, opts ...request.
 		return client.RequestOptions{}, nil, err
 	}
 	return opt, cfn, nil
+}
+
+func buildHandlersForUnimplementedOperations() *request.Handlers {
+	h := &request.Handlers{}
+	h.Build.PushFrontNamed(request.NamedHandler{
+		Name: "dax.BuildHandler",
+		Fn: func(r *request.Request) {
+			r.Error = errors.New(client.ErrCodeNotImplemented)
+			return
+		}})
+	return h
+}
+
+var handlersForUnimplementedOperations = buildHandlersForUnimplementedOperations()
+
+func newRequestForUnimplementedOperation() *request.Request {
+	op := &request.Operation{Name: "Unimplemented"}
+	clientInfo := metadata.ClientInfo{ServiceName: "dax"}
+	req := request.New(aws.Config{}, clientInfo, *handlersForUnimplementedOperations, nil, op, nil, nil)
+	return req
 }
 
 var _ dynamodbiface.DynamoDBAPI = (*Dax)(nil)
