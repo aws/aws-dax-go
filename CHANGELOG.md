@@ -1,3 +1,7 @@
+Release v1.2.4 (2020-12-16)
+==
+* Remove the assignment of a Dax client pointer to the DynamoDBAPI interface, as requested in [issue 30](https://github.com/aws/aws-dax-go/issues/30).
+
 Release v1.2.3 (2020-12-03)
 ===
 * Add new (but unimplemented by DAX) DynamoDB operations.

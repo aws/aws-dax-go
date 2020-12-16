@@ -25,7 +25,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/client/metadata"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 )
 
 // Dax makes requests to the Amazon DAX API, which conforms to the DynamoDB API.
@@ -168,5 +167,3 @@ func newRequestForUnimplementedOperation() *request.Request {
 	req := request.New(aws.Config{}, clientInfo, *handlersForUnimplementedOperations, nil, op, nil, nil)
 	return req
 }
-
-var _ dynamodbiface.DynamoDBAPI = (*Dax)(nil)
