@@ -1,3 +1,7 @@
+Release v1.2.5 (2020-12-17)
+==
+* Incorporate [pull request #26](https://github.com/aws/aws-dax-go/pull/26), which fixes merging an `aws.Config` into a `dax.Config`.
+
 Release v1.2.4 (2020-12-16)
 ==
 * Remove the assignment of a Dax client pointer to the DynamoDBAPI interface, as requested in [issue 30](https://github.com/aws/aws-dax-go/issues/30).
