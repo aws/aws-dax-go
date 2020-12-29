@@ -191,12 +191,11 @@ func DecodeAttributeValue(reader *Reader) (*dynamodb.AttributeValue, error) {
 		}
 		return &dynamodb.AttributeValue{M: m}, nil
 	case PosInt, NegInt:
-		i, err := reader.ReadInt64()
+		s, err := reader.ReadCborIntegerToString()
 		if err != nil {
 			return nil, err
 		}
-		n := strconv.FormatInt(i, 10)
-		return &dynamodb.AttributeValue{N: &n}, nil
+		return &dynamodb.AttributeValue{N: &s}, nil
 	case Simple:
 		if _, _, err := reader.readTypeHeader(); err != nil {
 			return nil, err

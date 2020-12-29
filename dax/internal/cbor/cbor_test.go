@@ -30,6 +30,96 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 )
 
+type IntBoundary struct {
+	name  string
+	value *big.Int
+	cbor  []byte
+}
+
+var (
+	// CBOR BigNum; uses a tagged value rather than the CBOR negative int major type
+	MinCborNegativeIntMinusOne = IntBoundary{
+		"min cbor negative int - 1",
+		new(big.Int).Sub(MinCborNegativeInt.value, big.NewInt(1)),
+		fromHex("0xc349010000000000000000"),
+	}
+	MinCborNegativeInt = IntBoundary{
+		"min cbor negative int",
+		new(big.Int).Neg(new(big.Int).Exp(big.NewInt(2), big.NewInt(64), nil)),
+		fromHex("0x3bffffffffffffffff"),
+	}
+	MinCborNegativeIntPlusOne = IntBoundary{
+		"min cbor negative int",
+		new(big.Int).Add(new(big.Int).Neg(new(big.Int).Exp(big.NewInt(2), big.NewInt(64), nil)), big.NewInt(1)),
+		fromHex("0x3bfffffffffffffffe"),
+	}
+	MinInt64MinusOne = IntBoundary{
+		"min int64 - 1",
+		new(big.Int).Sub(big.NewInt(math.MinInt64), big.NewInt(1)),
+		fromHex("0x3b8000000000000000"),
+	}
+	MinInt64 = IntBoundary{
+		"min int64",
+		big.NewInt(math.MinInt64),
+		fromHex("0x3b7fffffffffffffff"),
+	}
+	MinusOne = IntBoundary{
+		"minus 1",
+		new(big.Int).Neg(big.NewInt(1)),
+		fromHex("0x20"),
+	}
+	Zero = IntBoundary{
+		"zero",
+		big.NewInt(0),
+		fromHex("0x00"),
+	}
+	MaxInt64 = IntBoundary{
+		"max int64",
+		big.NewInt(math.MaxInt64),
+		fromHex("0x1b7fffffffffffffff"),
+	}
+	MaxInt64PlusOne = IntBoundary{
+		"max int64 + 1",
+		new(big.Int).Add(MaxInt64.value, big.NewInt(1)),
+		fromHex("0x1b8000000000000000"),
+	}
+	MaxCborPositiveInt = IntBoundary{
+		"max cbor positive int (also max uint64)",
+		new(big.Int).SetUint64(math.MaxUint64),
+		fromHex("0x1bffffffffffffffff"),
+	}
+	MaxUint64 = MaxCborPositiveInt
+	// CBOR BigNum; uses a tagged value rather than the CBOR positive int major type
+	MaxUint64PlusOne = IntBoundary{
+		"max uint64 + 1 (also max cbor positive int + 1)",
+		new(big.Int).Add(MaxUint64.value, big.NewInt(1)),
+		fromHex("0xc249010000000000000000"),
+	}
+	MaxCborPositiveIntPlusOne = MaxUint64PlusOne
+)
+
+// Occasionally useful for debugging tests
+func TestPrintBoundaries(t *testing.T) {
+	t.Skip()
+	for _, b := range []IntBoundary{
+		MinCborNegativeIntMinusOne,
+		MinCborNegativeInt,
+		MinCborNegativeIntPlusOne,
+		MinInt64MinusOne,
+		MinInt64,
+		MinusOne,
+		Zero,
+		MaxInt64,
+		MaxInt64PlusOne,
+		MaxCborPositiveInt,
+		MaxUint64,
+		MaxUint64PlusOne,
+		MaxCborPositiveIntPlusOne,
+	} {
+		t.Logf("%s %d %x", b.name, b.value, b.cbor)
+	}
+}
+
 func TestCborString(t *testing.T) {
 	ss := []string{
 		"",
@@ -458,6 +548,29 @@ func TestCborInt64(t *testing.T) {
 		tt(v)
 		tt(v - 1)
 		tt(v + 1)
+	}
+}
+
+func TestReadCborIntegerToString(t *testing.T) {
+	for _, tt := range []IntBoundary{
+		MinCborNegativeInt,
+		MinCborNegativeIntPlusOne,
+		MinInt64MinusOne,
+		MinInt64,
+		MinusOne,
+		Zero,
+		MaxInt64,
+		MaxInt64PlusOne,
+		MaxCborPositiveInt,
+		MaxUint64,
+	} {
+		r := NewReader(bytes.NewBuffer(tt.cbor))
+		a, err := r.ReadCborIntegerToString()
+		if err != nil {
+			t.Errorf("reading %s, expected: %d, got error %v", tt.name, tt.value, err)
+		} else if tt.value.String() != a {
+			t.Errorf("reading %s, expected %s, actual: %s", tt.name, tt.value.String(), a)
+		}
 	}
 }
 

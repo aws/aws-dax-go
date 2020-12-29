@@ -19,12 +19,13 @@ import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
-	"io"
-	"math"
-	"sync"
-
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
+	"io"
+	"math"
+	"math/big"
+	"strconv"
+	"sync"
 )
 
 const (
@@ -487,11 +488,19 @@ func (r *Reader) verifyMajorType(hdr, exp int) error {
 	return nil
 }
 
+// Deprecated: See the comment on ReadInt64().
 func (r *Reader) ReadInt() (int, error) {
 	v, err := r.ReadInt64()
 	return int(v), err
 }
 
+// Deprecated: This method is not safe for reading values that use the
+// high-order bit, because an int64 only has 63 bits for the value's
+// magnitude, but CBOR negative and positive integers have 64 bits (the
+// sign is in the major type). It is left here because it is used to read
+// many values that are safely within the range of an int64, like ports,
+// attribute ids, and parameter counts. However, it is not safe for reading
+// DynamoDB item attribute values. For that use ReadCborIntegerToString().
 func (r *Reader) ReadInt64() (int64, error) {
 	hdr, value, err := r.readTypeHeader()
 	if err != nil {
@@ -505,6 +514,29 @@ func (r *Reader) ReadInt64() (int64, error) {
 		return int64(value), nil
 	default:
 		return 0, ErrNaN
+	}
+}
+
+// Read a CBOR integer (positive or negative) into a decimal string. Use
+// primitive types unless the magnitude of the value requires a big.Int.
+func (r *Reader) ReadCborIntegerToString() (string, error) {
+	hdr, value, err := r.readTypeHeader()
+	if err != nil {
+		return "", err
+	}
+	switch hdr & MajorTypeMask {
+	case PosInt:
+		return strconv.FormatUint(uint64(value), 10), nil
+	case NegInt:
+		if value <= math.MaxInt64 {
+			return strconv.FormatInt(int64(^value), 10), nil
+		} else {
+			// The magnitude is too high to flip the bits and
+			// cast to an int64, so use a big integer instead.
+			return new(big.Int).Not(new(big.Int).SetUint64(value)).String(), nil
+		}
+	default:
+		return "", ErrNaN
 	}
 }
 

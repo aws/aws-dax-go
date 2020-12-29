@@ -78,3 +78,31 @@ func TestAttrVal(t *testing.T) {
 		}
 	}
 }
+
+func TestDecodeIntBoundariesFromCbor(t *testing.T) {
+	for _, e := range []IntBoundary{
+		MinCborNegativeIntMinusOne,
+		MinCborNegativeInt,
+		MinCborNegativeIntPlusOne,
+		MinInt64MinusOne,
+		MinInt64,
+		MinusOne,
+		Zero,
+		MaxInt64,
+		MaxInt64PlusOne,
+		MaxCborPositiveInt,
+		MaxUint64,
+		MaxUint64PlusOne,
+		MaxCborPositiveIntPlusOne,
+	} {
+		var buf bytes.Buffer
+		buf.Write(e.cbor)
+		a, err := DecodeAttributeValue(NewReader(&buf))
+		if err != nil {
+			t.Errorf("unexpected error %v for %s", err, e.name)
+		}
+		if eAttr := (dynamodb.AttributeValue{N: aws.String(e.value.String())}); !reflect.DeepEqual(eAttr, *a) {
+			t.Errorf("test %s expected: %v, actual: %v", e.name, eAttr, a)
+		}
+	}
+}
