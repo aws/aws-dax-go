@@ -1,7 +1,7 @@
 github.com/antlr/antlr4 v0.0.0-20181218183524-be58ebffde8e h1:yxMh4HIdsSh2EqxUESWvzszYMNzOugRyYCeohfwNULM=
 github.com/antlr/antlr4 v0.0.0-20181218183524-be58ebffde8e/go.mod h1:T7PbCXFs94rrTttyxjbyT5+/1V8T2TYDejxUfHJjw1Y=
-github.com/aws/aws-sdk-go v1.36.18 h1:PvfZkE0cjM1k1EMQDSb2BrX8LETPx0IFFZ/YKkurmFg=
-github.com/aws/aws-sdk-go v1.36.18/go.mod h1:hcU610XS61/+aQV88ixoOzUoG7v3b31pl2zKMmprdro=
+github.com/aws/aws-sdk-go v1.36.22 h1:kkQdiotYI9RlGoAoMPbQyHKsl9oyT+vz/w2cN6EUZKs=
+github.com/aws/aws-sdk-go v1.36.22/go.mod h1:hcU610XS61/+aQV88ixoOzUoG7v3b31pl2zKMmprdro=
 github.com/davecgh/go-spew v1.1.0 h1:ZDRjVQ15GmhC3fiQ8ni8+OwkZQO4DARzQgrnXU1Liz8=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/gofrs/uuid v3.3.0+incompatible h1:8K4tyRfvU1CYPgJsveYFQMhpFd/wXNM7iK6rR7UHz84=

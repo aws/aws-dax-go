@@ -1,3 +1,7 @@
+Release v1.2.7 (2021-01-16)
+===
+* Add support for go modules.
+
 Release v1.2.6 (2020-12-23)
 ===
 * Fix problems reading integer values from the wire that overflow an int64.
