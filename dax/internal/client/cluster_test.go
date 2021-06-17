@@ -308,7 +308,7 @@ func TestClusterDaxClient_retryReturnsCorrectErrorType(t *testing.T) {
 
 func TestCluster_parseHostPorts(t *testing.T) {
 	endpoints := []string{"dax.us-east-1.amazonaws.com:8111"}
-	hostPorts, err := parseHostPorts(endpoints)
+	hostPorts, _, _, err := getHostPorts(endpoints)
 	if err != nil {
 		t.Errorf("unexpected error %v", err)
 	}
@@ -558,6 +558,73 @@ func TestCluster_Close(t *testing.T) {
 	}
 }
 
+func Test_CorrectHostPortUrlFormat(t *testing.T) {
+	hostPort := "dax://test.nds.clustercfg.dax.usw2integ.cache.amazonaws.com:1234"
+	host, port, scheme, _ := parseHostPort(hostPort)
+	assertEqual(t, "test.nds.clustercfg.dax.usw2integ.cache.amazonaws.com", host, "")
+	assertEqual(t, 1234, port, "")
+	assertEqual(t, "dax", scheme, "")
+}
+
+func Test_MissingScheme(t *testing.T) {
+	hostPort := "test.nds.clustercfg.dax.usw2integ.cache.amazonaws.com:8111"
+	host, port, scheme, _ := parseHostPort(hostPort)
+	assertEqual(t, "test.nds.clustercfg.dax.usw2integ.cache.amazonaws.com", host, "")
+	assertEqual(t, 8111, port, "")
+	assertEqual(t, "dax", scheme, "")
+}
+
+func Test_MissingPortForDax(t *testing.T) {
+	hostPort := "dax://test.nds.clustercfg.dax.usw2integ.cache.amazonaws.com"
+	host, port, scheme, _ := parseHostPort(hostPort)
+	assertEqual(t, "test.nds.clustercfg.dax.usw2integ.cache.amazonaws.com", host, "")
+	assertEqual(t, 8111, port, "")
+	assertEqual(t, "dax", scheme, "")
+}
+
+func Test_MissingPortForDaxs(t *testing.T) {
+	hostPort := "daxs://test.nds.clustercfg.dax.usw2integ.cache.amazonaws.com"
+	host, port, scheme, _ := parseHostPort(hostPort)
+	assertEqual(t, "test.nds.clustercfg.dax.usw2integ.cache.amazonaws.com", host, "")
+	assertEqual(t, 9111, port, "")
+	assertEqual(t, "daxs", scheme, "")
+}
+
+func Test_UnsupportedScheme(t *testing.T) {
+	hostPort := "sample://test.nds.clustercfg.dax.usw2integ.cache.amazonaws.com"
+	_, _, _, err := parseHostPort(hostPort)
+	assertEqual(t, reflect.TypeOf(err), reflect.TypeOf(awserr.New(request.ErrCodeRequestError, "", nil)), "")
+}
+
+func Test_DaxsCorrectUrlFormat(t *testing.T) {
+	hostPort := "daxs://test.nds.clustercfg.dax.usw2integ.cache.amazonaws.com:1234"
+	host, port, scheme, _ := parseHostPort(hostPort)
+	assertEqual(t, "test.nds.clustercfg.dax.usw2integ.cache.amazonaws.com", host, "")
+	assertEqual(t, 1234, port, "")
+	assertEqual(t, "daxs", scheme, "")
+}
+
+var nonEncEp = "dax://cluster.random.alpha-dax-clusters.us-east-1.amazonaws.com"
+var nonEncNodeEp = "cluster-a.random.nodes.alpha-dax-clusters.us-east-1.amazonaws.com:8111"
+var encEp = "daxs://cluster2.random.alpha-dax-clusters.us-east-1.amazonaws.com"
+var encNodeEp = "daxs://cluster2-a.random.nodes.alpha-dax-clusters.us-east-1.amazonaws.com:9111"
+
+func Test_InconsistentScheme(t *testing.T) {
+	_, _, _, err := getHostPorts([]string{nonEncEp, encEp})
+	assertEqual(t, reflect.TypeOf(err), reflect.TypeOf(awserr.New(request.ErrCodeRequestError, "", nil)), "")
+}
+
+func Test_MultipleUnEncryptedEndpoints(t *testing.T) {
+	hps, _, _, _ := getHostPorts([]string{nonEncEp, nonEncNodeEp})
+	assert.Contains(t, hps, hostPort{"cluster.random.alpha-dax-clusters.us-east-1.amazonaws.com", 8111})
+	assert.Contains(t, hps, hostPort{"cluster-a.random.nodes.alpha-dax-clusters.us-east-1.amazonaws.com", 8111})
+}
+
+func Test_MultipleEncryptedEndpoints(t *testing.T) {
+	_, _, _, err := getHostPorts([]string{encEp, encNodeEp})
+	assertEqual(t, reflect.TypeOf(err), reflect.TypeOf(awserr.New(request.ErrCodeRequestError, "", nil)), "")
+}
+
 func assertConnections(cluster *cluster, endpoints []serviceEndpoint, t *testing.T) {
 	if len(cluster.active) != len(endpoints) {
 		t.Errorf("expected %d, got %d", len(cluster.active), len(endpoints))
@@ -602,6 +669,16 @@ func assertActiveClient(client *testClient, t *testing.T) {
 	if client.closeCalls != 0 {
 		t.Errorf("expected 0, got %d", client.closeCalls)
 	}
+}
+
+func assertEqual(t *testing.T, a interface{}, b interface{}, message string) {
+	if a == b {
+		return
+	}
+	if len(message) == 0 {
+		message = fmt.Sprintf("%v != %v", a, b)
+	}
+	t.Fatal(message)
 }
 
 func newTestCluster(seeds []string) (*cluster, *testClientBuilder) {
@@ -664,7 +741,7 @@ type testClientBuilder struct {
 	clients []*testClient
 }
 
-func (b *testClientBuilder) newClient(ip net.IP, port int, region string, credentials *credentials.Credentials, maxConns int, dialContextFn dialContext) (DaxAPI, error) {
+func (b *testClientBuilder) newClient(ip net.IP, port int, connConfigData connConfig, region string, credentials *credentials.Credentials, maxConns int, dialContextFn dialContext) (DaxAPI, error) {
 	t := &testClient{ep: b.ep, hp: hostPort{ip.String(), port}}
 	b.clients = append(b.clients, []*testClient{t}...)
 	return t, nil

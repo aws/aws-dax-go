@@ -1,3 +1,7 @@
+Release v1.2.8 (2021-03-08)
+===
+* Add TLS support to DAX go client.
+
 Release v1.2.7 (2021-01-16)
 ===
 * Add support for go modules.

@@ -17,10 +17,13 @@ package client
 
 import (
 	"context"
+	"crypto/tls"
 	"net"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/aws/aws-dax-go/dax/internal/proxy"
 )
 
 const network = "tcp"
@@ -43,6 +46,8 @@ type tubePool struct {
 	lastActive tube    // protected by mutex
 	session    session // protected by mutex
 	waiters    chan tube
+
+	connConfig connConfig
 }
 
 type tubePoolOptions struct {
@@ -53,21 +58,34 @@ type tubePoolOptions struct {
 
 var defaultDialer = &net.Dialer{}
 
-var defaultTubePoolOptions = tubePoolOptions{10, time.Second * 5, defaultDialer.DialContext}
+var defaultTubePoolOptions = tubePoolOptions{maxConcurrentConnAttempts: 10, timeout: time.Second * 5}
 
 // Creates a new pool using defaultTubePoolOptions and associated with given address.
-func newTubePool(address string) *tubePool {
-	return newTubePoolWithOptions(address, defaultTubePoolOptions)
+func newTubePool(address string, connConfigData connConfig) *tubePool {
+	return newTubePoolWithOptions(address, defaultTubePoolOptions, connConfigData)
 }
 
 // Creates a new pool with provided options associated with the given address.
-func newTubePoolWithOptions(address string, options tubePoolOptions) *tubePool {
+func newTubePoolWithOptions(address string, options tubePoolOptions, connConfigData connConfig) *tubePool {
 	if options.maxConcurrentConnAttempts <= 0 {
 		options.maxConcurrentConnAttempts = defaultTubePoolOptions.maxConcurrentConnAttempts
 	}
 
 	if options.dialContext == nil {
-		options.dialContext = defaultTubePoolOptions.dialContext
+		if connConfigData.isEncrypted {
+			dialer := &proxy.Dialer{}
+			var cfg tls.Config
+			if connConfigData.skipHostnameVerification {
+				cfg = tls.Config{InsecureSkipVerify: true}
+			} else {
+				cfg = tls.Config{ServerName: connConfigData.hostname}
+			}
+			dialer.Config = &cfg
+			options.dialContext = dialer.DialContext
+		} else {
+			dialer := &net.Dialer{}
+			options.dialContext = dialer.DialContext
+		}
 	}
 
 	return &tubePool{
@@ -77,6 +95,8 @@ func newTubePoolWithOptions(address string, options tubePoolOptions) *tubePool {
 		waiters:     make(chan tube),
 		timeout:     options.timeout,
 		dialContext: options.dialContext,
+
+		connConfig: connConfigData,
 	}
 }
 

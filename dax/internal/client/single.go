@@ -77,11 +77,11 @@ type SingleDaxClient struct {
 	attrListIdToNames *lru.Lru
 }
 
-func NewSingleClient(endpoint, region string, credentials *credentials.Credentials) (*SingleDaxClient, error) {
-	return newSingleClientWithOptions(endpoint, region, credentials, -1, defaultDialer.DialContext)
+func NewSingleClient(endpoint string, connConfigData connConfig, region string, credentials *credentials.Credentials) (*SingleDaxClient, error) {
+	return newSingleClientWithOptions(endpoint, connConfigData, region, credentials, -1, defaultDialer.DialContext)
 }
 
-func newSingleClientWithOptions(endpoint, region string, credentials *credentials.Credentials, maxPendingConnections int, dialContextFn dialContext) (*SingleDaxClient, error) {
+func newSingleClientWithOptions(endpoint string, connConfigData connConfig, region string, credentials *credentials.Credentials, maxPendingConnections int, dialContextFn dialContext) (*SingleDaxClient, error) {
 	po := defaultTubePoolOptions
 	if maxPendingConnections > 0 {
 		po.maxConcurrentConnAttempts = maxPendingConnections
@@ -93,7 +93,7 @@ func newSingleClientWithOptions(endpoint, region string, credentials *credential
 		region:             region,
 		credentials:        credentials,
 		tubeAuthWindowSecs: authTtlSecs * tubeAuthWindowScalar,
-		pool:               newTubePoolWithOptions(endpoint, po),
+		pool:               newTubePoolWithOptions(endpoint, po, connConfigData),
 	}
 
 	client.handlers = client.buildHandlers()

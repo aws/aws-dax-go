@@ -31,13 +31,47 @@ import (
 )
 
 func main() {
+	
 	cfg := dax.DefaultConfig()
-	cfg.HostPorts = []string{"mycluster.frfx8h.clustercfg.dax.usw2.amazonaws.com:8111"}
+	cfg.HostPorts = []string{"dax://mycluster.frfx8h.clustercfg.dax.usw2.amazonaws.com:8111"}
 	cfg.Region = "us-west-2"
 	client, err := dax.New(cfg)
+
 	if err != nil {
 		panic(fmt.Errorf("unable to initialize client %v", err))
 	}
+	
+	
+	//Connecion to a secure cluster
+	secureEndpoint := "daxs://mycluster.frfx8h.clustercfg.dax.usw2.amazonaws.com"
+	secureCfg := dax.DefaultConfig()
+	secureCfg.HostPorts = []string{secureEndpoint}
+	secureCfg.Region = "us-west-2"
+	
+	//WARN: Skip hostname verification of TLS connections. 
+	//The default is to perform hostname verification, setting this to True will skip verification. 
+	//Be sure you understand the implication of doing so, which is the inability to authenticate
+	//the cluster that you are connecting to.
+	secureCfg.SkipHostnameVerification = false
+	
+	// DialContext is an optional field in Config.
+	// If DialContext is being set in Config for a secure/ encrypted cluster, then use dax.SecureDialContext to 
+	// return DialContext. An example of how DailContext can be set using dax.SecureDialContext is shown below.
+	secureCfg.DialContext = func(ctx context.Context, network string, address string) (net.Conn, error) {
+		//    fmt.Println("Write your custom logic here")
+		dialCon, err := dax.SecureDialContext(secureEndpoint, secureCfg.SkipHostnameVerification)
+		if err != nil {
+			panic(fmt.Errorf("secure dialcontext creation failed %v", err))
+		}
+		return dialCon(ctx, network, address)
+	}
+	secureClient, err := dax.New(secureCfg)
+	if err != nil {
+		panic(fmt.Errorf("unable to initialize client %v", err))
+	}
+	fmt.Println("secure client created", secureClient)
+	
+	
 
 	input := &dynamodb.PutItemInput{
 		TableName: aws.String("TryDaxGoTable"),
