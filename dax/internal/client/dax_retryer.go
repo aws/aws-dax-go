@@ -64,7 +64,12 @@ func (r DaxRetryer) RetryRules(req *request.Request) time.Duration {
 func (r DaxRetryer) ShouldRetry(req *request.Request) bool {
 	daxErr := req.Error.(daxError)
 	codes := daxErr.CodeSequence()
-	return len(codes) > 0 && (codes[0] == 1 || codes[0] == 2) || req.IsErrorThrottle()
+	return len(codes) > 0 && (codes[0] == 1 || codes[0] == 2) || req.IsErrorThrottle() || isAuthCRequiredException(codes)
+}
+
+// Error code [4.23.31.33] is for AuthenticationRequiredException
+func isAuthCRequiredException(codes []int) bool {
+	return len(codes) == 4 && codes[0] == 4 && codes[1] == 23 && codes[2] == 31 && codes[3] == 33
 }
 
 // MaxRetries returns the number of maximum retries the service will use to make

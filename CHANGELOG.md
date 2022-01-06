@@ -1,3 +1,7 @@
+Release v1.2.9 (2021-07-01)
+===
+* Retry requests on AuthenticationRequiredException
+
 Release v1.2.8 (2021-03-08)
 ===
 * Add TLS support to DAX go client.

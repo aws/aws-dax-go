@@ -75,3 +75,30 @@ func TestRetryOnThrottlingException(t *testing.T) {
 		t.Errorf("error %v", err)
 	}
 }
+
+func TestRetryOnAuthenticationRequiredException(t *testing.T) {
+	cluster, _ := newTestCluster([]string{"127.0.0.1:8111"})
+	cluster.update([]serviceEndpoint{{hostname: "localhost", port: 8121}})
+	cc := ClusterDaxClient{config: DefaultConfig(), cluster: cluster}
+
+	flag := 0
+	codes := []int{4, 23, 31, 33}
+	action := func(client DaxAPI, o RequestOptions) error {
+		if flag == 0 {
+			flag = 1
+			return newDaxRequestFailure(codes, "AuthenticationRequiredException", "", "", 400)
+		}
+		return nil
+	}
+
+	opt := RequestOptions{
+		MaxRetries: 2,
+	}
+
+	err := cc.retry("op", action, opt)
+
+	if err != nil {
+		t.Errorf("error %v", err)
+	}
+
+}
