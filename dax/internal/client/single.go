@@ -693,7 +693,7 @@ func (client *SingleDaxClient) executeWithRetries(op string, o RequestOptions, e
 			o.Logger.Log(fmt.Sprintf("DEBUG: Retrying Request %s/%s, attempt %d", service, op, i))
 		}
 
-		if err = client.executeWithContext(ctx, op, encoder, decoder); err == nil {
+		if err = client.executeWithContext(ctx, op, encoder, decoder, o); err == nil {
 			return nil
 		} else if ctx != nil && err == ctx.Err() {
 			return awserr.New(request.CanceledErrorCode, "request context canceled", err)
@@ -704,13 +704,17 @@ func (client *SingleDaxClient) executeWithRetries(op string, o RequestOptions, e
 				return awserr.New(request.CanceledErrorCode, "request context canceled", err)
 			}
 		}
+
+		if o.Logger != nil && o.LogLevel.Matches(aws.LogDebugWithRequestRetries) {
+			o.Logger.Log(fmt.Sprintf("DEBUG: Error in executing %s%s : %s", service, op, err))
+		}
 	}
 	// Return the last error occurred
 	return translateError(err)
 }
 
-func (client *SingleDaxClient) executeWithContext(ctx aws.Context, op string, encoder func(writer *cbor.Writer) error, decoder func(reader *cbor.Reader) error) error {
-	t, err := client.pool.getWithContext(ctx, client.isHighPriority(op))
+func (client *SingleDaxClient) executeWithContext(ctx aws.Context, op string, encoder func(writer *cbor.Writer) error, decoder func(reader *cbor.Reader) error, opt RequestOptions) error {
+	t, err := client.pool.getWithContext(ctx, client.isHighPriority(op), opt)
 	if err != nil {
 		return err
 	}

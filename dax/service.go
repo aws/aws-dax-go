@@ -19,6 +19,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"net"
 	"net/url"
 	"time"
@@ -81,8 +82,12 @@ func NewConfigWithSession(session session.Session) Config {
 
 // New creates a new instance of the DAX client with a DAX configuration.
 func New(cfg Config) (*Dax, error) {
+	cfg.Config.SetLogger(cfg.Logger, cfg.LogLevel)
 	c, err := client.New(cfg.Config)
 	if err != nil {
+		if cfg.Logger != nil {
+			cfg.Logger.Log(fmt.Sprintf("ERROR: Exception in initialisation of DAX Client : %s", err))
+		}
 		return nil, err
 	}
 	return &Dax{client: c, config: cfg}, nil
@@ -164,6 +169,9 @@ func (c *Config) requestOptions(read bool, ctx context.Context, opts ...request.
 		MaxRetries: r,
 	}
 	if err := opt.MergeFromRequestOptions(ctx, opts...); err != nil {
+		if c.Logger != nil && c.LogLevel.AtLeast(aws.LogDebug) {
+			c.Logger.Log(fmt.Sprintf("DEBUG: Error in merging from Request Options : %s", err))
+		}
 		return client.RequestOptions{}, nil, err
 	}
 	return opt, cfn, nil

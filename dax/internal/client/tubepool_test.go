@@ -354,7 +354,7 @@ func TestConnectionPriority(t *testing.T) {
 	for i := 0; i < maxAttempts; i++ {
 		go func() {
 			defer wg.Done()
-			tb, err := pool.getWithContext(context.Background(), false)
+			tb, err := pool.getWithContext(context.Background(), false, RequestOptions{})
 			if err != nil {
 				t.Errorf("unexpected error %v", err)
 			} else {
@@ -365,7 +365,7 @@ func TestConnectionPriority(t *testing.T) {
 
 	ctx, cfn := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cfn()
-	_, err = pool.getWithContext(ctx, false)
+	_, err = pool.getWithContext(ctx, false, RequestOptions{})
 	if err == nil {
 		t.Errorf("expected error, got none")
 	}
@@ -373,7 +373,7 @@ func TestConnectionPriority(t *testing.T) {
 		t.Errorf("expected %v, got %v", ctx.Err(), err)
 	}
 
-	tb, err := pool.getWithContext(context.Background(), true)
+	tb, err := pool.getWithContext(context.Background(), true, RequestOptions{})
 	if err != nil {
 		t.Errorf("unexpected error %v", err)
 	} else {
@@ -407,7 +407,7 @@ func TestGetWithClosedErrorChannel(t *testing.T) {
 		pool.Close()
 	}()
 
-	tube, err := pool.getWithContext(context.Background(), false)
+	tube, err := pool.getWithContext(context.Background(), false, RequestOptions{})
 	if tube != nil {
 		t.Fatalf("Expected nil tube")
 	}

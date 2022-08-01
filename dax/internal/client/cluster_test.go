@@ -726,6 +726,8 @@ func TestCluster_customDialer(t *testing.T) {
 		DialContext:                  dialContextFn,
 		Region:                       "us-west-2",
 		HostPorts:                    []string{"localhost:9121"},
+		logger:                       aws.NewDefaultLogger(),
+		logLevel:                     aws.LogDebugWithRequestRetries,
 	}
 	cc, err := New(cfg)
 	require.NoError(t, err)

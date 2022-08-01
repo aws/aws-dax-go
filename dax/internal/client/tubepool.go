@@ -18,12 +18,14 @@ package client
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net"
 	"os"
 	"sync"
 	"time"
 
 	"github.com/aws/aws-dax-go/dax/internal/proxy"
+	"github.com/aws/aws-sdk-go/aws"
 )
 
 const network = "tcp"
@@ -108,12 +110,12 @@ func (p *tubePool) get() (tube, error) {
 		ctx, cancelFn = context.WithTimeout(ctx, p.timeout)
 		defer cancelFn()
 	}
-	return p.getWithContext(ctx, false)
+	return p.getWithContext(ctx, false, RequestOptions{})
 }
 
 // Gets a new or reuses existing tube with provided context.
 // Create a new tube even if pool reached maxConcurrentConnAttempts if highPriority is true.
-func (p *tubePool) getWithContext(ctx context.Context, highPriority bool) (tube, error) {
+func (p *tubePool) getWithContext(ctx context.Context, highPriority bool, opt RequestOptions) (tube, error) {
 	for {
 		p.mutex.Lock()
 		if p.closed {
@@ -143,10 +145,10 @@ func (p *tubePool) getWithContext(ctx context.Context, highPriority bool) (tube,
 
 		var done chan tube
 		if p.gate.tryEnter() {
-			go p.allocAndReleaseGate(session, done, true)
+			go p.allocAndReleaseGate(session, done, true, opt)
 		} else if highPriority {
 			done = make(chan tube)
-			go p.allocAndReleaseGate(session, done, false)
+			go p.allocAndReleaseGate(session, done, false, opt)
 		}
 
 		select {
@@ -162,10 +164,12 @@ func (p *tubePool) getWithContext(ctx context.Context, highPriority bool) (tube,
 		case err := <-p.errCh:
 			// if channel was closed, the error will be nil
 			if err != nil {
+				p.logDebug(opt, fmt.Sprintf("DEBUG: TubePool for %s returned error : %s", p.address, err))
 				return nil, err
 			}
 			return nil, os.ErrClosed
 		case <-ctx.Done():
+			p.logDebug(opt, fmt.Sprintf("DEBUG: Context.Done is closed in Pool %s. Error : %s", p.address, ctx.Err()))
 			return nil, ctx.Err()
 		}
 	}
@@ -173,8 +177,8 @@ func (p *tubePool) getWithContext(ctx context.Context, highPriority bool) (tube,
 
 // Allocates a new tube and optionally releases the gate.
 // If done channel isn't nil the new tube will be send there as opposed to idle tubes stack.
-func (p *tubePool) allocAndReleaseGate(session int64, done chan tube, releaseGate bool) {
-	tube, err := p.alloc(session)
+func (p *tubePool) allocAndReleaseGate(session int64, done chan tube, releaseGate bool, opt RequestOptions) {
+	tube, err := p.alloc(session, opt)
 	if releaseGate {
 		p.gate.exit()
 	}
@@ -328,19 +332,21 @@ func (p *tubePool) reapIdleConnections() {
 		p.lastActive = p.top
 	}
 	p.mutex.Unlock()
-
 	// closing tubes synchronously as this method is expected to be called from a background goroutine
 	p.closeAll(reapHead)
 }
 
 // Allocates a new tube by establishing a new connection and performing initialization.
-func (p *tubePool) alloc(session int64) (tube, error) {
+func (p *tubePool) alloc(session int64, opt RequestOptions) (tube, error) {
 	conn, err := p.dialContext(context.TODO(), network, p.address)
 	if err != nil {
+		p.logDebug(opt, fmt.Sprintf("DEBUG: Error in establishing connection to address %s : %s", p.address, err))
 		return nil, err
 	}
+
 	t, err := newTube(conn, session)
 	if err != nil {
+		p.logDebug(opt, fmt.Sprintf("DEBUG: Error in allocating new tube for %s : %s", conn.RemoteAddr(), err))
 		return nil, err
 	}
 	return t, nil
@@ -362,6 +368,13 @@ func (p *tubePool) closeAll(head tube) {
 // p.mutex must be held when calling this method
 func (p *tubePool) sessionBump() {
 	p.session++
+}
+
+// Logs debug logs if DEBUG logging is enabled.
+func (p *tubePool) logDebug(opt RequestOptions, logString string) {
+	if opt.Logger != nil && opt.LogLevel.AtLeast(aws.LogDebug) {
+		opt.Logger.Log(logString)
+	}
 }
 
 // Represents a semaphore limiting the total number of in-flight connection attempts.

@@ -1,3 +1,7 @@
+Release v1.2.10 (2022-07-22)
+===
+* Added debug logging for runtime errors.
+
 Release v1.2.9 (2021-07-01)
 ===
 * Retry requests on AuthenticationRequiredException

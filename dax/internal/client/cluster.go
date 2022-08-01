@@ -71,6 +71,7 @@ type Config struct {
 
 	SkipHostnameVerification bool
 	logger                   aws.Logger
+	logLevel                 aws.LogLevelType
 }
 
 type connConfig struct {
@@ -101,6 +102,11 @@ func (cfg *Config) validateConnConfig() {
 	}
 }
 
+func (cfg *Config) SetLogger(logger aws.Logger, logLevelType aws.LogLevelType) {
+	cfg.logger = logger
+	cfg.logLevel = logLevelType
+}
+
 var defaultConfig = Config{
 	MaxPendingConnectionsPerHost: 10,
 	ClusterUpdateInterval:        time.Second * 4,
@@ -111,6 +117,7 @@ var defaultConfig = Config{
 	connConfig:               connConfig{},
 	SkipHostnameVerification: false,
 	logger:                   aws.NewDefaultLogger(),
+	logLevel:                 aws.LogOff,
 }
 
 var defaultPorts = map[string]int{
@@ -383,6 +390,10 @@ func (cc *ClusterDaxClient) retry(op string, action func(client DaxAPI, o Reques
 					return awserr.New(request.CanceledErrorCode, "request context canceled", err)
 				}
 			}
+
+			if err != nil && opt.Logger != nil && opt.LogLevel.Matches(aws.LogDebugWithRequestRetries) {
+				opt.Logger.Log(fmt.Sprintf("DEBUG: Error in executing request %s/%s. : %s", service, op, err))
+			}
 		}
 	}
 	return err
@@ -588,6 +599,7 @@ func (c *cluster) refresh(force bool) error {
 func (c *cluster) refreshNow() error {
 	cfg, err := c.pullEndpoints()
 	if err != nil {
+		c.config.logger.Log(fmt.Sprintf("ERROR: Failed to refresh endpoint : %s", err))
 		return err
 	}
 	if !c.hasChanged(cfg) {
@@ -679,6 +691,9 @@ func (c *cluster) pullEndpoints() ([]serviceEndpoint, error) {
 			if err != nil {
 				lastErr = err
 				continue
+			}
+			if c.config.logger != nil && c.config.logLevel.AtLeast(aws.LogDebug) {
+				c.config.logger.Log(fmt.Sprintf("DEBUG: Pulled endpoints from %s : %v", ip, endpoints))
 			}
 			if len(endpoints) > 0 {
 				return endpoints, nil

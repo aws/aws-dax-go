@@ -91,7 +91,7 @@ func TestExecuteErrorHandling(t *testing.T) {
 		}
 		cli.pool.closeTubeImmediately = true
 
-		err = cli.executeWithContext(aws.BackgroundContext(), OpGetItem, c.enc, c.dec)
+		err = cli.executeWithContext(aws.BackgroundContext(), OpGetItem, c.enc, c.dec, RequestOptions{})
 		if !reflect.DeepEqual(c.ee, err) {
 			t.Errorf("case[%d] expected error %v, got error %v", i, c.ee, err)
 		}
@@ -351,4 +351,20 @@ func (m *mockConn) register() {
 		m.cc = make(map[string]int)
 	}
 	m.cc[n]++
+}
+
+func (m *mockConn) LocalAddr() net.Addr {
+	return nil
+}
+
+func (m *mockConn) RemoteAddr() net.Addr {
+	return nil
+}
+
+func (m *mockConn) SetReadDeadline(t time.Time) error {
+	return nil
+}
+
+func (m *mockConn) SetWriteDeadline(t time.Time) error {
+	return nil
 }
