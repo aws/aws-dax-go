@@ -423,7 +423,7 @@ func encodeBatchWriteItemInput(ctx aws.Context, input *dynamodb.BatchWriteItemIn
 		l := len(wrs)
 		if l == 0 {
 			return awserr.New(request.InvalidParameterErrCode, fmt.Sprintf("1 validation error detected: Value '{%s=%d}' at 'requestItems' failed to satisfy constraint:"+
-				" Map value must satisfy constraint: [Member must have length less than or equal to 100, Member must have length greater than or equal to 1", table, l), nil)
+				" Map value must satisfy constraint: [Member must have length less than or equal to %d, Member must have length greater than or equal to 1", table, l, maxWriteBatchSize), nil)
 		}
 		totalRequests = totalRequests + l
 		if totalRequests > maxWriteBatchSize {
