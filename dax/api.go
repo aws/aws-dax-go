@@ -521,6 +521,18 @@ func (d *Dax) DescribeGlobalTableSettingsRequest(*dynamodb.DescribeGlobalTableSe
 	return newRequestForUnimplementedOperation(), &dynamodb.DescribeGlobalTableSettingsOutput{}
 }
 
+func (d *Dax) DescribeImport(*dynamodb.DescribeImportInput) (*dynamodb.DescribeImportOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) DescribeImportWithContext(aws.Context, *dynamodb.DescribeImportInput, ...request.Option) (*dynamodb.DescribeImportOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) DescribeImportRequest(*dynamodb.DescribeImportInput) (*request.Request, *dynamodb.DescribeImportOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.DescribeImportOutput{}
+}
+
 func (d *Dax) DescribeLimits(*dynamodb.DescribeLimitsInput) (*dynamodb.DescribeLimitsOutput, error) {
 	return nil, d.unImpl()
 }
@@ -677,6 +689,18 @@ func (d *Dax) ListBackupsRequest(*dynamodb.ListBackupsInput) (*request.Request, 
 	return newRequestForUnimplementedOperation(), &dynamodb.ListBackupsOutput{}
 }
 
+func (d *Dax) ImportTable(*dynamodb.ImportTableInput) (*dynamodb.ImportTableOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) ImportTableWithContext(aws.Context, *dynamodb.ImportTableInput, ...request.Option) (*dynamodb.ImportTableOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) ImportTableRequest(*dynamodb.ImportTableInput) (*request.Request, *dynamodb.ImportTableOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.ImportTableOutput{}
+}
+
 func (d *Dax) ListContributorInsights(*dynamodb.ListContributorInsightsInput) (*dynamodb.ListContributorInsightsOutput, error) {
 	return nil, d.unImpl()
 }
@@ -727,6 +751,26 @@ func (d *Dax) ListGlobalTablesWithContext(aws.Context, *dynamodb.ListGlobalTable
 
 func (d *Dax) ListGlobalTablesRequest(*dynamodb.ListGlobalTablesInput) (*request.Request, *dynamodb.ListGlobalTablesOutput) {
 	return newRequestForUnimplementedOperation(), &dynamodb.ListGlobalTablesOutput{}
+}
+
+func (d *Dax) ListImports(*dynamodb.ListImportsInput) (*dynamodb.ListImportsOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) ListImportsWithContext(aws.Context, *dynamodb.ListImportsInput, ...request.Option) (*dynamodb.ListImportsOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) ListImportsRequest(*dynamodb.ListImportsInput) (*request.Request, *dynamodb.ListImportsOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.ListImportsOutput{}
+}
+
+func (d *Dax) ListImportsPages(*dynamodb.ListImportsInput, func(*dynamodb.ListImportsOutput, bool) bool) error {
+	return d.unImpl()
+}
+
+func (d *Dax) ListImportsPagesWithContext(aws.Context, *dynamodb.ListImportsInput, func(*dynamodb.ListImportsOutput, bool) bool, ...request.Option) error {
+	return d.unImpl()
 }
 
 func (d *Dax) ListTables(*dynamodb.ListTablesInput) (*dynamodb.ListTablesOutput, error) {

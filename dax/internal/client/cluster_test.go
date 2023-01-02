@@ -728,6 +728,7 @@ func TestCluster_customDialer(t *testing.T) {
 		HostPorts:                    []string{"localhost:9121"},
 		logger:                       aws.NewDefaultLogger(),
 		logLevel:                     aws.LogDebugWithRequestRetries,
+		IdleConnectionReapDelay:      30 * time.Second,
 	}
 	cc, err := New(cfg)
 	require.NoError(t, err)

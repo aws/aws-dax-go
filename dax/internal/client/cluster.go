@@ -56,12 +56,11 @@ type hostPort struct {
 	port int
 }
 
-const idleConnectionReapDelay = 30 * time.Second
-
 type Config struct {
 	MaxPendingConnectionsPerHost int
 	ClusterUpdateThreshold       time.Duration
 	ClusterUpdateInterval        time.Duration
+	IdleConnectionReapDelay      time.Duration
 
 	HostPorts   []string
 	Region      string
@@ -118,6 +117,7 @@ var defaultConfig = Config{
 	SkipHostnameVerification: false,
 	logger:                   aws.NewDefaultLogger(),
 	logLevel:                 aws.LogOff,
+	IdleConnectionReapDelay:  30 * time.Second,
 }
 
 var defaultPorts = map[string]int{
@@ -519,7 +519,7 @@ func (c *cluster) start() error {
 		c.safeRefresh(false)
 		return nil
 	})
-	c.executor.start(idleConnectionReapDelay, c.reapIdleConnections)
+	c.executor.start(c.config.IdleConnectionReapDelay, c.reapIdleConnections)
 	c.safeRefresh(false)
 	return nil
 }

@@ -1,3 +1,8 @@
+Release v1.2.11 (2022-12-28)
+===
+* Made IdleConnectionReapDelay configurable for clients.
+* Add new DynamoDB Imports operations.
+
 Release v1.2.10 (2022-07-22)
 ===
 * Added debug logging for runtime errors.
