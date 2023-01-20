@@ -61,6 +61,7 @@ type Config struct {
 	ClusterUpdateThreshold       time.Duration
 	ClusterUpdateInterval        time.Duration
 	IdleConnectionReapDelay      time.Duration
+	ClientHealthCheckInterval    time.Duration
 
 	HostPorts   []string
 	Region      string
@@ -110,6 +111,7 @@ var defaultConfig = Config{
 	MaxPendingConnectionsPerHost: 10,
 	ClusterUpdateInterval:        time.Second * 4,
 	ClusterUpdateThreshold:       time.Millisecond * 125,
+	ClientHealthCheckInterval:    time.Second * 5,
 
 	Credentials: defaults.CredChain(defaults.Config(), defaults.Handlers()),
 
@@ -418,10 +420,10 @@ func (cc *ClusterDaxClient) shouldRetry(o RequestOptions, err error) (request.Re
 
 type cluster struct {
 	lock           sync.RWMutex
-	active         map[hostPort]DaxAPI // protected by lock
-	routes         []DaxAPI            // protected by lock
-	closed         bool                // protected by lock
-	lastRefreshErr error               // protected by lock
+	active         map[hostPort]clientAndConfig // protected by lock
+	routes         []DaxAPI                     // protected by lock
+	closed         bool                         // protected by lock
+	lastRefreshErr error                        // protected by lock
 
 	lastUpdateNs int64
 	executor     *taskExecutor
@@ -429,6 +431,11 @@ type cluster struct {
 	seeds         []hostPort
 	config        Config
 	clientBuilder clientBuilder
+}
+
+type clientAndConfig struct {
+	client DaxAPI
+	cfg    serviceEndpoint
 }
 
 func newCluster(cfg Config) (*cluster, error) {
@@ -599,7 +606,7 @@ func (c *cluster) refresh(force bool) error {
 func (c *cluster) refreshNow() error {
 	cfg, err := c.pullEndpoints()
 	if err != nil {
-		c.config.logger.Log(fmt.Sprintf("ERROR: Failed to refresh endpoint : %s", err))
+		c.debugLog(fmt.Sprintf("ERROR: Failed to refresh endpoint : %s", err))
 		return err
 	}
 	if !c.hasChanged(cfg) {
@@ -608,53 +615,114 @@ func (c *cluster) refreshNow() error {
 	return c.update(cfg)
 }
 
+// This method is responsible for updating the set of active routes tracked by
+// the clsuter-dax-client in response to updates in the roster.
 func (c *cluster) update(config []serviceEndpoint) error {
 	newEndpoints := make(map[hostPort]struct{}, len(config))
 	for _, cfg := range config {
 		newEndpoints[cfg.hostPort()] = struct{}{}
 	}
 
-	newActive := make(map[hostPort]DaxAPI, len(config))
+	newActive := make(map[hostPort]clientAndConfig, len(config))
 	newRoutes := make([]DaxAPI, len(config))
+	shouldUpdateRoutes := true
+	var toClose []clientAndConfig
+	// Track the newly created client instances, so that we can clean them up in case of partial failures.
+	var newCliCfg []clientAndConfig
 
-	c.lock.RLock()
+	c.lock.Lock()
+
 	cls := c.closed
 	oldActive := c.active
-	c.lock.RUnlock()
-	if cls {
-		return nil
-	}
 
-	var toClose []DaxAPI
-	for ep, cli := range oldActive {
-		_, ok := newEndpoints[ep]
-		if !ok {
-			toClose = append(toClose, cli)
-		}
-	}
-	for i, ep := range config {
-		cli, ok := oldActive[ep.hostPort()]
-		var err error
-		if !ok {
-			cli, err = c.newSingleClient(ep)
-			if err != nil {
-				return nil
+	if cls {
+		shouldUpdateRoutes = false
+	} else {
+		// Close the client instances that are no longer part of roster.
+		for ep, clicfg := range oldActive {
+			_, isPartOfUpdatedEndpointsConfig := newEndpoints[ep]
+			if !isPartOfUpdatedEndpointsConfig {
+				c.debugLog(fmt.Sprintf("Found updated endpoing configs, will close inactive endpoint client : %s", ep.host))
+				toClose = append(toClose, clicfg)
 			}
 		}
-		newActive[ep.hostPort()] = cli
-		newRoutes[i] = cli
+
+		// Create client instances for the new endpoints in roster.
+		for i, ep := range config {
+			cliAndCfg, alreadyExists := oldActive[ep.hostPort()]
+			if !alreadyExists {
+				cli, err := c.newSingleClient(ep)
+				if err != nil {
+					shouldUpdateRoutes = false
+					break
+				} else {
+					cliAndCfg = clientAndConfig{client: cli, cfg: ep}
+					newCliCfg = append(newCliCfg, cliAndCfg)
+				}
+
+				if singleCli, ok := cli.(HealthCheckDaxAPI); ok {
+					singleCli.startHealthChecks(c, ep.hostPort())
+				}
+			}
+			newActive[ep.hostPort()] = cliAndCfg
+			newRoutes[i] = cliAndCfg.client
+		}
 	}
-	c.lock.Lock()
-	c.active = newActive
-	c.routes = newRoutes
+
+	if shouldUpdateRoutes {
+		c.active = newActive
+		c.routes = newRoutes
+	} else {
+		// cleanup newly created clients if they are not going to be tracked further.
+		toClose = append(toClose, newCliCfg...)
+	}
 	c.lock.Unlock()
 
 	go func() {
 		for _, client := range toClose {
-			c.closeClient(client)
+			c.debugLog(fmt.Sprintf("Closing client for : %s", client.cfg.hostname))
+			c.closeClient(client.client)
 		}
 	}()
 	return nil
+}
+
+func (c *cluster) onHealthCheckFailed(host hostPort) {
+	c.lock.Lock()
+	c.debugLog("DEBUG: Refreshing cache for host: " + host.host)
+	shouldCloseOldClient := true
+	var oldClientConfig, ok = c.active[host]
+	if ok {
+		var err error
+		var cli DaxAPI
+		cli, err = c.newSingleClient(oldClientConfig.cfg)
+		if singleCli, ok := cli.(HealthCheckDaxAPI); ok {
+			singleCli.startHealthChecks(c, host)
+		}
+
+		if err == nil {
+			c.active[host] = clientAndConfig{client: cli, cfg: oldClientConfig.cfg}
+
+			newRoutes := make([]DaxAPI, len(c.active))
+			i := 0
+			for _, cliAndCfg := range c.active {
+				newRoutes[i] = cliAndCfg.client
+				i++
+			}
+			c.routes = newRoutes
+		} else {
+			shouldCloseOldClient = false
+			c.debugLog(fmt.Sprintf("DEBUG: Failed to refresh cache for host: " + host.host))
+		}
+	} else {
+		c.debugLog(fmt.Sprintf("DEBUG: The node is not part of active routes. Ignoring the health check failure for host: " + host.host))
+	}
+	c.lock.Unlock()
+
+	if shouldCloseOldClient {
+		c.debugLog(fmt.Sprintf("DEBUG: Closing old instance of a replaced client for endpoint: %s", oldClientConfig.cfg.hostPort().host))
+		c.closeClient(oldClientConfig.client)
+	}
 }
 
 func (c *cluster) hasChanged(cfg []serviceEndpoint) bool {
@@ -692,9 +760,7 @@ func (c *cluster) pullEndpoints() ([]serviceEndpoint, error) {
 				lastErr = err
 				continue
 			}
-			if c.config.logger != nil && c.config.logLevel.AtLeast(aws.LogDebug) {
-				c.config.logger.Log(fmt.Sprintf("DEBUG: Pulled endpoints from %s : %v", ip, endpoints))
-			}
+			c.debugLog(fmt.Sprintf("DEBUG: Pulled endpoints from %s : %v", ip, endpoints))
 			if len(endpoints) > 0 {
 				return endpoints, nil
 			}
@@ -717,6 +783,14 @@ func (c *cluster) pullEndpointsFrom(ip net.IP, port int) ([]serviceEndpoint, err
 func (c *cluster) closeClient(client DaxAPI) {
 	if d, ok := client.(io.Closer); ok {
 		d.Close()
+	}
+}
+
+func (c *cluster) debugLog(args ...interface{}) {
+	if c.config.logger != nil && c.config.logLevel.AtLeast(aws.LogDebug) {
+		{
+			c.config.logger.Log(args)
+		}
 	}
 }
 

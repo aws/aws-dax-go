@@ -468,6 +468,7 @@ func TestCluster_update(t *testing.T) {
 	}
 	assertNumRoutes(cluster, 1, t)
 	assertConnections(cluster, first, t)
+	assertHealthCheckCalls(cluster, t)
 
 	// add new hosts
 	second := []serviceEndpoint{{hostname: "localhost", port: 8121}, {hostname: "localhost", port: 8122}, {hostname: "localhost", port: 8123}}
@@ -479,6 +480,7 @@ func TestCluster_update(t *testing.T) {
 	}
 	assertNumRoutes(cluster, 3, t)
 	assertConnections(cluster, second, t)
+	assertHealthCheckCalls(cluster, t)
 
 	// replace host
 	third := []serviceEndpoint{{hostname: "localhost", port: 8121}, {hostname: "localhost", port: 8122}, {hostname: "localhost", port: 8124}}
@@ -490,6 +492,7 @@ func TestCluster_update(t *testing.T) {
 	}
 	assertNumRoutes(cluster, 3, t)
 	assertConnections(cluster, third, t)
+	assertHealthCheckCalls(cluster, t)
 
 	// remove host
 	fourth := []serviceEndpoint{{hostname: "localhost", port: 8122}, {hostname: "localhost", port: 8124}}
@@ -501,14 +504,50 @@ func TestCluster_update(t *testing.T) {
 	}
 	assertNumRoutes(cluster, 2, t)
 	assertConnections(cluster, fourth, t)
+	assertHealthCheckCalls(cluster, t)
 
 	// no change
 	fifth := []serviceEndpoint{{hostname: "localhost", port: 8122}, {hostname: "localhost", port: 8124}}
 	if cluster.hasChanged(fifth) {
 		t.Errorf("unexpected config change")
 	}
+	if err := cluster.update(fifth); err != nil {
+		t.Errorf("unexpected error %v", err)
+	}
 	assertNumRoutes(cluster, 2, t)
 	assertConnections(cluster, fifth, t)
+	assertHealthCheckCalls(cluster, t)
+}
+
+func TestCluster_onHealthCheckFailed(t *testing.T) {
+	cluster, clientBuilder := newTestCluster([]string{"127.0.0.1:8888"})
+	endpoint := serviceEndpoint{hostname: "localhost", port: 8123}
+	first := []serviceEndpoint{endpoint, {hostname: "localhost", port: 8124}, {hostname: "localhost", port: 8125}}
+	cluster.update(first)
+
+	assertNumRoutes(cluster, 3, t)
+	assertConnections(cluster, first, t)
+	assertHealthCheckCalls(cluster, t)
+	// Replace old instance of client with new one. Total client instances: 3 + 0
+	assert.Equal(t, 3, len(clientBuilder.clients))
+	assertCloseCalls(cluster, 0, t)
+
+	cluster.onHealthCheckFailed(endpoint.hostPort())
+	assertNumRoutes(cluster, 3, t)
+	assertConnections(cluster, first, t)
+	assertHealthCheckCalls(cluster, t)
+	// Replace old instance of client with new one. Total client instances: 3 + 1
+	assert.Equal(t, 4, len(clientBuilder.clients))
+	assertCloseCalls(cluster, 1, t)
+
+	// Another failure
+	cluster.onHealthCheckFailed(endpoint.hostPort())
+	assertNumRoutes(cluster, 3, t)
+	assertConnections(cluster, first, t)
+	assertHealthCheckCalls(cluster, t)
+	// Replace old instance of client with new one. Total client instances: 3 + 2
+	assert.Equal(t, 5, len(clientBuilder.clients))
+	assertCloseCalls(cluster, 2, t)
 }
 
 func TestCluster_client(t *testing.T) {
@@ -635,7 +674,7 @@ func assertConnections(cluster *cluster, endpoints []serviceEndpoint, t *testing
 		if !ok {
 			t.Errorf("missing client %v", hp)
 		}
-		if tc, ok := c.(*testClient); ok {
+		if tc, ok := c.client.(*testClient); ok {
 			if tc.hp != hp {
 				t.Errorf("expected %v, got %v", hp, tc.hp)
 			}
@@ -651,6 +690,25 @@ func assertNumRoutes(cluster *cluster, num int, t *testing.T) {
 	if len(cluster.routes) != num {
 		t.Errorf("expected %d, got %d", num, len(cluster.routes))
 	}
+}
+
+func assertHealthCheckCalls(cluster *cluster, t *testing.T) {
+	for _, cliAndCfg := range cluster.active {
+		healtCheckCalls := cliAndCfg.client.(*testClient).healthCheckCalls
+		if healtCheckCalls != 1 {
+			t.Errorf("expected 1 healthcheck call, got %d", healtCheckCalls)
+		}
+	}
+}
+
+func assertCloseCalls(cluster *cluster, num int, t *testing.T) {
+	cnt := 0
+	for _, client := range cluster.clientBuilder.(*testClientBuilder).clients {
+		if client.closeCalls == 1 {
+			cnt++
+		}
+	}
+	assert.Equal(t, num, cnt)
 }
 
 func assertDiscoveryClient(client *testClient, t *testing.T) {
@@ -751,9 +809,13 @@ func (b *testClientBuilder) newClient(ip net.IP, port int, connConfigData connCo
 }
 
 type testClient struct {
-	hp                         hostPort
-	ep                         []serviceEndpoint
-	endpointsCalls, closeCalls int
+	hp                                           hostPort
+	ep                                           []serviceEndpoint
+	endpointsCalls, closeCalls, healthCheckCalls int
+}
+
+func (c *testClient) startHealthChecks(cc *cluster, host hostPort) {
+	c.healthCheckCalls++
 }
 
 func (c *testClient) endpoints(opt RequestOptions) ([]serviceEndpoint, error) {

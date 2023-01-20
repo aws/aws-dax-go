@@ -17,6 +17,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"time"
 
@@ -69,6 +70,7 @@ type SingleDaxClient struct {
 	region             string
 	credentials        *credentials.Credentials
 	tubeAuthWindowSecs int64
+	executor           *taskExecutor
 
 	handlers          *request.Handlers
 	pool              *tubePool
@@ -94,6 +96,7 @@ func newSingleClientWithOptions(endpoint string, connConfigData connConfig, regi
 		credentials:        credentials,
 		tubeAuthWindowSecs: authTtlSecs * tubeAuthWindowScalar,
 		pool:               newTubePoolWithOptions(endpoint, po, connConfigData),
+		executor:           newExecutor(),
 	}
 
 	client.handlers = client.buildHandlers()
@@ -153,10 +156,28 @@ func newSingleClientWithOptions(endpoint string, connConfigData connConfig, regi
 }
 
 func (client *SingleDaxClient) Close() error {
+	client.executor.stopAll()
 	if client.pool != nil {
 		return client.pool.Close()
 	}
 	return nil
+}
+
+func (client *SingleDaxClient) startHealthChecks(cc *cluster, host hostPort) {
+	cc.debugLog("Starting health checks for :: " + host.host)
+	client.executor.start(cc.config.ClientHealthCheckInterval, func() error {
+		ctx, cfn := context.WithTimeout(aws.BackgroundContext(), 1*time.Second)
+		defer cfn()
+		var err error
+		_, err = client.endpoints(RequestOptions{MaxRetries: 2, Context: ctx})
+		if err != nil {
+			cc.debugLog(fmt.Sprintf("Health checks failed with error " + err.Error() + " for host :: " + host.host))
+			cc.onHealthCheckFailed(host)
+		} else {
+			cc.debugLog(fmt.Sprintf("Health checks succeeded for host:: " + host.host))
+		}
+		return nil
+	})
 }
 
 func (client *SingleDaxClient) endpoints(opt RequestOptions) ([]serviceEndpoint, error) {
@@ -814,4 +835,8 @@ func (client *SingleDaxClient) auth(t tube) error {
 
 func (client *SingleDaxClient) reapIdleConnections() {
 	client.pool.reapIdleConnections()
+}
+
+type HealthCheckDaxAPI interface {
+	startHealthChecks(cc *cluster, host hostPort)
 }

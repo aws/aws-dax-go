@@ -1,3 +1,7 @@
+Release v1.2.12 (2023-01-10)
+===
+* Add support for healthcheck infrastructure
+
 Release v1.2.11 (2022-12-28)
 ===
 * Made IdleConnectionReapDelay configurable for clients.
