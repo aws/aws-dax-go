@@ -18,12 +18,13 @@ package cbor
 import (
 	"bytes"
 	"fmt"
+	"sort"
+
 	"github.com/aws/aws-dax-go/dax/internal/lru"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"sort"
 )
 
 var ErrMissingKey = awserr.New(request.ParamRequiredErrCode, "One of the required keys was not given a value", nil)

@@ -19,12 +19,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/aws/aws-dax-go/dax/internal/lru"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/aws/aws-dax-go/dax/internal/lru"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
 func TestItemKey(t *testing.T) {

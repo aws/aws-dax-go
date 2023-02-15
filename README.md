@@ -11,11 +11,6 @@ to your Go Workspace manually.
 
     go get github.com/aws/aws-dax-go
 
-You could also use [Dep](https://github.com/golang/dep) to add the SDK to your
-application's dependencies. Using Dep will simplify your update story and help
-your application keep pinned to a specific version of the SDK.
-
-    dep ensure -add github.com/aws/aws-dax-go
 
 ## Making API requests
 This example shows how you can use the AWS DAX SDK to make an API request.
@@ -24,6 +19,7 @@ This example shows how you can use the AWS DAX SDK to make an API request.
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/aws/aws-dax-go/dax"
 	"github.com/aws/aws-sdk-go/aws"
@@ -42,7 +38,7 @@ func main() {
 	}
 	
 	
-	//Connecion to a secure cluster
+	// Connection to a secure cluster
 	secureEndpoint := "daxs://mycluster.frfx8h.clustercfg.dax.usw2.amazonaws.com"
 	secureCfg := dax.DefaultConfig()
 	secureCfg.HostPorts = []string{secureEndpoint}
