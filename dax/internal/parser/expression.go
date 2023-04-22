@@ -25,7 +25,7 @@ import (
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	"github.com/aws/aws-dax-go/dax/internal/cbor"
 	"github.com/aws/aws-dax-go/dax/internal/parser/generated"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
 )
@@ -43,12 +43,12 @@ type ExpressionEncoder struct {
 
 	// input
 	expressions map[int]string
-	substitutes map[string]*string
-	variables   map[string]*dynamodb.AttributeValue
+	substitutes map[string]string
+	variables   map[string]types.AttributeValue
 
 	// output
 	encoded        map[int][]byte
-	variableValues []dynamodb.AttributeValue
+	variableValues []types.AttributeValue
 
 	// book keeping
 	stack             []sexpr
@@ -64,7 +64,7 @@ type ExpressionEncoder struct {
 	buf        *bytes.Buffer
 }
 
-func NewExpressionEncoder(expr map[int]string, subs map[string]*string, vars map[string]*dynamodb.AttributeValue) *ExpressionEncoder {
+func NewExpressionEncoder(expr map[int]string, subs map[string]string, vars map[string]types.AttributeValue) *ExpressionEncoder {
 	var b bytes.Buffer
 	us := make(stringSet, len(subs))
 	us.addKeysStrVal(subs)
@@ -77,7 +77,7 @@ func NewExpressionEncoder(expr map[int]string, subs map[string]*string, vars map
 
 		encoded:           make(map[int][]byte),
 		variableIdByName:  make(map[string]int),
-		variableValues:    make([]dynamodb.AttributeValue, 0, len(vars)),
+		variableValues:    make([]types.AttributeValue, 0, len(vars)),
 		unusedSubstitutes: us,
 		unusedVariables:   uv,
 
@@ -123,7 +123,7 @@ func (e *ExpressionEncoder) reset(typ int) {
 	e.exprType = typ
 	e.nestingLevel = 0
 	e.variableIdByName = make(map[string]int)
-	e.variableValues = make([]dynamodb.AttributeValue, 0, len(e.variables))
+	e.variableValues = make([]types.AttributeValue, 0, len(e.variables))
 	e.err = nil
 }
 
@@ -200,7 +200,7 @@ func (e *ExpressionEncoder) ExitId(ctx *generated.IdContext) {
 			return
 		}
 		e.unusedSubstitutes.remove(id)
-		e.push(e.encodeDocumentPathElement(*s))
+		e.push(e.encodeDocumentPathElement(s))
 	} else {
 		e.push(e.encodeDocumentPathElement(id))
 	}
@@ -550,7 +550,7 @@ func (e *ExpressionEncoder) encodeVariable(l string) sexpr {
 	if !ok {
 		id = len(e.variableValues)
 		e.variableIdByName[n] = id
-		e.variableValues = append(e.variableValues, *v)
+		e.variableValues = append(e.variableValues, v)
 	}
 	return e.encodeFunction(opVariable, []sexpr{e.encodeId(id)})
 }
@@ -622,13 +622,13 @@ type sexpr struct {
 
 type stringSet map[string]struct{}
 
-func (s stringSet) addKeysStrVal(m map[string]*string) {
+func (s stringSet) addKeysStrVal(m map[string]string) {
 	for k, _ := range m {
 		s[k] = struct{}{}
 	}
 }
 
-func (s stringSet) addKeysAttrVal(m map[string]*dynamodb.AttributeValue) {
+func (s stringSet) addKeysAttrVal(m map[string]types.AttributeValue) {
 	for k, _ := range m {
 		s[k] = struct{}{}
 	}

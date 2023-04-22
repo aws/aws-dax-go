@@ -491,7 +491,9 @@ func encodeBatchWriteItemInput(ctx aws.Context, input *dynamodb.BatchWriteItemIn
 	}
 	return encodeItemOperationOptionalParams(
 		types.ReturnValueNone,
-		input.ReturnConsumedCapacity, input.ReturnItemCollectionMetrics, nil, nil, nil, nil, nil, nil, writer)
+		input.ReturnConsumedCapacity,
+		input.ReturnItemCollectionMetrics,
+		nil, nil, nil, nil, nil, nil, writer)
 }
 
 func encodeBatchGetItemInput(ctx aws.Context, input *dynamodb.BatchGetItemInput, keySchema *lru.Lru, writer *cbor.Writer) error {
@@ -1115,7 +1117,9 @@ func encodeItemOperationOptionalParamsWithToken(
 	returnConsumedCapacity types.ReturnConsumedCapacity,
 	returnItemCollectionMetrics types.ReturnItemCollectionMetrics,
 	consistentRead *bool,
-	projectionExp, conditionalExpr, updateExpr *string, exprAttrNames map[string]*string, exprAttrValues map[string]*dynamodb.AttributeValue, clientRequestToken *string, writer *cbor.Writer) error {
+	projectionExp, conditionalExpr, updateExpr *string,
+	exprAttrNames map[string]string,
+	exprAttrValues map[string]types.AttributeValue, clientRequestToken *string, writer *cbor.Writer) error {
 	if err := writer.WriteMapStreamHeader(); err != nil {
 		return err
 	}
@@ -1199,7 +1203,9 @@ func encodeItemOperationOptionalParams(
 	returnConsumedCapacity types.ReturnConsumedCapacity,
 	returnItemCollectionMetrics types.ReturnItemCollectionMetrics,
 	consistentRead *bool,
-	projectionExp, conditionalExpr, updateExpr *string, exprAttrNames map[string]*string, exprAttrValues map[string]*dynamodb.AttributeValue, writer *cbor.Writer) error {
+	projectionExp, conditionalExpr, updateExpr *string,
+	exprAttrNames map[string]string,
+	exprAttrValues map[string]types.AttributeValue, writer *cbor.Writer) error {
 	return encodeItemOperationOptionalParamsWithToken(
 		returnValues,
 		returnConsumedCapacity,
@@ -1208,7 +1214,9 @@ func encodeItemOperationOptionalParams(
 		projectionExp, conditionalExpr, updateExpr, exprAttrNames, exprAttrValues, nil, writer)
 }
 
-func parseExpressions(conditionalExpr, updateExpr, projectionExp *string, exprAttrNames map[string]*string, exprAttrValues map[string]*dynamodb.AttributeValue) (map[int][]byte, error) {
+func parseExpressions(
+	conditionalExpr, updateExpr, projectionExp *string, exprAttrNames map[string]string, exprAttrValues map[string]types.AttributeValue,
+) (map[int][]byte, error) {
 	expressions := make(map[int]string)
 	if conditionalExpr != nil {
 		expressions[parser.ConditionExpr] = *conditionalExpr
@@ -1234,7 +1242,7 @@ func encodeServiceAndMethod(method int, writer *cbor.Writer) error {
 	return writer.WriteInt(method)
 }
 
-func encodeExpressions(projection, filter, keyCondition *string, exprAttrNames map[string]*string, exprAttrValues map[string]*dynamodb.AttributeValue) (map[int][]byte, error) {
+func encodeExpressions(projection, filter, keyCondition *string, exprAttrNames map[string]string, exprAttrValues map[string]types.AttributeValue) (map[int][]byte, error) {
 	expressions := make(map[int]string)
 	if projection != nil {
 		expressions[parser.ProjectionExpr] = *projection
