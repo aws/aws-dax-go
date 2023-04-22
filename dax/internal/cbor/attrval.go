@@ -17,13 +17,13 @@ package cbor
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
 	"math/big"
 	"strconv"
 	"strings"
+
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/request"
 )
 
 const (
@@ -33,69 +33,69 @@ const (
 	tagDocumentPathOrdinal
 )
 
-func EncodeAttributeValue(value *dynamodb.AttributeValue, writer *Writer) error {
+func EncodeAttributeValue(value types.AttributeValue, writer *Writer) error {
 	if value == nil {
 		return awserr.New(request.InvalidParameterErrCode, "invalid attribute value: nil", nil)
 	}
 
 	var err error
-	switch {
-	case value.S != nil:
-		err = writer.WriteString(*value.S)
-	case value.N != nil:
-		err = writeStringNumber(*value.N, writer)
-	case value.B != nil:
-		err = writer.WriteBytes(value.B)
-	case value.SS != nil:
+	switch v := value.(type) {
+	case *types.AttributeValueMemberS:
+		err = writer.WriteString(v.Value)
+	case *types.AttributeValueMemberN:
+		err = writeStringNumber(v.Value, writer)
+	case *types.AttributeValueMemberB:
+		err = writer.WriteBytes(v.Value)
+	case *types.AttributeValueMemberSS:
 		if err = writer.writeType(Tag, tagStringSet); err != nil {
 			return err
 		}
-		if err = writer.WriteArrayHeader(len(value.SS)); err != nil {
+		if err = writer.WriteArrayHeader(len(v.Value)); err != nil {
 			return err
 		}
-		for _, sp := range value.SS {
-			if err := writer.WriteString(*sp); err != nil {
+		for _, sp := range v.Value {
+			if err := writer.WriteString(sp); err != nil {
 				return err
 			}
 		}
-	case value.NS != nil:
+	case *types.AttributeValueMemberNS:
 		if err = writer.writeType(Tag, tagNumberSet); err != nil {
 			return err
 		}
-		if err = writer.WriteArrayHeader(len(value.NS)); err != nil {
+		if err = writer.WriteArrayHeader(len(v.Value)); err != nil {
 			return err
 		}
-		for _, sp := range value.NS {
-			if err := writeStringNumber(*sp, writer); err != nil {
+		for _, sp := range v.Value {
+			if err := writeStringNumber(sp, writer); err != nil {
 				return err
 			}
 		}
-	case value.BS != nil:
+	case *types.AttributeValueMemberBS:
 		if err = writer.writeType(Tag, tagBinarySet); err != nil {
 			return err
 		}
-		if err = writer.WriteArrayHeader(len(value.BS)); err != nil {
+		if err = writer.WriteArrayHeader(len(v.Value)); err != nil {
 			return err
 		}
-		for _, bp := range value.BS {
+		for _, bp := range v.Value {
 			if err := writer.WriteBytes(bp); err != nil {
 				return err
 			}
 		}
-	case value.L != nil:
-		if err = writer.WriteArrayHeader(len(value.L)); err != nil {
+	case *types.AttributeValueMemberL:
+		if err = writer.WriteArrayHeader(len(v.Value)); err != nil {
 			return err
 		}
-		for _, v := range value.L {
+		for _, v := range v.Value {
 			if err := EncodeAttributeValue(v, writer); err != nil {
 				return err
 			}
 		}
-	case value.M != nil:
-		if err = writer.WriteMapHeader(len(value.M)); err != nil {
+	case *types.AttributeValueMemberM:
+		if err = writer.WriteMapHeader(len(v.Value)); err != nil {
 			return err
 		}
-		for k, v := range value.M {
+		for k, v := range v.Value {
 			if err := writer.WriteString(k); err != nil {
 				return err
 			}
@@ -103,10 +103,10 @@ func EncodeAttributeValue(value *dynamodb.AttributeValue, writer *Writer) error 
 				return err
 			}
 		}
-	case value.BOOL != nil:
-		err = writer.WriteBoolean(*value.BOOL)
-	case value.NULL != nil:
-		if !(*value.NULL) {
+	case *types.AttributeValueMemberBOOL:
+		err = writer.WriteBoolean(v.Value)
+	case *types.AttributeValueMemberNULL:
+		if !v.Value {
 			return awserr.New(request.InvalidParameterErrCode, "invalid null attribute value", nil) // DaxJavaClient suppress this error
 		}
 		err = writer.WriteNull()
@@ -137,7 +137,7 @@ func writeStringNumber(val string, writer *Writer) error {
 	return err
 }
 
-func DecodeAttributeValue(reader *Reader) (*dynamodb.AttributeValue, error) {
+func DecodeAttributeValue(reader *Reader) (types.AttributeValue, error) {
 	hdr, err := reader.PeekHeader()
 	if err != nil {
 		return nil, err
@@ -151,34 +151,34 @@ func DecodeAttributeValue(reader *Reader) (*dynamodb.AttributeValue, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &dynamodb.AttributeValue{S: &s}, nil
+		return &types.AttributeValueMemberS{Value: s}, nil
 	case Bytes:
 		b, err := reader.ReadBytes()
 		if err != nil {
 			return nil, err
 		}
-		return &dynamodb.AttributeValue{B: b}, nil
+		return &types.AttributeValueMemberB{Value: b}, nil
 	case Array:
-		len, err := reader.ReadArrayLength()
+		length, err := reader.ReadArrayLength()
 		if err != nil {
 			return nil, err
 		}
-		as := make([]*dynamodb.AttributeValue, len)
-		for i := 0; i < len; i++ {
+		as := make([]types.AttributeValue, length)
+		for i := 0; i < length; i++ {
 			a, err := DecodeAttributeValue(reader)
 			if err != nil {
 				return nil, err
 			}
 			as[i] = a
 		}
-		return &dynamodb.AttributeValue{L: as}, nil
+		return &types.AttributeValueMemberL{Value: as}, nil
 	case Map:
-		len, err := reader.ReadMapLength()
+		length, err := reader.ReadMapLength()
 		if err != nil {
 			return nil, err
 		}
-		m := make(map[string]*dynamodb.AttributeValue, len)
-		for i := 0; i < len; i++ {
+		m := make(map[string]types.AttributeValue, length)
+		for i := 0; i < length; i++ {
 			k, err := reader.ReadString()
 			if err != nil {
 				return nil, err
@@ -189,24 +189,24 @@ func DecodeAttributeValue(reader *Reader) (*dynamodb.AttributeValue, error) {
 			}
 			m[k] = v
 		}
-		return &dynamodb.AttributeValue{M: m}, nil
+		return &types.AttributeValueMemberM{Value: m}, nil
 	case PosInt, NegInt:
 		s, err := reader.ReadCborIntegerToString()
 		if err != nil {
 			return nil, err
 		}
-		return &dynamodb.AttributeValue{N: &s}, nil
+		return &types.AttributeValueMemberN{Value: s}, nil
 	case Simple:
 		if _, _, err := reader.readTypeHeader(); err != nil {
 			return nil, err
 		}
 		switch hdr {
 		case False:
-			return &dynamodb.AttributeValue{BOOL: aws.Bool(false)}, nil
+			return &types.AttributeValueMemberBOOL{Value: false}, nil
 		case True:
-			return &dynamodb.AttributeValue{BOOL: aws.Bool(true)}, nil
+			return &types.AttributeValueMemberBOOL{Value: true}, nil
 		case Nil:
-			return &dynamodb.AttributeValue{NULL: aws.Bool(true)}, nil
+			return &types.AttributeValueMemberNULL{Value: true}, nil
 		default:
 			return nil, awserr.New(request.ErrCodeSerialization, fmt.Sprintf("unknown minor type %d for simple major type", minor), nil)
 		}
@@ -217,13 +217,13 @@ func DecodeAttributeValue(reader *Reader) (*dynamodb.AttributeValue, error) {
 			if err != nil {
 				return nil, err
 			}
-			return &dynamodb.AttributeValue{N: aws.String(i.String())}, nil
+			return &types.AttributeValueMemberN{Value: i.String()}, nil
 		case TagDecimal:
 			d, err := reader.ReadDecimal()
 			if err != nil {
 				return nil, err
 			}
-			return &dynamodb.AttributeValue{N: aws.String(d.String())}, nil
+			return &types.AttributeValueMemberN{Value: d.String()}, nil
 		default:
 			_, tag, err := reader.readTypeHeader()
 			if err != nil {
@@ -231,47 +231,51 @@ func DecodeAttributeValue(reader *Reader) (*dynamodb.AttributeValue, error) {
 			}
 			switch tag {
 			case tagStringSet:
-				len, err := reader.ReadArrayLength()
+				length, err := reader.ReadArrayLength()
 				if err != nil {
 					return nil, err
 				}
-				ss := make([]*string, len)
-				for i := 0; i < len; i++ {
+				ss := make([]string, length)
+				for i := 0; i < length; i++ {
 					s, err := reader.ReadString()
 					if err != nil {
 						return nil, err
 					}
-					ss[i] = &s
+					ss[i] = s
 				}
-				return &dynamodb.AttributeValue{SS: ss}, nil
+				return &types.AttributeValueMemberSS{Value: ss}, nil
 			case tagNumberSet:
-				len, err := reader.ReadArrayLength()
+				length, err := reader.ReadArrayLength()
 				if err != nil {
 					return nil, err
 				}
-				ss := make([]*string, len)
-				for i := 0; i < len; i++ {
+				ss := make([]string, length)
+				for i := 0; i < length; i++ {
 					av, err := DecodeAttributeValue(reader)
 					if err != nil {
 						return nil, err
 					}
-					ss[i] = av.N
+					n, ok := av.(*types.AttributeValueMemberN)
+					if !ok {
+						return nil, awserr.New(request.ErrCodeSerialization, fmt.Sprintf("attribute type is not number. type: %T", av), nil)
+					}
+					ss[i] = n.Value
 				}
-				return &dynamodb.AttributeValue{NS: ss}, nil
+				return &types.AttributeValueMemberNS{Value: ss}, nil
 			case tagBinarySet:
-				len, err := reader.ReadArrayLength()
+				length, err := reader.ReadArrayLength()
 				if err != nil {
 					return nil, err
 				}
-				bs := make([][]byte, len)
-				for i := 0; i < len; i++ {
+				bs := make([][]byte, length)
+				for i := 0; i < length; i++ {
 					b, err := reader.ReadBytes()
 					if err != nil {
 						return nil, err
 					}
 					bs[i] = b
 				}
-				return &dynamodb.AttributeValue{BS: bs}, nil
+				return &types.AttributeValueMemberBS{Value: bs}, nil
 			default:
 				return nil, awserr.New(request.ErrCodeSerialization, fmt.Sprintf("unknown minor type %d or tag %d", minor, tag), nil)
 			}
