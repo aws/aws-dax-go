@@ -25,6 +25,7 @@ import (
 	"github.com/aws/aws-dax-go/dax/internal/lru"
 	"github.com/aws/aws-dax-go/dax/internal/parser"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
@@ -245,7 +246,11 @@ func encodePutItemInput(ctx aws.Context, input *dynamodb.PutItemInput, keySchema
 		return err
 	}
 
-	return encodeItemOperationOptionalParams(input.ReturnValues, input.ReturnConsumedCapacity, input.ReturnItemCollectionMetrics, nil,
+	return encodeItemOperationOptionalParams(
+		input.ReturnValues,
+		input.ReturnConsumedCapacity,
+		input.ReturnItemCollectionMetrics,
+		nil,
 		nil, input.ConditionExpression, nil, input.ExpressionAttributeNames, input.ExpressionAttributeValues, writer)
 }
 
@@ -277,7 +282,11 @@ func encodeDeleteItemInput(ctx aws.Context, input *dynamodb.DeleteItemInput, key
 		return err
 	}
 
-	return encodeItemOperationOptionalParams(input.ReturnValues, input.ReturnConsumedCapacity, input.ReturnItemCollectionMetrics, nil,
+	return encodeItemOperationOptionalParams(
+		input.ReturnValues,
+		input.ReturnConsumedCapacity,
+		input.ReturnItemCollectionMetrics,
+		nil,
 		nil, input.ConditionExpression, nil, input.ExpressionAttributeNames, input.ExpressionAttributeValues, writer)
 }
 
@@ -309,7 +318,11 @@ func encodeUpdateItemInput(ctx aws.Context, input *dynamodb.UpdateItemInput, key
 		return err
 	}
 
-	return encodeItemOperationOptionalParams(input.ReturnValues, input.ReturnConsumedCapacity, input.ReturnItemCollectionMetrics, nil,
+	return encodeItemOperationOptionalParams(
+		input.ReturnValues,
+		input.ReturnConsumedCapacity,
+		input.ReturnItemCollectionMetrics,
+		nil,
 		nil, input.ConditionExpression, input.UpdateExpression, input.ExpressionAttributeNames, input.ExpressionAttributeValues, writer)
 }
 
@@ -339,7 +352,11 @@ func encodeGetItemInput(ctx aws.Context, input *dynamodb.GetItemInput, keySchema
 	if err := cbor.EncodeItemKey(input.Key, keys, writer); err != nil {
 		return err
 	}
-	return encodeItemOperationOptionalParams(nil, input.ReturnConsumedCapacity, nil, input.ConsistentRead,
+	return encodeItemOperationOptionalParams(
+		types.ReturnValueNone,
+		input.ReturnConsumedCapacity,
+		types.ReturnItemCollectionMetricsNone,
+		input.ConsistentRead,
 		input.ProjectionExpression, nil, nil, input.ExpressionAttributeNames, nil, writer)
 }
 
@@ -364,7 +381,12 @@ func encodeScanInput(ctx aws.Context, input *dynamodb.ScanInput, keySchema *lru.
 	if err != nil {
 		return err
 	}
-	return encodeScanQueryOptionalParams(ctx, input.IndexName, input.Select, input.ReturnConsumedCapacity, input.ConsistentRead,
+	return encodeScanQueryOptionalParams(
+		ctx,
+		input.IndexName,
+		input.Select,
+		input.ReturnConsumedCapacity,
+		input.ConsistentRead,
 		expressions, input.Segment, input.TotalSegments, input.Limit, nil, input.ExclusiveStartKey, keySchema, *input.TableName, writer)
 }
 
@@ -395,7 +417,12 @@ func encodeQueryInput(ctx aws.Context, input *dynamodb.QueryInput, keySchema *lr
 	if err = writer.WriteBytes(expressions[parser.KeyConditionExpr]); err != nil {
 		return err
 	}
-	return encodeScanQueryOptionalParams(ctx, input.IndexName, input.Select, input.ReturnConsumedCapacity, input.ConsistentRead,
+	return encodeScanQueryOptionalParams(
+		ctx,
+		input.IndexName,
+		input.Select,
+		input.ReturnConsumedCapacity,
+		input.ConsistentRead,
 		expressions, nil, nil, input.Limit, input.ScanIndexForward, input.ExclusiveStartKey, keySchema, *input.TableName, writer)
 }
 
@@ -462,7 +489,9 @@ func encodeBatchWriteItemInput(ctx aws.Context, input *dynamodb.BatchWriteItemIn
 			}
 		}
 	}
-	return encodeItemOperationOptionalParams(nil, input.ReturnConsumedCapacity, input.ReturnItemCollectionMetrics, nil, nil, nil, nil, nil, nil, writer)
+	return encodeItemOperationOptionalParams(
+		types.ReturnValueNone,
+		input.ReturnConsumedCapacity, input.ReturnItemCollectionMetrics, nil, nil, nil, nil, nil, nil, writer)
 }
 
 func encodeBatchGetItemInput(ctx aws.Context, input *dynamodb.BatchGetItemInput, keySchema *lru.Lru, writer *cbor.Writer) error {
@@ -535,7 +564,11 @@ func encodeBatchGetItemInput(ctx aws.Context, input *dynamodb.BatchGetItemInput,
 		}
 	}
 
-	return encodeItemOperationOptionalParams(nil, input.ReturnConsumedCapacity, nil, nil, nil, nil, nil, nil, nil, writer)
+	return encodeItemOperationOptionalParams(
+		types.ReturnValueNone,
+		input.ReturnConsumedCapacity,
+		types.ReturnItemCollectionMetricsNone,
+		nil, nil, nil, nil, nil, nil, writer)
 }
 
 func encodeTransactWriteItemsInput(ctx aws.Context, input *dynamodb.TransactWriteItemsInput, keySchema *lru.Lru, attrNamesListToId *lru.Lru, writer *cbor.Writer, extractedKeys []map[string]*dynamodb.AttributeValue) error {
@@ -799,7 +832,11 @@ func encodeTransactWriteItemsInput(ctx aws.Context, input *dynamodb.TransactWrit
 		}
 		input.ClientRequestToken = aws.String(id.String())
 	}
-	return encodeItemOperationOptionalParamsWithToken(nil, input.ReturnConsumedCapacity, input.ReturnItemCollectionMetrics, nil, nil, nil, nil, nil, nil, input.ClientRequestToken, writer)
+	return encodeItemOperationOptionalParamsWithToken(
+		types.ReturnValueNone,
+		input.ReturnConsumedCapacity,
+		input.ReturnItemCollectionMetrics,
+		nil, nil, nil, nil, nil, nil, input.ClientRequestToken, writer)
 }
 
 func encodeTransactGetItemsInput(ctx aws.Context, input *dynamodb.TransactGetItemsInput, keySchema *lru.Lru, writer *cbor.Writer, extractedKeys []map[string]*dynamodb.AttributeValue) error {
@@ -902,7 +939,11 @@ func encodeTransactGetItemsInput(ctx aws.Context, input *dynamodb.TransactGetIte
 		return err
 	}
 
-	return encodeItemOperationOptionalParams(nil, input.ReturnConsumedCapacity, nil, nil, nil, nil, nil, nil, nil, writer)
+	return encodeItemOperationOptionalParams(
+		types.ReturnValueNone,
+		input.ReturnConsumedCapacity,
+		types.ReturnItemCollectionMetricsNone,
+		nil, nil, nil, nil, nil, nil, writer)
 }
 
 func encodeCompoundKey(key map[string]*dynamodb.AttributeValue, writer *cbor.Writer) error {
@@ -945,7 +986,12 @@ func encodeNonKeyAttributes(ctx aws.Context, item map[string]*dynamodb.Attribute
 	return writer.WriteBytes(buf.Bytes())
 }
 
-func encodeScanQueryOptionalParams(ctx aws.Context, index, selection, returnConsumedCapacity *string, consistentRead *bool,
+func encodeScanQueryOptionalParams(
+	ctx aws.Context,
+	index *string,
+	selection types.Select,
+	returnConsumedCapacity types.ReturnConsumedCapacity,
+	consistentRead *bool,
 	encodedExpressions map[int][]byte, segment, totalSegment, limit *int64, forward *bool,
 	startKey map[string]*dynamodb.AttributeValue, keySchema *lru.Lru, table string, writer *cbor.Writer) error {
 
@@ -961,7 +1007,7 @@ func encodeScanQueryOptionalParams(ctx aws.Context, index, selection, returnCons
 			return err
 		}
 	}
-	if selection != nil {
+	if selection != types.SelectAllAttributes {
 		if err = writer.WriteInt(requestParamSelect); err != nil {
 			return err
 		}
@@ -969,7 +1015,7 @@ func encodeScanQueryOptionalParams(ctx aws.Context, index, selection, returnCons
 			return err
 		}
 	}
-	if returnConsumedCapacity != nil {
+	if returnConsumedCapacity != types.ReturnConsumedCapacityNone {
 		if err = writer.WriteInt(requestParamReturnConsumedCapacity); err != nil {
 			return err
 		}
@@ -1064,7 +1110,11 @@ func encodeScanQueryOptionalParams(ctx aws.Context, index, selection, returnCons
 	return writer.WriteStreamBreak()
 }
 
-func encodeItemOperationOptionalParamsWithToken(returnValues, returnConsumedCapacity, returnItemCollectionMetrics *string, consistentRead *bool,
+func encodeItemOperationOptionalParamsWithToken(
+	returnValues types.ReturnValue,
+	returnConsumedCapacity types.ReturnConsumedCapacity,
+	returnItemCollectionMetrics types.ReturnItemCollectionMetrics,
+	consistentRead *bool,
 	projectionExp, conditionalExpr, updateExpr *string, exprAttrNames map[string]*string, exprAttrValues map[string]*dynamodb.AttributeValue, clientRequestToken *string, writer *cbor.Writer) error {
 	if err := writer.WriteMapStreamHeader(); err != nil {
 		return err
@@ -1144,9 +1194,17 @@ func encodeItemOperationOptionalParamsWithToken(returnValues, returnConsumedCapa
 	return writer.WriteStreamBreak()
 }
 
-func encodeItemOperationOptionalParams(returnValues, returnConsumedCapacity, returnItemCollectionMetrics *string, consistentRead *bool,
+func encodeItemOperationOptionalParams(
+	returnValues types.ReturnValue,
+	returnConsumedCapacity types.ReturnConsumedCapacity,
+	returnItemCollectionMetrics types.ReturnItemCollectionMetrics,
+	consistentRead *bool,
 	projectionExp, conditionalExpr, updateExpr *string, exprAttrNames map[string]*string, exprAttrValues map[string]*dynamodb.AttributeValue, writer *cbor.Writer) error {
-	return encodeItemOperationOptionalParamsWithToken(returnValues, returnConsumedCapacity, returnItemCollectionMetrics, consistentRead,
+	return encodeItemOperationOptionalParamsWithToken(
+		returnValues,
+		returnConsumedCapacity,
+		returnItemCollectionMetrics,
+		consistentRead,
 		projectionExp, conditionalExpr, updateExpr, exprAttrNames, exprAttrValues, nil, writer)
 }
 
@@ -1191,61 +1249,49 @@ func encodeExpressions(projection, filter, keyCondition *string, exprAttrNames m
 	return encoder.Parse()
 }
 
-func translateReturnValues(returnValues *string) int {
-	if returnValues == nil {
-		return returnValueNone
-	}
-	switch *returnValues {
-	case dynamodb.ReturnValueAllOld:
+func translateReturnValues(returnValues types.ReturnValue) int {
+	switch returnValues {
+	case types.ReturnValueAllOld:
 		return returnValueAllOld
-	case dynamodb.ReturnValueUpdatedOld:
+	case types.ReturnValueUpdatedOld:
 		return returnValueUpdatedOld
-	case dynamodb.ReturnValueAllNew:
+	case types.ReturnValueAllNew:
 		return returnValueAllNew
-	case dynamodb.ReturnValueUpdatedNew:
+	case types.ReturnValueUpdatedNew:
 		return returnValueUpdatedNew
 	default:
 		return returnValueNone
 	}
 }
 
-func translateReturnConsumedCapacity(returnConsumedCapacity *string) int {
-	if returnConsumedCapacity == nil {
-		return returnConsumedCapacityNone
-	}
-	switch *returnConsumedCapacity {
-	case dynamodb.ReturnConsumedCapacityTotal:
+func translateReturnConsumedCapacity(returnConsumedCapacity types.ReturnConsumedCapacity) int {
+	switch returnConsumedCapacity {
+	case types.ReturnConsumedCapacityTotal:
 		return returnConsumedCapacityTotal
-	case dynamodb.ReturnConsumedCapacityIndexes:
+	case types.ReturnConsumedCapacityIndexes:
 		return returnConsumedCapacityIndexes
 	default:
-		return returnItemCollectionMetricsNone
+		return returnConsumedCapacityNone
 	}
 }
 
-func translateReturnItemCollectionMetrics(returnItemCollectionMetrics *string) int {
-	if returnItemCollectionMetrics == nil {
-		return returnItemCollectionMetricsNone
-	}
-	if dynamodb.ReturnItemCollectionMetricsSize == *returnItemCollectionMetrics {
+func translateReturnItemCollectionMetrics(returnItemCollectionMetrics types.ReturnItemCollectionMetrics) int {
+	if types.ReturnItemCollectionMetricsSize == returnItemCollectionMetrics {
 		return returnItemCollectionMetricsSize
 	}
 	return returnItemCollectionMetricsNone
 }
 
-func translateSelect(selection *string) int {
-	if selection == nil {
-		return selectAllAttributes
-	}
-	switch *selection {
-	case dynamodb.SelectAllAttributes:
-		return selectAllAttributes
-	case dynamodb.SelectAllProjectedAttributes:
+func translateSelect(selection types.Select) int {
+	switch selection {
+	case types.SelectAllProjectedAttributes:
 		return selectAllProjectedAttributes
-	case dynamodb.SelectCount:
+	case types.SelectCount:
 		return selectCount
-	case dynamodb.SelectSpecificAttributes:
+	case types.SelectSpecificAttributes:
 		return selectSpecificAttributes
+	case types.SelectAllAttributes:
+		return selectAllAttributes
 	default:
 		return selectAllAttributes
 	}
