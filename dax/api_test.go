@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/aws/aws-dax-go/dax/internal/client"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 )
 
 // https://github.com/aws/aws-dax-go/issues/27

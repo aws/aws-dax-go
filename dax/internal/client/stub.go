@@ -6,9 +6,9 @@ is used to test pagination logic.
 package client
 
 import (
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
 type ClientStub struct {

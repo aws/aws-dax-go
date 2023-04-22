@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/aws/aws-dax-go/dax/internal/client"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
 func NewWithInternalClient(c client.DaxAPI) *Dax {
