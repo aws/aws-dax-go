@@ -16,12 +16,13 @@
 package client
 
 import (
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/request"
 )
 
 type documentPathElement struct {
@@ -41,7 +42,7 @@ func documentPathElementFromName(nm string) documentPathElement {
 	return documentPathElement{index: -1, name: nm}
 }
 
-func buildProjectionOrdinals(projectionExpression *string, expressionAttributeNames map[string]*string) ([]documentPath, error) {
+func buildProjectionOrdinals(projectionExpression *string, expressionAttributeNames map[string]string) ([]documentPath, error) {
 	if projectionExpression == nil || *projectionExpression == "" {
 		return nil, nil
 	}
@@ -57,8 +58,8 @@ func buildProjectionOrdinals(projectionExpression *string, expressionAttributeNa
 	return dps, nil
 }
 
-func buildDocumentPath(path string, expressionAttributeNames map[string]*string) (documentPath, error) {
-	var substitutes map[string]*string
+func buildDocumentPath(path string, expressionAttributeNames map[string]string) (documentPath, error) {
+	var substitutes map[string]string
 	if expressionAttributeNames != nil {
 		substitutes = expressionAttributeNames
 	}
@@ -109,10 +110,10 @@ func buildDocumentPath(path string, expressionAttributeNames map[string]*string)
 	return documentPath{elements: elements}, nil
 }
 
-func getOrDefault(m map[string]*string, key, value string) string {
+func getOrDefault(m map[string]string, key, value string) string {
 	v, ok := m[key]
 	if ok {
-		return *v
+		return v
 	} else {
 		return value
 	}
