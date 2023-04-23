@@ -24,6 +24,7 @@ import (
 	"github.com/aws/aws-dax-go/dax/internal/cbor"
 	"github.com/aws/aws-dax-go/dax/internal/lru"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/client/metadata"
@@ -236,11 +237,11 @@ func (client *SingleDaxClient) defineAttributeList(ctx aws.Context, id int64) ([
 	return out, nil
 }
 
-func (client *SingleDaxClient) defineKeySchema(ctx aws.Context, table string) ([]dynamodb.AttributeDefinition, error) {
+func (client *SingleDaxClient) defineKeySchema(ctx aws.Context, table string) ([]types.AttributeDefinition, error) {
 	encoder := func(writer *cbor.Writer) error {
 		return encodeDefineKeySchemaInput(table, writer)
 	}
-	var out []dynamodb.AttributeDefinition
+	var out []types.AttributeDefinition
 	var err error
 	decoder := func(reader *cbor.Reader) error {
 		out, err = decodeDefineKeySchemaOutput(reader)
@@ -374,7 +375,7 @@ func (client *SingleDaxClient) BatchGetItemWithOptions(input *dynamodb.BatchGetI
 }
 
 func (client *SingleDaxClient) TransactWriteItemsWithOptions(input *dynamodb.TransactWriteItemsInput, output *dynamodb.TransactWriteItemsOutput, opt RequestOptions) (*dynamodb.TransactWriteItemsOutput, error) {
-	extractedKeys := make([]map[string]*dynamodb.AttributeValue, len(input.TransactItems))
+	extractedKeys := make([]map[string]types.AttributeValue, len(input.TransactItems))
 	encoder := func(writer *cbor.Writer) error {
 		return encodeTransactWriteItemsInput(opt.Context, input, client.keySchema, client.attrNamesListToId, writer, extractedKeys)
 	}
@@ -385,7 +386,7 @@ func (client *SingleDaxClient) TransactWriteItemsWithOptions(input *dynamodb.Tra
 	}
 	if err = client.executeWithRetries(OpBatchWriteItem, opt, encoder, decoder); err != nil {
 		if failure, ok := err.(*daxTransactionCanceledFailure); ok {
-			var cancellationReasons []*dynamodb.CancellationReason
+			var cancellationReasons []types.CancellationReason
 			if cancellationReasons, err = decodeTransactionCancellationReasons(opt.Context, failure, extractedKeys, client.attrListIdToNames); err != nil {
 				return output, err
 			}
@@ -398,7 +399,7 @@ func (client *SingleDaxClient) TransactWriteItemsWithOptions(input *dynamodb.Tra
 }
 
 func (client *SingleDaxClient) TransactGetItemsWithOptions(input *dynamodb.TransactGetItemsInput, output *dynamodb.TransactGetItemsOutput, opt RequestOptions) (*dynamodb.TransactGetItemsOutput, error) {
-	extractedKeys := make([]map[string]*dynamodb.AttributeValue, len(input.TransactItems))
+	extractedKeys := make([]map[string]types.AttributeValue, len(input.TransactItems))
 	encoder := func(writer *cbor.Writer) error {
 		return encodeTransactGetItemsInput(opt.Context, input, client.keySchema, writer, extractedKeys)
 	}
@@ -409,7 +410,7 @@ func (client *SingleDaxClient) TransactGetItemsWithOptions(input *dynamodb.Trans
 	}
 	if err = client.executeWithRetries(OpBatchWriteItem, opt, encoder, decoder); err != nil {
 		if failure, ok := err.(*daxTransactionCanceledFailure); ok {
-			var cancellationReasons []*dynamodb.CancellationReason
+			var cancellationReasons []types.CancellationReason
 			if cancellationReasons, err = decodeTransactionCancellationReasons(opt.Context, failure, extractedKeys, client.attrListIdToNames); err != nil {
 				return output, err
 			}
@@ -525,7 +526,7 @@ func (client *SingleDaxClient) build(req *request.Request) {
 			req.Error = awserr.New(request.ErrCodeSerialization, "expected *TransactGetItemsInput", nil)
 			return
 		}
-		extractedKeys := make([]map[string]*dynamodb.AttributeValue, len(input.TransactItems))
+		extractedKeys := make([]map[string]types.AttributeValue, len(input.TransactItems))
 		if err := encodeTransactGetItemsInput(req.Context(), input, client.keySchema, w, extractedKeys); err != nil {
 			req.Error = translateError(err)
 			return
@@ -536,7 +537,7 @@ func (client *SingleDaxClient) build(req *request.Request) {
 			req.Error = awserr.New(request.ErrCodeSerialization, "expected *TransactWriteItemsInput", nil)
 			return
 		}
-		extractedKeys := make([]map[string]*dynamodb.AttributeValue, len(input.TransactItems))
+		extractedKeys := make([]map[string]types.AttributeValue, len(input.TransactItems))
 		if err := encodeTransactWriteItemsInput(req.Context(), input, client.keySchema, client.attrNamesListToId, w, extractedKeys); err != nil {
 			req.Error = translateError(err)
 			return
