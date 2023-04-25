@@ -179,7 +179,7 @@ func (e *ExpressionEncoder) fullExpr(typ int, expr []byte) ([]byte, error) {
 	if typ != ProjectionExpr {
 		e.cborWriter.WriteArrayHeader(len(e.variableValues))
 		for _, v := range e.variableValues {
-			if err := cbor.EncodeAttributeValue(&v, e.cborWriter); err != nil {
+			if err := cbor.EncodeAttributeValue(v, e.cborWriter); err != nil {
 				return nil, err
 			}
 		}
