@@ -5,8 +5,9 @@ import (
 	"testing"
 
 	"github.com/aws/aws-dax-go/dax/internal/client"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
 func NewWithInternalClient(c client.DaxAPI) *Dax {
@@ -14,59 +15,59 @@ func NewWithInternalClient(c client.DaxAPI) *Dax {
 }
 
 func TestPaginationBatchGetItemPage(t *testing.T) {
-	pages, numPages, gotToEnd := map[string][]map[string]*dynamodb.AttributeValue{}, 0, false
+	pages, numPages, gotToEnd := map[string][]map[string]types.AttributeValue{}, 0, false
 
 	resps := []*dynamodb.BatchGetItemOutput{
 		{
-			Responses: map[string][]map[string]*dynamodb.AttributeValue{
+			Responses: map[string][]map[string]types.AttributeValue{
 				"tablename": {
 					{
-						"key":  {S: aws.String("key1")},
-						"attr": {S: aws.String("attr1")},
+						"key":  &types.AttributeValueMemberS{Value: "key1"},
+						"attr": &types.AttributeValueMemberS{Value: "attr1"},
 					},
 					{
-						"key":  {S: aws.String("key2")},
-						"attr": {S: aws.String("attr2")},
+						"key":  &types.AttributeValueMemberS{Value: "key2"},
+						"attr": &types.AttributeValueMemberS{Value: "attr2"},
 					},
 				},
 			},
-			UnprocessedKeys: map[string]*dynamodb.KeysAndAttributes{
+			UnprocessedKeys: map[string]types.KeysAndAttributes{
 				"tablename": {
-					Keys: []map[string]*dynamodb.AttributeValue{
-						{"key": {S: aws.String("key3")}},
-						{"key": {S: aws.String("key4")}},
-						{"key": {S: aws.String("key5")}},
-					},
-				},
-			},
-		},
-		{
-			Responses: map[string][]map[string]*dynamodb.AttributeValue{
-				"tablename": {
-					{
-						"key":  {S: aws.String("key3")},
-						"attr": {S: aws.String("attr3")},
-					},
-					{
-						"key":  {S: aws.String("key4")},
-						"attr": {S: aws.String("attr4")},
-					},
-				},
-			},
-			UnprocessedKeys: map[string]*dynamodb.KeysAndAttributes{
-				"tablename": {
-					Keys: []map[string]*dynamodb.AttributeValue{
-						{"key": {S: aws.String("key5")}},
+					Keys: []map[string]types.AttributeValue{
+						{"key": &types.AttributeValueMemberS{Value: "key3"}},
+						{"key": &types.AttributeValueMemberS{Value: "key4"}},
+						{"key": &types.AttributeValueMemberS{Value: "key5"}},
 					},
 				},
 			},
 		},
 		{
-			Responses: map[string][]map[string]*dynamodb.AttributeValue{
+			Responses: map[string][]map[string]types.AttributeValue{
 				"tablename": {
 					{
-						"key":  {S: aws.String("key5")},
-						"attr": {S: aws.String("attr5")},
+						"key":  &types.AttributeValueMemberS{Value: "key3"},
+						"attr": &types.AttributeValueMemberS{Value: "attr3"},
+					},
+					{
+						"key":  &types.AttributeValueMemberS{Value: "key4"},
+						"attr": &types.AttributeValueMemberS{Value: "attr4"},
+					},
+				},
+			},
+			UnprocessedKeys: map[string]types.KeysAndAttributes{
+				"tablename": {
+					Keys: []map[string]types.AttributeValue{
+						{"key": &types.AttributeValueMemberS{Value: "key5"}},
+					},
+				},
+			},
+		},
+		{
+			Responses: map[string][]map[string]types.AttributeValue{
+				"tablename": {
+					{
+						"key":  &types.AttributeValueMemberS{Value: "key5"},
+						"attr": &types.AttributeValueMemberS{Value: "attr5"},
 					},
 				},
 			},
@@ -76,14 +77,14 @@ func TestPaginationBatchGetItemPage(t *testing.T) {
 	stub := client.NewClientStub(resps, nil, nil)
 	db := NewWithInternalClient(stub)
 	params := &dynamodb.BatchGetItemInput{
-		RequestItems: map[string]*dynamodb.KeysAndAttributes{
+		RequestItems: map[string]types.KeysAndAttributes{
 			"tablename": {
-				Keys: []map[string]*dynamodb.AttributeValue{
-					{"key": {S: aws.String("key1")}},
-					{"key": {S: aws.String("key2")}},
-					{"key": {S: aws.String("key3")}},
-					{"key": {S: aws.String("key4")}},
-					{"key": {S: aws.String("key5")}},
+				Keys: []map[string]types.AttributeValue{
+					{"key": &types.AttributeValueMemberS{Value: "key1"}},
+					{"key": &types.AttributeValueMemberS{Value: "key2"}},
+					{"key": &types.AttributeValueMemberS{Value: "key3"}},
+					{"key": &types.AttributeValueMemberS{Value: "key4"}},
+					{"key": &types.AttributeValueMemberS{Value: "key5"}},
 				},
 			},
 		},
@@ -109,13 +110,13 @@ func TestPaginationBatchGetItemPage(t *testing.T) {
 
 	// The items were all returned
 	if e, a :=
-		map[string][]map[string]*dynamodb.AttributeValue{
+		map[string][]map[string]types.AttributeValue{
 			"tablename": {
-				{"key": {S: aws.String("key1")}, "attr": {S: aws.String("attr1")}},
-				{"key": {S: aws.String("key2")}, "attr": {S: aws.String("attr2")}},
-				{"key": {S: aws.String("key3")}, "attr": {S: aws.String("attr3")}},
-				{"key": {S: aws.String("key4")}, "attr": {S: aws.String("attr4")}},
-				{"key": {S: aws.String("key5")}, "attr": {S: aws.String("attr5")}},
+				{"key": &types.AttributeValueMemberS{Value: "key1"}, "attr": &types.AttributeValueMemberS{Value: "attr1"}},
+				{"key": &types.AttributeValueMemberS{Value: "key2"}, "attr": &types.AttributeValueMemberS{Value: "attr2"}},
+				{"key": &types.AttributeValueMemberS{Value: "key3"}, "attr": &types.AttributeValueMemberS{Value: "attr3"}},
+				{"key": &types.AttributeValueMemberS{Value: "key4"}, "attr": &types.AttributeValueMemberS{Value: "attr4"}},
+				{"key": &types.AttributeValueMemberS{Value: "key5"}, "attr": &types.AttributeValueMemberS{Value: "attr5"}},
 			}}, pages; !reflect.DeepEqual(e, a) {
 		t.Errorf("expect %v, got %v", e, a)
 	}
@@ -139,39 +140,40 @@ func TestPaginationBatchGetItemPage(t *testing.T) {
 	}
 
 	// The last request had the correct key
-	if e, a := "key5", *stub.GetBatchGetItemRequests()[2].RequestItems["tablename"].Keys[0]["key"].S; e != a {
+	if e, a := "key5", stub.GetBatchGetItemRequests()[2].RequestItems["tablename"].Keys[0]["key"].(*types.AttributeValueMemberS).Value; e != a {
 		t.Errorf("expect %v, got %v", e, a)
 	}
 }
 
 func TestPaginationQueryPage(t *testing.T) {
-	pages, numPages, gotToEnd := []map[string]*dynamodb.AttributeValue{}, 0, false
+	var pages []map[string]types.AttributeValue
+	numPages, gotToEnd := 0, false
 
 	resps := []*dynamodb.QueryOutput{
 		{
-			LastEvaluatedKey: map[string]*dynamodb.AttributeValue{"key": {S: aws.String("key1")}},
-			Count:            aws.Int64(1),
-			Items: []map[string]*dynamodb.AttributeValue{
+			LastEvaluatedKey: map[string]types.AttributeValue{"key": &types.AttributeValueMemberS{Value: ("key1")}},
+			Count:            1,
+			Items: []map[string]types.AttributeValue{
 				{
-					"key": {S: aws.String("key1")},
+					"key": &types.AttributeValueMemberS{Value: "key1"},
 				},
 			},
 		},
 		{
-			LastEvaluatedKey: map[string]*dynamodb.AttributeValue{"key": {S: aws.String("key2")}},
-			Count:            aws.Int64(1),
-			Items: []map[string]*dynamodb.AttributeValue{
+			LastEvaluatedKey: map[string]types.AttributeValue{"key": &types.AttributeValueMemberS{Value: "key2"}},
+			Count:            1,
+			Items: []map[string]types.AttributeValue{
 				{
-					"key": {S: aws.String("key2")},
+					"key": &types.AttributeValueMemberS{Value: "key2"},
 				},
 			},
 		},
 		{
-			LastEvaluatedKey: map[string]*dynamodb.AttributeValue{},
-			Count:            aws.Int64(1),
-			Items: []map[string]*dynamodb.AttributeValue{
+			LastEvaluatedKey: map[string]types.AttributeValue{},
+			Count:            1,
+			Items: []map[string]types.AttributeValue{
 				{
-					"key": {S: aws.String("key3")},
+					"key": &types.AttributeValueMemberS{Value: "key3"},
 				},
 			},
 		},
@@ -180,7 +182,7 @@ func TestPaginationQueryPage(t *testing.T) {
 	stub := client.NewClientStub(nil, resps, nil)
 	db := NewWithInternalClient(stub)
 	params := &dynamodb.QueryInput{
-		Limit:     aws.Int64(1),
+		Limit:     aws.Int32(1),
 		TableName: aws.String("tablename"),
 	}
 	err := db.QueryPages(params, func(p *dynamodb.QueryOutput, last bool) bool {
@@ -202,10 +204,10 @@ func TestPaginationQueryPage(t *testing.T) {
 
 	// The correct items were returned
 	if e, a :=
-		[]map[string]*dynamodb.AttributeValue{
-			{"key": {S: aws.String("key1")}},
-			{"key": {S: aws.String("key2")}},
-			{"key": {S: aws.String("key3")}},
+		[]map[string]types.AttributeValue{
+			{"key": &types.AttributeValueMemberS{Value: "key1"}},
+			{"key": &types.AttributeValueMemberS{Value: "key2"}},
+			{"key": &types.AttributeValueMemberS{Value: "key3"}},
 		}, pages; !reflect.DeepEqual(e, a) {
 		t.Errorf("expect %v, got %v", e, a)
 	}
@@ -225,40 +227,41 @@ func TestPaginationQueryPage(t *testing.T) {
 		t.Errorf("expect nil, %v", a)
 	}
 	for i, e := range []string{"key1", "key2"} {
-		if a := *stub.GetQueryRequests()[i+1].ExclusiveStartKey["key"].S; e != a {
+		if a := stub.GetQueryRequests()[i+1].ExclusiveStartKey["key"].(*types.AttributeValueMemberS).Value; e != a {
 			t.Errorf("expect %s, got %s at index %d", e, a, i+1)
 		}
 	}
 }
 
 func TestPaginationScanPage(t *testing.T) {
-	pages, numPages, gotToEnd := []map[string]*dynamodb.AttributeValue{}, 0, false
+	var pages []map[string]types.AttributeValue
+	numPages, gotToEnd := 0, false
 
 	resps := []*dynamodb.ScanOutput{
 		{
-			LastEvaluatedKey: map[string]*dynamodb.AttributeValue{"key": {S: aws.String("key1")}},
-			Count:            aws.Int64(1),
-			Items: []map[string]*dynamodb.AttributeValue{
+			LastEvaluatedKey: map[string]types.AttributeValue{"key": &types.AttributeValueMemberS{Value: "key1"}},
+			Count:            1,
+			Items: []map[string]types.AttributeValue{
 				{
-					"key": {S: aws.String("key1")},
+					"key": &types.AttributeValueMemberS{Value: "key1"},
 				},
 			},
 		},
 		{
-			LastEvaluatedKey: map[string]*dynamodb.AttributeValue{"key": {S: aws.String("key2")}},
-			Count:            aws.Int64(1),
-			Items: []map[string]*dynamodb.AttributeValue{
+			LastEvaluatedKey: map[string]types.AttributeValue{"key": &types.AttributeValueMemberS{Value: "key2"}},
+			Count:            1,
+			Items: []map[string]types.AttributeValue{
 				{
-					"key": {S: aws.String("key2")},
+					"key": &types.AttributeValueMemberS{Value: "key2"},
 				},
 			},
 		},
 		{
-			LastEvaluatedKey: map[string]*dynamodb.AttributeValue{},
-			Count:            aws.Int64(1),
-			Items: []map[string]*dynamodb.AttributeValue{
+			LastEvaluatedKey: map[string]types.AttributeValue{},
+			Count:            1,
+			Items: []map[string]types.AttributeValue{
 				{
-					"key": {S: aws.String("key3")},
+					"key": &types.AttributeValueMemberS{Value: "key3"},
 				},
 			},
 		},
@@ -267,7 +270,7 @@ func TestPaginationScanPage(t *testing.T) {
 	stub := client.NewClientStub(nil, nil, resps)
 	db := NewWithInternalClient(stub)
 	params := &dynamodb.ScanInput{
-		Limit:     aws.Int64(1),
+		Limit:     aws.Int32(1),
 		TableName: aws.String("tablename"),
 	}
 	err := db.ScanPages(params, func(p *dynamodb.ScanOutput, last bool) bool {
@@ -289,10 +292,10 @@ func TestPaginationScanPage(t *testing.T) {
 
 	// The correct items were returned
 	if e, a :=
-		[]map[string]*dynamodb.AttributeValue{
-			{"key": {S: aws.String("key1")}},
-			{"key": {S: aws.String("key2")}},
-			{"key": {S: aws.String("key3")}},
+		[]map[string]types.AttributeValue{
+			{"key": &types.AttributeValueMemberS{Value: "key1"}},
+			{"key": &types.AttributeValueMemberS{Value: "key2"}},
+			{"key": &types.AttributeValueMemberS{Value: "key3"}},
 		}, pages; !reflect.DeepEqual(e, a) {
 		t.Errorf("expect %v, got %v", e, a)
 	}
@@ -311,7 +314,7 @@ func TestPaginationScanPage(t *testing.T) {
 		t.Errorf("expect nil, %v", a)
 	}
 	for i, e := range []string{"key1", "key2"} {
-		if a := *stub.GetScanRequests()[i+1].ExclusiveStartKey["key"].S; e != a {
+		if a := stub.GetScanRequests()[i+1].ExclusiveStartKey["key"].(*types.AttributeValueMemberS).Value; e != a {
 			t.Errorf("expect %s, got %s at index %d", e, a, i+1)
 		}
 	}

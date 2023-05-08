@@ -5,6 +5,7 @@ import (
 
 	"github.com/aws/aws-dax-go/dax/internal/client"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
 // https://github.com/aws/aws-dax-go/issues/27
@@ -28,7 +29,7 @@ func TestUnimplementedRequestBehavior(t *testing.T) {
 	// CreateGlobalTable is not implemented by DAX
 	params := &dynamodb.CreateGlobalTableInput{
 		GlobalTableName:  nil,
-		ReplicationGroup: []*dynamodb.Replica{},
+		ReplicationGroup: []types.Replica{},
 	}
 	req, o := dax.CreateGlobalTableRequest(params)
 
