@@ -26,8 +26,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/smithy-go"
 )
 
 type IntBoundary struct {
@@ -208,7 +207,8 @@ func TestCborType(t *testing.T) {
 				if rt == PosInt || rt == NegInt {
 					exp = ErrNaN
 				} else {
-					exp = awserr.New(request.ErrCodeSerialization, fmt.Sprintf("cbor: expected major type %d, got %d", rt, wt&MajorTypeMask), nil)
+					exp = &smithy.DeserializationError{Err: fmt.Errorf("cbor: expected major type %d, got %d", rt, wt&MajorTypeMask)}
+					//exp = awserr.New(request.ErrCodeSerialization, fmt.Sprintf("cbor: expected major type %d, got %d", rt, wt&MajorTypeMask), nil)
 				}
 				if !reflect.DeepEqual(exp, err) {
 					t.Errorf("expected %v, got %v", exp, err)
