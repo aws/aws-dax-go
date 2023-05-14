@@ -70,8 +70,7 @@ type Config struct {
 	connConfig  connConfig
 
 	SkipHostnameVerification bool
-	logger                   aws.Logger
-	logLevel                 aws.LogLevelType
+	logger                   Logger
 }
 
 type connConfig struct {
@@ -98,13 +97,13 @@ func (cfg *Config) validate() error {
 
 func (cfg *Config) validateConnConfig() {
 	if cfg.connConfig.isEncrypted && cfg.SkipHostnameVerification {
-		cfg.logger.Log(fmt.Sprintf("WARN: Skip hostname verification of TLS connections. The default is to perform hostname verification, setting this to True will skip verification. Be sure you understand the implication of doing so, which is the inability to authenticate the cluster that you are connecting to."))
+		cfg.logger.Warn(
+			"WARN: Skip hostname verification of TLS connections. The default is to perform hostname verification, setting this to True will skip verification. Be sure you understand the implication of doing so, which is the inability to authenticate the cluster that you are connecting to.")
 	}
 }
 
-func (cfg *Config) SetLogger(logger aws.Logger, logLevelType aws.LogLevelType) {
+func (cfg *Config) SetLogger(logger Logger) {
 	cfg.logger = logger
-	cfg.logLevel = logLevelType
 }
 
 var defaultConfig = Config{
@@ -117,8 +116,7 @@ var defaultConfig = Config{
 
 	connConfig:               connConfig{},
 	SkipHostnameVerification: false,
-	logger:                   aws.NewDefaultLogger(),
-	logLevel:                 aws.LogOff,
+	logger:                   NewDefaultLogger(LogLevelNoop),
 	IdleConnectionReapDelay:  30 * time.Second,
 }
 
@@ -360,8 +358,8 @@ func (cc *ClusterDaxClient) retry(op string, action func(client DaxAPI, o Reques
 	var client DaxAPI
 	// Start from 0 to accomodate for the initial request
 	for i := 0; i <= attempts; i++ {
-		if i > 0 && opt.Logger != nil && opt.LogLevel.Matches(aws.LogDebugWithRequestRetries) {
-			opt.Logger.Log(fmt.Sprintf("DEBUG: Retrying Request %s/%s, attempt %d", service, op, i))
+		if i > 0 && opt.Logger != nil {
+			opt.Logger.Debug("DEBUG: Retrying Request %s/%s, attempt %d", service, op, i)
 		}
 		client, err = cc.cluster.client(client)
 		if err != nil {
@@ -393,8 +391,8 @@ func (cc *ClusterDaxClient) retry(op string, action func(client DaxAPI, o Reques
 				}
 			}
 
-			if err != nil && opt.Logger != nil && opt.LogLevel.Matches(aws.LogDebugWithRequestRetries) {
-				opt.Logger.Log(fmt.Sprintf("DEBUG: Error in executing request %s/%s. : %s", service, op, err))
+			if err != nil && opt.Logger != nil {
+				opt.Logger.Debug("DEBUG: Error in executing request %s/%s. : %s", service, op, err)
 			}
 		}
 	}
@@ -606,7 +604,7 @@ func (c *cluster) refresh(force bool) error {
 func (c *cluster) refreshNow() error {
 	cfg, err := c.pullEndpoints()
 	if err != nil {
-		c.debugLog(fmt.Sprintf("ERROR: Failed to refresh endpoint : %s", err))
+		c.debugLog("ERROR: Failed to refresh endpoint : %s", err)
 		return err
 	}
 	if !c.hasChanged(cfg) {
@@ -642,7 +640,7 @@ func (c *cluster) update(config []serviceEndpoint) error {
 		for ep, clicfg := range oldActive {
 			_, isPartOfUpdatedEndpointsConfig := newEndpoints[ep]
 			if !isPartOfUpdatedEndpointsConfig {
-				c.debugLog(fmt.Sprintf("Found updated endpoing configs, will close inactive endpoint client : %s", ep.host))
+				c.debugLog("Found updated endpoint configs, will close inactive endpoint client : %s", ep.host)
 				toClose = append(toClose, clicfg)
 			}
 		}
@@ -680,7 +678,7 @@ func (c *cluster) update(config []serviceEndpoint) error {
 
 	go func() {
 		for _, client := range toClose {
-			c.debugLog(fmt.Sprintf("Closing client for : %s", client.cfg.hostname))
+			c.debugLog("Closing client for : %s", client.cfg.hostname)
 			c.closeClient(client.client)
 		}
 	}()
@@ -712,15 +710,15 @@ func (c *cluster) onHealthCheckFailed(host hostPort) {
 			c.routes = newRoutes
 		} else {
 			shouldCloseOldClient = false
-			c.debugLog(fmt.Sprintf("DEBUG: Failed to refresh cache for host: " + host.host))
+			c.debugLog("DEBUG: Failed to refresh cache for host: " + host.host)
 		}
 	} else {
-		c.debugLog(fmt.Sprintf("DEBUG: The node is not part of active routes. Ignoring the health check failure for host: " + host.host))
+		c.debugLog("DEBUG: The node is not part of active routes. Ignoring the health check failure for host: " + host.host)
 	}
 	c.lock.Unlock()
 
 	if shouldCloseOldClient {
-		c.debugLog(fmt.Sprintf("DEBUG: Closing old instance of a replaced client for endpoint: %s", oldClientConfig.cfg.hostPort().host))
+		c.debugLog("DEBUG: Closing old instance of a replaced client for endpoint: %s", oldClientConfig.cfg.hostPort().host)
 		c.closeClient(oldClientConfig.client)
 	}
 }
@@ -760,7 +758,7 @@ func (c *cluster) pullEndpoints() ([]serviceEndpoint, error) {
 				lastErr = err
 				continue
 			}
-			c.debugLog(fmt.Sprintf("DEBUG: Pulled endpoints from %s : %v", ip, endpoints))
+			c.debugLog("DEBUG: Pulled endpoints from %s : %v", ip, endpoints)
 			if len(endpoints) > 0 {
 				return endpoints, nil
 			}
@@ -786,10 +784,10 @@ func (c *cluster) closeClient(client DaxAPI) {
 	}
 }
 
-func (c *cluster) debugLog(args ...interface{}) {
-	if c.config.logger != nil && c.config.logLevel.AtLeast(aws.LogDebug) {
+func (c *cluster) debugLog(format string, args ...interface{}) {
+	if c.config.logger != nil {
 		{
-			c.config.logger.Log(args)
+			c.config.logger.Debug(format, args)
 		}
 	}
 }

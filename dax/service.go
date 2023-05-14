@@ -50,8 +50,7 @@ type Config struct {
 	WriteRetries   int
 	ReadRetries    int
 
-	LogLevel aws.LogLevelType
-	Logger   aws.Logger
+	Logger client.Logger
 }
 
 // DefaultConfig returns the default DAX configuration.
@@ -64,8 +63,6 @@ func DefaultConfig() Config {
 		RequestTimeout: 1 * time.Minute,
 		WriteRetries:   2,
 		ReadRetries:    2,
-		LogLevel:       aws.LogOff,
-		Logger:         aws.NewDefaultLogger(),
 	}
 }
 
@@ -82,11 +79,11 @@ func NewConfigWithSession(session session.Session) Config {
 
 // New creates a new instance of the DAX client with a DAX configuration.
 func New(cfg Config) (*Dax, error) {
-	cfg.Config.SetLogger(cfg.Logger, cfg.LogLevel)
+	cfg.Config.SetLogger(cfg.Logger)
 	c, err := client.New(cfg.Config)
 	if err != nil {
 		if cfg.Logger != nil {
-			cfg.Logger.Log(fmt.Sprintf("ERROR: Exception in initialisation of DAX Client : %s", err))
+			cfg.Logger.Error("ERROR: Exception in initialisation of DAX Client : %s", err)
 		}
 		return nil, err
 	}
@@ -136,12 +133,10 @@ func (c *Config) mergeFrom(ac aws.Config) {
 		c.WriteRetries = *r
 		c.ReadRetries = *r
 	}
-	if ac.Logger != nil {
-		c.Logger = ac.Logger
-	}
-	if ac.LogLevel != nil {
-		c.LogLevel = *ac.LogLevel
-	}
+	// aws.Logger has already undefined  in v2
+	//if ac.Logger != nil {
+	//	c.Logger = ac.Logger
+	//}
 
 	if ac.Credentials != nil {
 		c.Credentials = ac.Credentials
@@ -164,13 +159,12 @@ func (c *Config) requestOptions(read bool, ctx context.Context, opts ...request.
 		ctx, cfn = context.WithTimeout(aws.BackgroundContext(), c.RequestTimeout)
 	}
 	opt := client.RequestOptions{
-		LogLevel:   c.LogLevel,
 		Logger:     c.Logger,
 		MaxRetries: r,
 	}
 	if err := opt.MergeFromRequestOptions(ctx, opts...); err != nil {
-		if c.Logger != nil && c.LogLevel.AtLeast(aws.LogDebug) {
-			c.Logger.Log(fmt.Sprintf("DEBUG: Error in merging from Request Options : %s", err))
+		if c.Logger != nil {
+			c.Logger.Debug("DEBUG: Error in merging from Request Options : %s", err)
 		}
 		return client.RequestOptions{}, nil, err
 	}

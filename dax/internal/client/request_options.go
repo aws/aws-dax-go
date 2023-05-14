@@ -25,8 +25,7 @@ import (
 )
 
 type RequestOptions struct {
-	LogLevel aws.LogLevelType
-	Logger   aws.Logger
+	Logger Logger
 
 	RetryDelay time.Duration
 	//Retryer implements equal jitter backoff stratergy for throttled requests
@@ -39,7 +38,6 @@ type RequestOptions struct {
 
 func (o *RequestOptions) applyTo(r *request.Request) {
 	if r != nil {
-		r.Config.LogLevel = aws.LogLevel(o.LogLevel)
 		r.Config.Logger = o.Logger
 
 		r.RetryDelay = o.RetryDelay
@@ -79,9 +77,6 @@ func (o *RequestOptions) mergeFromRequest(r *request.Request, validate bool) err
 		if err := ValidateRequest(r); err != nil {
 			return err
 		}
-	}
-	if r.Config.LogLevel != nil {
-		o.LogLevel = *r.Config.LogLevel
 	}
 	if r.Config.Logger != nil {
 		o.Logger = r.Config.Logger

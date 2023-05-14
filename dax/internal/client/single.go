@@ -18,7 +18,6 @@ package client
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/aws/aws-dax-go/dax/internal/cbor"
@@ -172,10 +171,10 @@ func (client *SingleDaxClient) startHealthChecks(cc *cluster, host hostPort) {
 		var err error
 		_, err = client.endpoints(RequestOptions{MaxRetries: 2, Context: ctx})
 		if err != nil {
-			cc.debugLog(fmt.Sprintf("Health checks failed with error " + err.Error() + " for host :: " + host.host))
+			cc.debugLog("Health checks failed with error " + err.Error() + " for host :: " + host.host)
 			cc.onHealthCheckFailed(host)
 		} else {
-			cc.debugLog(fmt.Sprintf("Health checks succeeded for host:: " + host.host))
+			cc.debugLog("Health checks succeeded for host:: " + host.host)
 		}
 		return nil
 	})
@@ -711,8 +710,8 @@ func (client *SingleDaxClient) executeWithRetries(op string, o RequestOptions, e
 	attempts := o.MaxRetries
 	// Start from 0 to accommodate for the initial request
 	for i := 0; i <= attempts; i++ {
-		if i > 0 && o.Logger != nil && o.LogLevel.Matches(aws.LogDebugWithRequestRetries) {
-			o.Logger.Log(fmt.Sprintf("DEBUG: Retrying Request %s/%s, attempt %d", service, op, i))
+		if i > 0 && o.Logger != nil {
+			o.Logger.Debug("DEBUG: Retrying Request %s/%s, attempt %d", service, op, i)
 		}
 
 		if err = client.executeWithContext(ctx, op, encoder, decoder, o); err == nil {
@@ -727,8 +726,8 @@ func (client *SingleDaxClient) executeWithRetries(op string, o RequestOptions, e
 			}
 		}
 
-		if o.Logger != nil && o.LogLevel.Matches(aws.LogDebugWithRequestRetries) {
-			o.Logger.Log(fmt.Sprintf("DEBUG: Error in executing %s%s : %s", service, op, err))
+		if o.Logger != nil {
+			o.Logger.Debug("DEBUG: Error in executing %s%s : %s", service, op, err)
 		}
 	}
 	// Return the last error occurred
