@@ -18,17 +18,14 @@ package dax
 import (
 	"context"
 	"crypto/tls"
-	"errors"
-	"fmt"
 	"net"
 	"net/url"
 	"time"
 
 	"github.com/aws/aws-dax-go/dax/internal/client"
 	"github.com/aws/aws-dax-go/dax/internal/proxy"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/client/metadata"
-	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 )
 
@@ -39,6 +36,8 @@ type Dax struct {
 	client client.DaxAPI
 	config Config
 }
+
+var _ DynamoDBAPI = (*Dax)(nil)
 
 const ServiceName = "dax"
 
@@ -63,6 +62,7 @@ func DefaultConfig() Config {
 		RequestTimeout: 1 * time.Minute,
 		WriteRetries:   2,
 		ReadRetries:    2,
+		Logger:         client.NewDefaultLogger(client.LogLevelNoop),
 	}
 }
 
@@ -149,14 +149,14 @@ func (c *Config) mergeFrom(ac aws.Config) {
 	}
 }
 
-func (c *Config) requestOptions(read bool, ctx context.Context, opts ...request.Option) (client.RequestOptions, context.CancelFunc, error) {
+func (c *Config) requestOptions(read bool, ctx context.Context, opts ...func(*dynamodb.Options)) (client.RequestOptions, context.CancelFunc, error) {
 	r := c.WriteRetries
 	if read {
 		r = c.ReadRetries
 	}
 	var cfn context.CancelFunc
 	if ctx == nil && c.RequestTimeout > 0 {
-		ctx, cfn = context.WithTimeout(aws.BackgroundContext(), c.RequestTimeout)
+		ctx, cfn = context.WithTimeout(context.Background(), c.RequestTimeout)
 	}
 	opt := client.RequestOptions{
 		Logger:     c.Logger,
@@ -166,27 +166,7 @@ func (c *Config) requestOptions(read bool, ctx context.Context, opts ...request.
 		if c.Logger != nil {
 			c.Logger.Debug("DEBUG: Error in merging from Request Options : %s", err)
 		}
-		return client.RequestOptions{}, nil, err
+		return client.RequestOptions{}, cfn, err
 	}
 	return opt, cfn, nil
-}
-
-func buildHandlersForUnimplementedOperations() *request.Handlers {
-	h := &request.Handlers{}
-	h.Build.PushFrontNamed(request.NamedHandler{
-		Name: "dax.BuildHandler",
-		Fn: func(r *request.Request) {
-			r.Error = errors.New(client.ErrCodeNotImplemented)
-			return
-		}})
-	return h
-}
-
-var handlersForUnimplementedOperations = buildHandlersForUnimplementedOperations()
-
-func newRequestForUnimplementedOperation() *request.Request {
-	op := &request.Operation{Name: "Unimplemented"}
-	clientInfo := metadata.ClientInfo{ServiceName: "dax"}
-	req := request.New(aws.Config{}, clientInfo, *handlersForUnimplementedOperations, nil, op, nil, nil)
-	return req
 }
