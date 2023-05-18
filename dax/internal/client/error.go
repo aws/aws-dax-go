@@ -22,7 +22,7 @@ import (
 
 	"github.com/aws/aws-dax-go/dax/internal/cbor"
 	"github.com/aws/aws-dax-go/dax/internal/lru"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
@@ -52,7 +52,7 @@ type daxTransactionCanceledFailure struct {
 	cancellationReasonCodes []*string
 	cancellationReasonMsgs  []*string
 	cancellationReasonItems []byte
-	cancellationReasons     []*dynamodb.CancellationReason
+	cancellationReasons     []types.CancellationReason
 }
 
 func newDaxRequestFailure(codes []int, errorCode, message, requestId string, statusCode int) *daxRequestFailure {
@@ -340,16 +340,16 @@ func convertDaxError(e daxError) error {
 }
 
 func decodeTransactionCancellationReasons(ctx aws.Context, failure *daxTransactionCanceledFailure,
-	keys []map[string]*dynamodb.AttributeValue, attrListIdToNames *lru.Lru) ([]*dynamodb.CancellationReason, error) {
+	keys []map[string]types.AttributeValue, attrListIdToNames *lru.Lru) ([]types.CancellationReason, error) {
 	inputL := len(keys)
 	outputL := len(failure.cancellationReasonCodes)
 	if inputL != outputL {
 		return nil, awserr.New(request.ErrCodeSerialization, "Cancellation reasons must be the same length as transact items in the request", nil)
 	}
-	reasons := make([]*dynamodb.CancellationReason, outputL)
+	reasons := make([]types.CancellationReason, outputL)
 	r := cbor.NewReader(bytes.NewReader(failure.cancellationReasonItems))
 	for i := 0; i < outputL; i++ {
-		reason := new(dynamodb.CancellationReason)
+		reason := types.CancellationReason{}
 		reason.Code = failure.cancellationReasonCodes[i]
 		reason.Message = failure.cancellationReasonMsgs[i]
 		if consumed, err := consumeNil(r); err != nil {

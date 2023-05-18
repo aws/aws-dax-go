@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-dax-go/dax/internal/proxy"
-	"github.com/aws/aws-sdk-go/aws"
 )
 
 const network = "tcp"

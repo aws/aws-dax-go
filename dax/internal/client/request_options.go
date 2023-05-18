@@ -18,6 +18,7 @@ package client
 import (
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/client/metadata"
@@ -49,7 +50,7 @@ func (o *RequestOptions) applyTo(r *request.Request) {
 	}
 }
 
-func (o *RequestOptions) MergeFromRequestOptions(ctx aws.Context, opts ...request.Option) error {
+func (o *RequestOptions) MergeFromRequestOptions(ctx aws.Context, opts ...func(*dynamodb.Options)) error {
 	if len(opts) == 0 {
 		if ctx != nil {
 			o.Context = ctx
@@ -58,6 +59,7 @@ func (o *RequestOptions) MergeFromRequestOptions(ctx aws.Context, opts ...reques
 	}
 
 	// New request has to be created to avoid panics when setting fields
+
 	r := request.New(aws.Config{}, metadata.ClientInfo{}, request.Handlers{}, nil, &request.Operation{}, nil, nil)
 	r.ApplyOptions(opts...)
 	if err := o.mergeFromRequest(r, true); err != nil {
