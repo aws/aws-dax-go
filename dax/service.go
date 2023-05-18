@@ -22,10 +22,12 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/aws/smithy-go/logging"
+
 	"github.com/aws/aws-dax-go/dax/internal/client"
 	"github.com/aws/aws-dax-go/dax/internal/proxy"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 )
 
@@ -49,7 +51,7 @@ type Config struct {
 	WriteRetries   int
 	ReadRetries    int
 
-	Logger client.Logger
+	Logger logging.Logger
 }
 
 // DefaultConfig returns the default DAX configuration.
@@ -62,7 +64,7 @@ func DefaultConfig() Config {
 		RequestTimeout: 1 * time.Minute,
 		WriteRetries:   2,
 		ReadRetries:    2,
-		Logger:         client.NewDefaultLogger(client.LogLevelNoop),
+		Logger:         &logging.Nop{},
 	}
 }
 
@@ -83,7 +85,7 @@ func New(cfg Config) (*Dax, error) {
 	c, err := client.New(cfg.Config)
 	if err != nil {
 		if cfg.Logger != nil {
-			cfg.Logger.Error("ERROR: Exception in initialisation of DAX Client : %s", err)
+			cfg.Logger.Logf(client.ClassificationError, "Exception in initialisation of DAX Client : %s", err)
 		}
 		return nil, err
 	}
@@ -129,14 +131,14 @@ func NewWithSession(session session.Session) (*Dax, error) {
 }
 
 func (c *Config) mergeFrom(ac aws.Config) {
-	if r := ac.MaxRetries; r != nil && *r != aws.UseServiceDefaultRetries {
-		c.WriteRetries = *r
-		c.ReadRetries = *r
+	if r := ac.RetryMaxAttempts; r > 0 {
+		c.WriteRetries = r
+		c.ReadRetries = r
 	}
-	// aws.Logger has already undefined  in v2
-	//if ac.Logger != nil {
-	//	c.Logger = ac.Logger
-	//}
+
+	if ac.Logger != nil {
+		c.Logger = ac.Logger
+	}
 
 	if ac.Credentials != nil {
 		c.Credentials = ac.Credentials
@@ -144,8 +146,8 @@ func (c *Config) mergeFrom(ac aws.Config) {
 	if ac.Endpoint != nil {
 		c.HostPorts = []string{*ac.Endpoint}
 	}
-	if ac.Region != nil {
-		c.Region = *ac.Region
+	if ac.Region != "" {
+		c.Region = ac.Region
 	}
 }
 
@@ -164,7 +166,7 @@ func (c *Config) requestOptions(read bool, ctx context.Context, opts ...func(*dy
 	}
 	if err := opt.MergeFromRequestOptions(ctx, opts...); err != nil {
 		if c.Logger != nil {
-			c.Logger.Debug("DEBUG: Error in merging from Request Options : %s", err)
+			c.Logger.Logf(client.ClassificationDebug, "Error in merging from Request Options : %s", err)
 		}
 		return client.RequestOptions{}, cfn, err
 	}

@@ -29,6 +29,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/aws/smithy-go/logging"
+
 	aws2 "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 
@@ -71,7 +73,7 @@ type Config struct {
 	connConfig  connConfig
 
 	SkipHostnameVerification bool
-	logger                   Logger
+	logger                   logging.Logger
 }
 
 type connConfig struct {
@@ -98,12 +100,11 @@ func (cfg *Config) validate() error {
 
 func (cfg *Config) validateConnConfig() {
 	if cfg.connConfig.isEncrypted && cfg.SkipHostnameVerification {
-		cfg.logger.Warn(
-			"WARN: Skip hostname verification of TLS connections. The default is to perform hostname verification, setting this to True will skip verification. Be sure you understand the implication of doing so, which is the inability to authenticate the cluster that you are connecting to.")
+		cfg.logger.Logf(ClassificationWarn, "Skip hostname verification of TLS connections. The default is to perform hostname verification, setting this to True will skip verification. Be sure you understand the implication of doing so, which is the inability to authenticate the cluster that you are connecting to.")
 	}
 }
 
-func (cfg *Config) SetLogger(logger Logger) {
+func (cfg *Config) SetLogger(logger logging.Logger) {
 	cfg.logger = logger
 }
 
@@ -121,7 +122,7 @@ func DefaultConfig() Config {
 
 		connConfig:               connConfig{},
 		SkipHostnameVerification: false,
-		logger:                   NewDefaultLogger(LogLevelNoop),
+		logger:                   &logging.Nop{},
 		IdleConnectionReapDelay:  30 * time.Second,
 	}
 	if cfg.Credentials == nil {
@@ -364,7 +365,7 @@ func (cc *ClusterDaxClient) retry(op string, action func(client DaxAPI, o Reques
 	// Start from 0 to accomodate for the initial request
 	for i := 0; i <= attempts; i++ {
 		if i > 0 && opt.Logger != nil {
-			opt.Logger.Debug("DEBUG: Retrying Request %s/%s, attempt %d", service, op, i)
+			opt.Logger.Logf(ClassificationDebug, "Retrying Request %s/%s, attempt %d", service, op, i)
 		}
 		client, err = cc.cluster.client(client)
 		if err != nil {
@@ -397,7 +398,7 @@ func (cc *ClusterDaxClient) retry(op string, action func(client DaxAPI, o Reques
 			}
 
 			if err != nil && opt.Logger != nil {
-				opt.Logger.Debug("DEBUG: Error in executing request %s/%s. : %s", service, op, err)
+				opt.Logger.Logf(ClassificationDebug, "Error in executing request %s/%s. : %s", service, op, err)
 			}
 		}
 	}
@@ -792,7 +793,7 @@ func (c *cluster) closeClient(client DaxAPI) {
 func (c *cluster) debugLog(format string, args ...interface{}) {
 	if c.config.logger != nil {
 		{
-			c.config.logger.Debug(format, args)
+			c.config.logger.Logf(ClassificationDebug, format, args)
 		}
 	}
 }

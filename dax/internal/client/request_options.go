@@ -18,6 +18,8 @@ package client
 import (
 	"time"
 
+	"github.com/aws/smithy-go/logging"
+
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -26,10 +28,10 @@ import (
 )
 
 type RequestOptions struct {
-	Logger Logger
+	Logger logging.Logger
 
 	RetryDelay time.Duration
-	//Retryer implements equal jitter backoff stratergy for throttled requests
+	//Retryer implements equal jitter backoff strategy for throttled requests
 	Retryer    DaxRetryer
 	MaxRetries int
 	//SleepDelayFn is used for non-throttled retryable requests
