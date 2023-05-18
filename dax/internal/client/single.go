@@ -712,7 +712,7 @@ func (client *SingleDaxClient) executeWithRetries(op string, o RequestOptions, e
 	// Start from 0 to accommodate for the initial request
 	for i := 0; i <= attempts; i++ {
 		if i > 0 && o.Logger != nil {
-			o.Logger.Debug("DEBUG: Retrying Request %s/%s, attempt %d", service, op, i)
+			o.Logger.Logf(ClassificationDebug, "Retrying Request %s/%s, attempt %d", service, op, i)
 		}
 
 		if err = client.executeWithContext(ctx, op, encoder, decoder, o); err == nil {
@@ -728,7 +728,7 @@ func (client *SingleDaxClient) executeWithRetries(op string, o RequestOptions, e
 		}
 
 		if o.Logger != nil {
-			o.Logger.Debug("DEBUG: Error in executing %s%s : %s", service, op, err)
+			o.Logger.Logf(ClassificationDebug, "Error in executing %s%s : %s", service, op, err)
 		}
 	}
 	// Return the last error occurred
