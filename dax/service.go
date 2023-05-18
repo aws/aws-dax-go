@@ -28,7 +28,6 @@ import (
 	"github.com/aws/aws-dax-go/dax/internal/proxy"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go/aws/session"
 )
 
 // Dax makes requests to the Amazon DAX API, which conforms to the DynamoDB API.
@@ -68,14 +67,10 @@ func DefaultConfig() Config {
 	}
 }
 
-// NewWithSession creates a new instance of the DAX config with a session.
-//
-// Only configurations relevent to DAX will be used, others will be ignored.
-func NewConfigWithSession(session session.Session) Config {
+// NewConfigWithSDKConfig creates a new instance of the DAX config with an aws.Config.
+func NewConfigWithSDKConfig(config aws.Config) Config {
 	dc := DefaultConfig()
-	if session.Config != nil {
-		dc.mergeFrom(*session.Config)
-	}
+	dc.mergeFrom(config)
 	return dc
 }
 
@@ -109,24 +104,23 @@ func SecureDialContext(endpoint string, skipHostnameVerification bool) (func(ctx
 	return dialer.DialContext, nil
 }
 
-// NewWithSession creates a new instance of the DAX client with a session.
-//
-// Only configurations relevent to DAX will be used, others will be ignored.
+// NewWithSDKConfig creates a new instance of the DAX client with an aws.Config.
 //
 // Example:
-// 		mySession := session.Must(session.NewSession(
-// 			&aws.Config{
-// 				Region: aws.String("us-east-1"),
-// 				Endpoint: aws.String("dax://mycluster.frfx8h.clustercfg.dax.usw2.amazonaws.com:8111"),
-// 			}))
+//		config := aws.Config{
+//			Region: "us-east-1",
+//			EndpointResolverWithOptions: aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...any) (aws.Endpoint, error) {
+//				return aws.Endpoint{
+//					URL: "dax://mycluster.frfx8h.clustercfg.dax.usw2.amazonaws.com:8111",
+//				}, nil
+//			}),
+//		}
 //
 // 		// Create a DAX client from just a session.
-// 		svc := dax.NewWithSession(mySession)
-func NewWithSession(session session.Session) (*Dax, error) {
+// 		svc := dax.NewWithSDKConfig(config)
+func NewWithSDKConfig(config aws.Config) (*Dax, error) {
 	dc := DefaultConfig()
-	if session.Config != nil {
-		dc.mergeFrom(*session.Config)
-	}
+	dc.mergeFrom(config)
 	return New(dc)
 }
 
