@@ -25,6 +25,7 @@ import (
 	"github.com/aws/aws-dax-go/dax/internal/cbor"
 	"github.com/aws/aws-dax-go/dax/internal/lru"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 )
@@ -156,17 +157,17 @@ func TestDecodeTransactionCancellationReasons(t *testing.T) {
 		aws.String("first reason"),
 		aws.String("second reason"),
 	}
-	keyDef := []dynamodb.AttributeDefinition{
+	keyDef := []types.AttributeDefinition{
 		{AttributeName: aws.String("hk")},
 	}
-	keys := []map[string]*dynamodb.AttributeValue{
-		{"hk": &dynamodb.AttributeValue{N: aws.String("0")}},
-		{"hk": &dynamodb.AttributeValue{N: aws.String("0")}},
-		{"hk": &dynamodb.AttributeValue{N: aws.String("0")}},
+	keys := []map[string]types.AttributeValue{
+		{"hk": &types.AttributeValueMemberN{Value: "0"}},
+		{"hk": &types.AttributeValueMemberN{Value: "0"}},
+		{"hk": &types.AttributeValueMemberN{Value: "0"}},
 	}
-	canceledItems := []map[string]*dynamodb.AttributeValue{
+	canceledItems := []map[string]types.AttributeValue{
 		nil,
-		{"attr": &dynamodb.AttributeValue{N: aws.String("0")}},
+		{"attr": &types.AttributeValueMemberN{Value: "0"}},
 		nil,
 	}
 	attrs := []string{"attr"}
@@ -208,16 +209,16 @@ func TestDecodeTransactionCancellationReasons(t *testing.T) {
 		canceledItems[1][k] = v
 	}
 
-	expCancellationReason := []*dynamodb.CancellationReason{
-		&dynamodb.CancellationReason{
+	expCancellationReason := []types.CancellationReason{
+		{
 			Code: expCanceledCodes[0],
 		},
-		&dynamodb.CancellationReason{
+		{
 			Code:    expCanceledCodes[1],
 			Message: expCanceledReasons[1],
 			Item:    canceledItems[1],
 		},
-		&dynamodb.CancellationReason{
+		{
 			Code:    expCanceledCodes[2],
 			Message: expCanceledReasons[2],
 		},

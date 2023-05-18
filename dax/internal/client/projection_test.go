@@ -17,50 +17,51 @@ package client
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go/aws"
 	"reflect"
 	"testing"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
 func TestBuildDocumentPath(t *testing.T) {
 	cases := []struct {
 		projectionExpression     string
-		expressionAttributeNames map[string]*string
+		expressionAttributeNames map[string]string
 		documentPath             documentPath
 	}{
 		{
 			"a", nil,
-			documentPath{[]documentPathElement{documentPathElement{name: "a", index: -1}}},
+			documentPath{[]documentPathElement{{name: "a", index: -1}}},
 		},
 		{
 			"a.b", nil,
 			documentPath{[]documentPathElement{
-				documentPathElement{name: "a", index: -1},
-				documentPathElement{name: "b", index: -1},
+				{name: "a", index: -1},
+				{name: "b", index: -1},
 			}},
 		},
 		{
 			"a[3]", nil,
 			documentPath{[]documentPathElement{
-				documentPathElement{name: "a", index: -1},
-				documentPathElement{name: "", index: 3},
+				{name: "a", index: -1},
+				{name: "", index: 3},
 			}},
 		},
 		{
-			"a.#s.c", map[string]*string{"#s": aws.String("b")},
+			"a.#s.c", map[string]string{"#s": "b"},
 			documentPath{[]documentPathElement{
-				documentPathElement{name: "a", index: -1},
-				documentPathElement{name: "b", index: -1},
-				documentPathElement{name: "c", index: -1},
+				{name: "a", index: -1},
+				{name: "b", index: -1},
+				{name: "c", index: -1},
 			}},
 		},
 		{
-			"#a[1].#b", map[string]*string{"#a": aws.String("with.dot"), "#b": aws.String("sub.field")},
+			"#a[1].#b", map[string]string{"#a": "with.dot", "#b": "sub.field"},
 			documentPath{[]documentPathElement{
-				documentPathElement{name: "with.dot", index: -1},
-				documentPathElement{name: "", index: 1},
-				documentPathElement{name: "sub.field", index: -1},
+				{name: "with.dot", index: -1},
+				{name: "", index: 1},
+				{name: "sub.field", index: -1},
 			}},
 		},
 	}
@@ -79,17 +80,17 @@ func TestBuildDocumentPath(t *testing.T) {
 func TestBuildProjectionOrdinals(t *testing.T) {
 	cases := []struct {
 		projectionExpression     string
-		expressionAttributeNames map[string]*string
+		expressionAttributeNames map[string]string
 		documentPaths            []documentPath
 	}{
 		{
 			"#1",
-			map[string]*string{"#1": aws.String("a")},
+			map[string]string{"#1": "a"},
 			[]documentPath{{[]documentPathElement{{name: "a", index: -1}}}},
 		},
 		{
 			"#1, #2",
-			map[string]*string{"#1": aws.String("a"), "#2": aws.String("b")},
+			map[string]string{"#1": "a", "#2": "b"},
 			[]documentPath{{[]documentPathElement{{name: "a", index: -1}}}, {[]documentPathElement{{name: "b", index: -1}}}},
 		},
 	}
@@ -109,103 +110,102 @@ func TestBuildProjectionOrdinals(t *testing.T) {
 func TestItemBuilder(t *testing.T) {
 	cases := []struct {
 		projectionExpression     string
-		expressionAttributeNames map[string]*string
-		values                   map[int]*dynamodb.AttributeValue
-		item                     map[string]*dynamodb.AttributeValue
+		expressionAttributeNames map[string]string
+		values                   map[int]types.AttributeValue
+		item                     map[string]types.AttributeValue
 	}{
 		{
 			"a", nil,
-			map[int]*dynamodb.AttributeValue{
-				0: &dynamodb.AttributeValue{S: aws.String("av")},
+			map[int]types.AttributeValue{
+				0: &types.AttributeValueMemberS{Value: "av"},
 			},
-			map[string]*dynamodb.AttributeValue{
-				"a": &dynamodb.AttributeValue{S: aws.String("av")},
+			map[string]types.AttributeValue{
+				"a": &types.AttributeValueMemberS{Value: "av"},
 			},
 		},
 		{
 			"a,b[2],c.d", nil,
-			map[int]*dynamodb.AttributeValue{},
-			map[string]*dynamodb.AttributeValue{},
+			map[int]types.AttributeValue{},
+			map[string]types.AttributeValue{},
 		},
 		{
-			"a.b", nil,
-			map[int]*dynamodb.AttributeValue{
-				0: &dynamodb.AttributeValue{S: aws.String("av")},
+			projectionExpression: "a.b",
+			values: map[int]types.AttributeValue{
+				0: &types.AttributeValueMemberS{Value: "av"},
 			},
-			map[string]*dynamodb.AttributeValue{
-				"a": &dynamodb.AttributeValue{
-					M: map[string]*dynamodb.AttributeValue{
-						"b": &dynamodb.AttributeValue{S: aws.String("av")},
+			item: map[string]types.AttributeValue{
+				"a": &types.AttributeValueMemberM{
+					Value: map[string]types.AttributeValue{
+						"b": &types.AttributeValueMemberS{Value: "av"},
 					},
 				},
 			},
 		},
 		{
-			"a[3]", nil,
-			map[int]*dynamodb.AttributeValue{
-				0: &dynamodb.AttributeValue{S: aws.String("av")},
+			projectionExpression: "a[3]",
+			values: map[int]types.AttributeValue{
+				0: &types.AttributeValueMemberS{Value: "av"},
 			},
-			map[string]*dynamodb.AttributeValue{
-				"a": &dynamodb.AttributeValue{
-					L: []*dynamodb.AttributeValue{
-						&dynamodb.AttributeValue{S: aws.String("av")},
-					},
+			item: map[string]types.AttributeValue{
+				"a": &types.AttributeValueMemberL{Value: []types.AttributeValue{
+					&types.AttributeValueMemberS{Value: "av"},
+				},
 				},
 			},
 		},
 		{
 			"a[3],a[2]", nil,
-			map[int]*dynamodb.AttributeValue{
-				0: &dynamodb.AttributeValue{S: aws.String("av3")},
-				1: &dynamodb.AttributeValue{S: aws.String("av2")},
+			map[int]types.AttributeValue{
+				0: &types.AttributeValueMemberS{Value: "av3"},
+				1: &types.AttributeValueMemberS{Value: "av2"},
 			},
-			map[string]*dynamodb.AttributeValue{
-				"a": &dynamodb.AttributeValue{
-					L: []*dynamodb.AttributeValue{
-						&dynamodb.AttributeValue{S: aws.String("av2")},
-						&dynamodb.AttributeValue{S: aws.String("av3")},
+			map[string]types.AttributeValue{
+				"a": &types.AttributeValueMemberL{
+					Value: []types.AttributeValue{
+						&types.AttributeValueMemberS{Value: "av2"},
+						&types.AttributeValueMemberS{Value: "av3"},
 					},
 				},
 			},
 		},
 		{
 			"a[2],a[3]", nil,
-			map[int]*dynamodb.AttributeValue{
-				0: &dynamodb.AttributeValue{S: aws.String("av2")},
-				1: &dynamodb.AttributeValue{S: aws.String("av3")},
+			map[int]types.AttributeValue{
+				0: &types.AttributeValueMemberS{Value: "av2"},
+				1: &types.AttributeValueMemberS{Value: "av3"},
 			},
-			map[string]*dynamodb.AttributeValue{
-				"a": &dynamodb.AttributeValue{
-					L: []*dynamodb.AttributeValue{
-						&dynamodb.AttributeValue{S: aws.String("av2")},
-						&dynamodb.AttributeValue{S: aws.String("av3")},
+			map[string]types.AttributeValue{
+				"a": &types.AttributeValueMemberL{
+					Value: []types.AttributeValue{
+						&types.AttributeValueMemberS{Value: "av2"},
+						&types.AttributeValueMemberS{Value: "av3"},
 					},
 				},
 			},
 		},
 		{
 			"a[2].b.c,a[2].b.d,a[1].b.e", nil,
-			map[int]*dynamodb.AttributeValue{
-				2: &dynamodb.AttributeValue{M: map[string]*dynamodb.AttributeValue{
-					"field": &dynamodb.AttributeValue{S: aws.String("value")},
+			map[int]types.AttributeValue{
+				2: &types.AttributeValueMemberM{Value: map[string]types.AttributeValue{
+					"field": &types.AttributeValueMemberS{Value: "value"},
 				}},
-				0: &dynamodb.AttributeValue{N: aws.String("4")},
-				1: &dynamodb.AttributeValue{N: aws.String("2")},
+				0: &types.AttributeValueMemberN{Value: "4"},
+				1: &types.AttributeValueMemberN{Value: "2"},
 			},
-			map[string]*dynamodb.AttributeValue{
-				"a": &dynamodb.AttributeValue{
-					L: []*dynamodb.AttributeValue{
-						&dynamodb.AttributeValue{M: map[string]*dynamodb.AttributeValue{
-							"b": &dynamodb.AttributeValue{M: map[string]*dynamodb.AttributeValue{
-								"e": &dynamodb.AttributeValue{M: map[string]*dynamodb.AttributeValue{
-									"field": &dynamodb.AttributeValue{S: aws.String("value")},
+			map[string]types.AttributeValue{
+				"a": &types.AttributeValueMemberL{
+					Value: []types.AttributeValue{
+						&types.AttributeValueMemberM{Value: map[string]types.AttributeValue{
+							"b": &types.AttributeValueMemberM{Value: map[string]types.AttributeValue{
+								"e": &types.AttributeValueMemberM{Value: map[string]types.AttributeValue{
+									"field": &types.AttributeValueMemberS{Value: "value"},
 								}},
 							}},
 						}},
-						&dynamodb.AttributeValue{M: map[string]*dynamodb.AttributeValue{
-							"b": &dynamodb.AttributeValue{M: map[string]*dynamodb.AttributeValue{
-								"c": &dynamodb.AttributeValue{N: aws.String("4")},
-								"d": &dynamodb.AttributeValue{N: aws.String("2")},
+						&types.AttributeValueMemberM{Value: map[string]types.AttributeValue{
+							"b": &types.AttributeValueMemberM{Value: map[string]types.AttributeValue{
+								"c": &types.AttributeValueMemberN{Value: "4"},
+								"d": &types.AttributeValueMemberN{Value: "2"},
 							}},
 						}},
 					},
@@ -214,27 +214,27 @@ func TestItemBuilder(t *testing.T) {
 		},
 		{
 			"a[4],a[2],b.c[12]", nil,
-			map[int]*dynamodb.AttributeValue{
-				2: &dynamodb.AttributeValue{L: []*dynamodb.AttributeValue{
-					&dynamodb.AttributeValue{S: aws.String("elem")},
+			map[int]types.AttributeValue{
+				2: &types.AttributeValueMemberL{Value: []types.AttributeValue{
+					&types.AttributeValueMemberS{Value: "elem"},
 				}},
-				0: &dynamodb.AttributeValue{N: aws.String("4")},
-				1: &dynamodb.AttributeValue{N: aws.String("2")},
+				0: &types.AttributeValueMemberN{Value: "4"},
+				1: &types.AttributeValueMemberN{Value: "2"},
 			},
-			map[string]*dynamodb.AttributeValue{
-				"a": &dynamodb.AttributeValue{
-					L: []*dynamodb.AttributeValue{
-						&dynamodb.AttributeValue{N: aws.String("2")},
-						&dynamodb.AttributeValue{N: aws.String("4")},
+			map[string]types.AttributeValue{
+				"a": &types.AttributeValueMemberL{
+					Value: []types.AttributeValue{
+						&types.AttributeValueMemberN{Value: "2"},
+						&types.AttributeValueMemberN{Value: "4"},
 					},
 				},
-				"b": &dynamodb.AttributeValue{
-					M: map[string]*dynamodb.AttributeValue{
-						"c": &dynamodb.AttributeValue{
-							L: []*dynamodb.AttributeValue{
-								&dynamodb.AttributeValue{
-									L: []*dynamodb.AttributeValue{
-										&dynamodb.AttributeValue{S: aws.String("elem")},
+				"b": &types.AttributeValueMemberM{
+					Value: map[string]types.AttributeValue{
+						"c": &types.AttributeValueMemberL{
+							Value: []types.AttributeValue{
+								&types.AttributeValueMemberL{
+									Value: []types.AttributeValue{
+										&types.AttributeValueMemberS{Value: "elem"},
 									},
 								},
 							},
@@ -245,19 +245,19 @@ func TestItemBuilder(t *testing.T) {
 		},
 		{
 			"#a[1].#b",
-			map[string]*string{
-				"#a": aws.String("with.dot"),
-				"#b": aws.String("sub.field"),
+			map[string]string{
+				"#a": "with.dot",
+				"#b": "sub.field",
 			},
-			map[int]*dynamodb.AttributeValue{
-				0: &dynamodb.AttributeValue{N: aws.String("4")},
+			map[int]types.AttributeValue{
+				0: &types.AttributeValueMemberN{Value: "4"},
 			},
-			map[string]*dynamodb.AttributeValue{
-				"with.dot": &dynamodb.AttributeValue{
-					L: []*dynamodb.AttributeValue{
-						&dynamodb.AttributeValue{
-							M: map[string]*dynamodb.AttributeValue{
-								"sub.field": &dynamodb.AttributeValue{N: aws.String("4")},
+			map[string]types.AttributeValue{
+				"with.dot": &types.AttributeValueMemberL{
+					Value: []types.AttributeValue{
+						&types.AttributeValueMemberM{
+							Value: map[string]types.AttributeValue{
+								"sub.field": &types.AttributeValueMemberN{Value: "4"},
 							},
 						},
 					},
