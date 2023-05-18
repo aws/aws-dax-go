@@ -143,8 +143,8 @@ func (c *Config) mergeFrom(ac aws.Config) {
 	if ac.Credentials != nil {
 		c.Credentials = ac.Credentials
 	}
-	if ac.Endpoint != nil {
-		c.HostPorts = []string{*ac.Endpoint}
+	if ac.EndpointResolverWithOptions != nil {
+		c.EndpointResolver = ac.EndpointResolverWithOptions
 	}
 	if ac.Region != "" {
 		c.Region = ac.Region

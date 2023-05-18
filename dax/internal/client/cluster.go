@@ -66,11 +66,12 @@ type Config struct {
 	IdleConnectionReapDelay      time.Duration
 	ClientHealthCheckInterval    time.Duration
 
-	HostPorts   []string
-	Region      string
-	Credentials aws2.CredentialsProvider
-	DialContext func(ctx context.Context, network string, address string) (net.Conn, error)
-	connConfig  connConfig
+	HostPorts        []string
+	Region           string
+	EndpointResolver aws2.EndpointResolverWithOptions
+	Credentials      aws2.CredentialsProvider
+	DialContext      func(ctx context.Context, network string, address string) (net.Conn, error)
+	connConfig       connConfig
 
 	SkipHostnameVerification bool
 	logger                   logging.Logger
@@ -83,8 +84,8 @@ type connConfig struct {
 }
 
 func (cfg *Config) validate() error {
-	if cfg.HostPorts == nil || len(cfg.HostPorts) == 0 {
-		return awserr.New(request.ParamRequiredErrCode, "HostPorts is required", nil)
+	if len(cfg.HostPorts) == 0 && cfg.EndpointResolver == nil {
+		return awserr.New(request.ParamRequiredErrCode, "HostPorts or EndpointResolver is required", nil)
 	}
 	if len(cfg.Region) == 0 {
 		return awserr.New(request.ParamRequiredErrCode, "Region is required", nil)
@@ -446,7 +447,15 @@ func newCluster(cfg Config) (*cluster, error) {
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
-	seeds, hostname, isEncrypted, err := getHostPorts(cfg.HostPorts)
+	hostPorts := cfg.HostPorts
+	if cfg.EndpointResolver != nil {
+		endpoint, err := cfg.EndpointResolver.ResolveEndpoint(serviceName, cfg.Region)
+		if err != nil {
+			return nil, err
+		}
+		hostPorts = append(hostPorts, endpoint.URL)
+	}
+	seeds, hostname, isEncrypted, err := getHostPorts(hostPorts)
 	if err != nil {
 		return nil, err
 	}
