@@ -29,11 +29,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	aws2 "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/defaults"
 	"github.com/aws/aws-sdk-go/aws/request"
 )
 
@@ -65,7 +66,7 @@ type Config struct {
 
 	HostPorts   []string
 	Region      string
-	Credentials *credentials.Credentials
+	Credentials aws2.CredentialsProvider
 	DialContext func(ctx context.Context, network string, address string) (net.Conn, error)
 	connConfig  connConfig
 
@@ -106,27 +107,31 @@ func (cfg *Config) SetLogger(logger Logger) {
 	cfg.logger = logger
 }
 
-var defaultConfig = Config{
-	MaxPendingConnectionsPerHost: 10,
-	ClusterUpdateInterval:        time.Second * 4,
-	ClusterUpdateThreshold:       time.Millisecond * 125,
-	ClientHealthCheckInterval:    time.Second * 5,
-
-	Credentials: defaults.CredChain(defaults.Config(), defaults.Handlers()),
-
-	connConfig:               connConfig{},
-	SkipHostnameVerification: false,
-	logger:                   NewDefaultLogger(LogLevelNoop),
-	IdleConnectionReapDelay:  30 * time.Second,
-}
-
 var defaultPorts = map[string]int{
 	"dax":  8111,
 	"daxs": 9111,
 }
 
 func DefaultConfig() Config {
-	return defaultConfig
+	cfg := Config{
+		MaxPendingConnectionsPerHost: 10,
+		ClusterUpdateInterval:        time.Second * 4,
+		ClusterUpdateThreshold:       time.Millisecond * 125,
+		ClientHealthCheckInterval:    time.Second * 5,
+
+		connConfig:               connConfig{},
+		SkipHostnameVerification: false,
+		logger:                   NewDefaultLogger(LogLevelNoop),
+		IdleConnectionReapDelay:  30 * time.Second,
+	}
+	if cfg.Credentials == nil {
+		conf, err := config.LoadDefaultConfig(context.Background())
+		if err != nil {
+			panic(fmt.Sprintf("unexpected error: %+v", err))
+		}
+		cfg.Credentials = conf.Credentials
+	}
+	return cfg
 }
 
 type ClusterDaxClient struct {
@@ -797,12 +802,12 @@ func (c *cluster) newSingleClient(cfg serviceEndpoint) (DaxAPI, error) {
 }
 
 type clientBuilder interface {
-	newClient(net.IP, int, connConfig, string, *credentials.Credentials, int, dialContext) (DaxAPI, error)
+	newClient(net.IP, int, connConfig, string, aws2.CredentialsProvider, int, dialContext) (DaxAPI, error)
 }
 
 type singleClientBuilder struct{}
 
-func (*singleClientBuilder) newClient(ip net.IP, port int, connConfigData connConfig, region string, credentials *credentials.Credentials, maxPendingConnects int, dialContextFn dialContext) (DaxAPI, error) {
+func (*singleClientBuilder) newClient(ip net.IP, port int, connConfigData connConfig, region string, credentials aws2.CredentialsProvider, maxPendingConnects int, dialContextFn dialContext) (DaxAPI, error) {
 	endpoint := fmt.Sprintf("%s:%d", ip, port)
 	return newSingleClientWithOptions(endpoint, connConfigData, region, credentials, maxPendingConnects, dialContextFn)
 }

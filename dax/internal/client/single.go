@@ -20,6 +20,8 @@ import (
 	"context"
 	"time"
 
+	aws2 "github.com/aws/aws-sdk-go-v2/aws"
+
 	"github.com/aws/aws-dax-go/dax/internal/cbor"
 	"github.com/aws/aws-dax-go/dax/internal/lru"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -27,7 +29,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/client/metadata"
-	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/request"
 )
 
@@ -68,7 +69,7 @@ const (
 
 type SingleDaxClient struct {
 	region             string
-	credentials        *credentials.Credentials
+	credentials        aws2.CredentialsProvider
 	tubeAuthWindowSecs int64
 	executor           *taskExecutor
 
@@ -79,11 +80,11 @@ type SingleDaxClient struct {
 	attrListIdToNames *lru.Lru
 }
 
-func NewSingleClient(endpoint string, connConfigData connConfig, region string, credentials *credentials.Credentials) (*SingleDaxClient, error) {
+func NewSingleClient(endpoint string, connConfigData connConfig, region string, credentials aws2.CredentialsProvider) (*SingleDaxClient, error) {
 	return newSingleClientWithOptions(endpoint, connConfigData, region, credentials, -1, defaultDialer.DialContext)
 }
 
-func newSingleClientWithOptions(endpoint string, connConfigData connConfig, region string, credentials *credentials.Credentials, maxPendingConnections int, dialContextFn dialContext) (*SingleDaxClient, error) {
+func newSingleClientWithOptions(endpoint string, connConfigData connConfig, region string, credentials aws2.CredentialsProvider, maxPendingConnections int, dialContextFn dialContext) (*SingleDaxClient, error) {
 	po := defaultTubePoolOptions
 	if maxPendingConnections > 0 {
 		po.maxConcurrentConnAttempts = maxPendingConnections
@@ -734,7 +735,7 @@ func (client *SingleDaxClient) executeWithRetries(op string, o RequestOptions, e
 	return translateError(err)
 }
 
-func (client *SingleDaxClient) executeWithContext(ctx aws.Context, op string, encoder func(writer *cbor.Writer) error, decoder func(reader *cbor.Reader) error, opt RequestOptions) error {
+func (client *SingleDaxClient) executeWithContext(ctx context.Context, op string, encoder func(writer *cbor.Writer) error, decoder func(reader *cbor.Reader) error, opt RequestOptions) error {
 	t, err := client.pool.getWithContext(ctx, client.isHighPriority(op), opt)
 	if err != nil {
 		return err
@@ -744,7 +745,7 @@ func (client *SingleDaxClient) executeWithContext(ctx aws.Context, op string, en
 		return err
 	}
 
-	if err = client.auth(t); err != nil {
+	if err = client.auth(ctx, t); err != nil {
 		client.pool.discard(t)
 		return err
 	}
@@ -812,9 +813,9 @@ func (client *SingleDaxClient) recycleTube(t tube, err error) {
 		client.pool.discard(t)
 	}
 }
-func (client *SingleDaxClient) auth(t tube) error {
+func (client *SingleDaxClient) auth(ctx context.Context, t tube) error {
 	// TODO credentials.Get() cause a throughput drop of ~25 with 250 goroutines with DefaultCredentialChain (only instance profile credentials available)
-	creds, err := client.credentials.Get()
+	creds, err := client.credentials.Retrieve(ctx)
 	if err != nil {
 		return err
 	}
