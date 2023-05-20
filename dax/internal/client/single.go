@@ -73,7 +73,6 @@ type SingleDaxClient struct {
 	tubeAuthWindowSecs int64
 	executor           *taskExecutor
 
-	handlers          *request.Handlers
 	pool              *tubePool
 	keySchema         *lru.Lru
 	attrNamesListToId *lru.Lru
@@ -100,7 +99,6 @@ func newSingleClientWithOptions(endpoint string, connConfigData connConfig, regi
 		executor:           newExecutor(),
 	}
 
-	client.handlers = client.buildHandlers()
 	client.keySchema = &lru.Lru{
 		MaxEntries: keySchemaLruCacheSize,
 		LoadFunc: func(ctx aws.Context, key lru.Key) (interface{}, error) {
@@ -420,19 +418,6 @@ func (client *SingleDaxClient) TransactGetItemsWithOptions(input *dynamodb.Trans
 		return output, err
 	}
 	return output, nil
-}
-
-func (client *SingleDaxClient) NewDaxRequest(op *request.Operation, input, output interface{}, opt RequestOptions) *request.Request {
-	req := request.New(aws.Config{}, clientInfo, *client.handlers, nil, op, input, output)
-	opt.applyTo(req)
-	return req
-}
-
-func (client *SingleDaxClient) buildHandlers() *request.Handlers {
-	h := &request.Handlers{}
-	h.Build.PushFrontNamed(request.NamedHandler{Name: "dax.BuildHandler", Fn: client.build})
-	h.Send.PushFrontNamed(request.NamedHandler{Name: "dax.SendHandler", Fn: client.send})
-	return h
 }
 
 func (client *SingleDaxClient) build(req *request.Request) {

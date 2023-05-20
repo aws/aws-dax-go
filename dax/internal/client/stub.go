@@ -7,7 +7,6 @@ package client
 
 import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/request"
 )
 
@@ -80,16 +79,6 @@ func (stub *ClientStub) TransactWriteItemsWithOptions(input *dynamodb.TransactWr
 
 func (stub *ClientStub) TransactGetItemsWithOptions(input *dynamodb.TransactGetItemsInput, output *dynamodb.TransactGetItemsOutput, opt RequestOptions) (*dynamodb.TransactGetItemsOutput, error) {
 	return nil, nil
-}
-
-func (stub *ClientStub) NewDaxRequest(op *request.Operation, input, output interface{}, opt RequestOptions) *request.Request {
-	h := request.Handlers{}
-	h.Build.PushFrontNamed(request.NamedHandler{Name: "dax.BuildHandler", Fn: stub.build})
-	h.Send.PushFrontNamed(request.NamedHandler{Name: "dax.SendHandler", Fn: stub.send})
-
-	req := request.New(aws.Config{}, clientInfo, h, nil, op, input, output)
-	opt.applyTo(req)
-	return req
 }
 
 func (stub *ClientStub) build(req *request.Request) {

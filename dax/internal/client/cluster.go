@@ -139,8 +139,6 @@ func DefaultConfig() Config {
 type ClusterDaxClient struct {
 	config  Config
 	cluster *cluster
-
-	handlers *request.Handlers
 }
 
 func New(config Config) (*ClusterDaxClient, error) {
@@ -153,7 +151,6 @@ func New(config Config) (*ClusterDaxClient, error) {
 		return nil, err
 	}
 	client := &ClusterDaxClient{config: config, cluster: cluster}
-	client.handlers = client.buildHandlers()
 	return client, nil
 }
 
@@ -292,19 +289,6 @@ func (cc *ClusterDaxClient) BatchGetItemWithOptions(input *dynamodb.BatchGetItem
 		return output, err
 	}
 	return output, nil
-}
-
-func (cc *ClusterDaxClient) NewDaxRequest(op *request.Operation, input, output interface{}, opt RequestOptions) *request.Request {
-	req := request.New(aws.Config{}, clientInfo, *cc.handlers, nil, op, input, output)
-	opt.applyTo(req)
-	return req
-}
-
-func (cc *ClusterDaxClient) buildHandlers() *request.Handlers {
-	h := &request.Handlers{}
-	h.Build.PushFrontNamed(request.NamedHandler{Name: "dax.BuildHandler", Fn: cc.build})
-	h.Send.PushFrontNamed(request.NamedHandler{Name: "dax.SendHandler", Fn: cc.send})
-	return h
 }
 
 func (cc *ClusterDaxClient) build(req *request.Request) {
