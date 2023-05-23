@@ -18,7 +18,10 @@ package client
 import (
 	"bytes"
 	"context"
+	"errors"
 	"time"
+
+	"github.com/aws/smithy-go"
 
 	aws2 "github.com/aws/aws-sdk-go-v2/aws"
 
@@ -677,39 +680,32 @@ func (client *SingleDaxClient) newContext(o RequestOptions) aws.Context {
 func (client *SingleDaxClient) executeWithRetries(op string, o RequestOptions, encoder func(writer *cbor.Writer) error, decoder func(reader *cbor.Reader) error) error {
 	ctx := client.newContext(o)
 
-	var sleepFun func() error
-	if o.RetryDelay > 0 {
-		retryDelay := o.RetryDelay
-		if o.SleepDelayFn == nil {
-			sleepFun = func() error {
-				return aws.SleepWithContext(ctx, retryDelay)
-			}
-		} else {
-			sleepFun = func() error {
-				o.SleepDelayFn(retryDelay)
-				return nil
-			}
-		}
-	}
-
 	var err error
-	attempts := o.MaxRetries
+	attempts := o.RetryMaxAttempts
 	// Start from 0 to accommodate for the initial request
 	for i := 0; i <= attempts; i++ {
 		if i > 0 && o.Logger != nil {
 			o.Logger.Logf(ClassificationDebug, "Retrying Request %s/%s, attempt %d", service, op, i)
 		}
 
-		if err = client.executeWithContext(ctx, op, encoder, decoder, o); err == nil {
+		err = client.executeWithContext(ctx, op, encoder, decoder, o)
+		if err == nil {
 			return nil
-		} else if ctx != nil && err == ctx.Err() {
-			return awserr.New(request.CanceledErrorCode, "request context canceled", err)
+		}
+		if errors.Is(err, context.Canceled) {
+			return &smithy.CanceledError{Err: err}
 		}
 
-		if i != attempts && sleepFun != nil {
-			if err := sleepFun(); err != nil {
-				return awserr.New(request.CanceledErrorCode, "request context canceled", err)
-			}
+		if !isRetryable(o, i+1, err) {
+			return &smithy.OperationError{Err: err, OperationName: op}
+		}
+
+		d, err := o.Retryer.RetryDelay(i+1, err)
+		if err != nil {
+			return &smithy.OperationError{Err: err, OperationName: op}
+		}
+		if err = Sleep(ctx, op, d); err != nil {
+			return err
 		}
 
 		if o.Logger != nil {

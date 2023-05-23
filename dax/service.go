@@ -22,6 +22,8 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
+
 	"github.com/aws/smithy-go/logging"
 
 	"github.com/aws/aws-dax-go/dax/internal/client"
@@ -154,15 +156,23 @@ func (c *Config) requestOptions(read bool, ctx context.Context, opts ...func(*dy
 	if ctx == nil && c.RequestTimeout > 0 {
 		ctx, cfn = context.WithTimeout(context.Background(), c.RequestTimeout)
 	}
-	opt := client.RequestOptions{
-		Logger:     c.Logger,
-		MaxRetries: r,
+
+	opt := client.RequestOptions{}
+	opt.Logger = c.Logger
+	opt.RetryMaxAttempts = r
+
+	// merge from request options
+	for _, o := range opts {
+		o(&opt.Options)
 	}
-	if err := opt.MergeFromRequestOptions(ctx, opts...); err != nil {
-		if c.Logger != nil {
-			c.Logger.Logf(client.ClassificationDebug, "Error in merging from Request Options : %s", err)
-		}
-		return client.RequestOptions{}, cfn, err
+
+	if opt.Retryer != nil {
+		opt.Retryer = retry.NewStandard(
+			func(options *retry.StandardOptions) {
+				options.MaxAttempts = r
+				options.Retryables = append(options.Retryables, retry.IsErrorRetryableFunc(client.IsErrorRetryable))
+			},
+		)
 	}
 	return opt, cfn, nil
 }

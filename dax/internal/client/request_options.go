@@ -16,27 +16,24 @@
 package client
 
 import (
-	"time"
-
-	"github.com/aws/smithy-go/logging"
-
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/client/metadata"
 	"github.com/aws/aws-sdk-go/aws/request"
 )
 
 type RequestOptions struct {
-	Logger logging.Logger
-
-	RetryDelay time.Duration
-	//Retryer implements equal jitter backoff strategy for throttled requests
-	Retryer    DaxRetryer
-	MaxRetries int
-	//SleepDelayFn is used for non-throttled retryable requests
-	SleepDelayFn func(time.Duration)
-	Context      aws.Context
+	dynamodb.Options
+	//
+	//Logger logging.Logger
+	//
+	//RetryDelay time.Duration
+	////Retryer implements equal jitter backoff strategy for throttled requests
+	//Retryer    DaxRetryer
+	//MaxRetries int
+	////SleepDelayFn is used for non-throttled retryable requests
+	//SleepDelayFn func(time.Duration)
+	//Context      aws.Context
 }
 
 func (o *RequestOptions) applyTo(r *request.Request) {
@@ -50,27 +47,6 @@ func (o *RequestOptions) applyTo(r *request.Request) {
 			r.SetContext(o.Context)
 		}
 	}
-}
-
-func (o *RequestOptions) MergeFromRequestOptions(ctx aws.Context, opts ...func(*dynamodb.Options)) error {
-	if len(opts) == 0 {
-		if ctx != nil {
-			o.Context = ctx
-		}
-		return nil
-	}
-
-	// New request has to be created to avoid panics when setting fields
-
-	r := request.New(aws.Config{}, metadata.ClientInfo{}, request.Handlers{}, nil, &request.Operation{}, nil, nil)
-	r.ApplyOptions(opts...)
-	if err := o.mergeFromRequest(r, true); err != nil {
-		return err
-	}
-	if ctx != nil {
-		o.Context = ctx
-	}
-	return nil
 }
 
 func (o *RequestOptions) mergeFromRequest(r *request.Request, validate bool) error {

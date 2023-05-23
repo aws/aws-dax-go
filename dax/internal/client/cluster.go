@@ -29,15 +29,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/aws/smithy-go/logging"
-
 	aws2 "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/smithy-go"
+	"github.com/aws/smithy-go/logging"
 )
 
 type serviceEndpoint struct {
@@ -326,26 +325,9 @@ func (cc *ClusterDaxClient) retry(op string, action func(client DaxAPI, o Reques
 
 	ctx := cc.newContext(opt)
 
-	var sleepFun func() error
-	if opt.RetryDelay > 0 {
-		retryDelay := opt.RetryDelay
-		if opt.SleepDelayFn == nil {
-			sleepFun = func() error {
-				return aws.SleepWithContext(ctx, retryDelay)
-			}
-		} else {
-			sleepFun = func() error {
-				opt.SleepDelayFn(retryDelay)
-				return nil
-			}
-		}
-	}
+	attempts := opt.RetryMaxAttempts
+	opt.RetryMaxAttempts = 0 // disable retries on single node client
 
-	attempts := opt.MaxRetries
-	opt.MaxRetries = 0 // disable retries on single node client
-
-	var req request.Request
-	var ok bool
 	var client DaxAPI
 	// Start from 0 to accomodate for the initial request
 	for i := 0; i <= attempts; i++ {
@@ -354,37 +336,31 @@ func (cc *ClusterDaxClient) retry(op string, action func(client DaxAPI, o Reques
 		}
 		client, err = cc.cluster.client(client)
 		if err != nil {
-			if req, ok = cc.shouldRetry(opt, err); !ok {
+			if !isRetryable(opt, i+1, err) {
 				return err
 			}
+			continue
 		}
 
+		err = action(client, opt)
 		if err == nil {
-			if err = action(client, opt); err == nil {
-				return nil
-			} else if req, ok = cc.shouldRetry(opt, err); !ok {
-				return err
-			}
+			// success
+			return nil
+		}
+		if !isRetryable(opt, i+1, err) {
+			return err
 		}
 
-		if i != attempts {
-			req.RetryCount = i + 1
-			delay := opt.Retryer.RetryRules(&req)
-			if delay != 0 {
-				if opt.SleepDelayFn == nil {
-					aws.SleepWithContext(ctx, delay)
-				} else {
-					opt.SleepDelayFn(delay)
-				}
-			} else if sleepFun != nil {
-				if err := sleepFun(); err != nil {
-					return awserr.New(request.CanceledErrorCode, "request context canceled", err)
-				}
-			}
+		d, err := opt.Retryer.RetryDelay(i+1, err)
+		if err != nil {
+			return &smithy.OperationError{Err: err, OperationName: op}
+		}
+		if err = Sleep(ctx, op, d); err != nil {
+			return err
+		}
 
-			if err != nil && opt.Logger != nil {
-				opt.Logger.Logf(ClassificationDebug, "Error in executing request %s/%s. : %s", service, op, err)
-			}
+		if err != nil && opt.Logger != nil {
+			opt.Logger.Logf(ClassificationDebug, "Error in executing request %s/%s. : %s", service, op, err)
 		}
 	}
 	return err
@@ -395,16 +371,6 @@ func (cc *ClusterDaxClient) newContext(o RequestOptions) aws.Context {
 		return o.Context
 	}
 	return aws.BackgroundContext()
-}
-
-func (cc *ClusterDaxClient) shouldRetry(o RequestOptions, err error) (request.Request, bool) {
-	req := request.Request{}
-	req.Error = err
-	if _, ok := err.(daxError); ok {
-		retry := o.Retryer.ShouldRetry(&req)
-		return req, retry
-	}
-	return req, true
 }
 
 type cluster struct {
