@@ -32,7 +32,6 @@ import (
 	aws2 "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/smithy-go"
@@ -729,7 +728,7 @@ func (c *cluster) pullEndpointsFrom(ctx context.Context, ip net.IP, port int) ([
 		return nil, err
 	}
 	defer c.closeClient(client)
-	ctx, cfn := context.WithTimeout(aws.BackgroundContext(), 5*time.Second)
+	ctx, cfn := context.WithTimeout(ctx, 5*time.Second)
 	defer cfn()
 	opts := RequestOptions{}
 	opts.RetryMaxAttempts = 2

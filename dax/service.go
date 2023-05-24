@@ -77,9 +77,9 @@ func NewConfigWithSDKConfig(config aws.Config) Config {
 }
 
 // New creates a new instance of the DAX client with a DAX configuration.
-func New(cfg Config) (*Dax, error) {
+func New(ctx context.Context, cfg Config) (*Dax, error) {
 	cfg.Config.SetLogger(cfg.Logger)
-	c, err := client.New(cfg.Config)
+	c, err := client.New(ctx, cfg.Config)
 	if err != nil {
 		if cfg.Logger != nil {
 			cfg.Logger.Logf(client.ClassificationError, "Exception in initialisation of DAX Client : %s", err)
@@ -119,11 +119,11 @@ func SecureDialContext(endpoint string, skipHostnameVerification bool) (func(ctx
 //		}
 //
 // 		// Create a DAX client from just a session.
-// 		svc := dax.NewWithSDKConfig(config)
-func NewWithSDKConfig(config aws.Config) (*Dax, error) {
+// 		svc := dax.NewWithSDKConfig(ctx, config)
+func NewWithSDKConfig(ctx context.Context, config aws.Config) (*Dax, error) {
 	dc := DefaultConfig()
 	dc.mergeFrom(config)
-	return New(dc)
+	return New(ctx, dc)
 }
 
 func (c *Config) mergeFrom(ac aws.Config) {
@@ -147,14 +147,10 @@ func (c *Config) mergeFrom(ac aws.Config) {
 	}
 }
 
-func (c *Config) requestOptions(read bool, ctx context.Context, opts ...func(*dynamodb.Options)) (client.RequestOptions, context.CancelFunc, error) {
+func (c *Config) requestOptions(read bool, opts ...func(*dynamodb.Options)) client.RequestOptions {
 	r := c.WriteRetries
 	if read {
 		r = c.ReadRetries
-	}
-	var cfn context.CancelFunc
-	if ctx == nil && c.RequestTimeout > 0 {
-		ctx, cfn = context.WithTimeout(context.Background(), c.RequestTimeout)
 	}
 
 	opt := client.RequestOptions{}
@@ -174,5 +170,5 @@ func (c *Config) requestOptions(read bool, ctx context.Context, opts ...func(*dy
 			},
 		)
 	}
-	return opt, cfn, nil
+	return opt
 }

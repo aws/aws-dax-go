@@ -83,112 +83,72 @@ type DynamoDBAPI interface {
 }
 
 func (d *Dax) PutItem(ctx context.Context, input *dynamodb.PutItemInput, opts ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
-	o, cfn, err := d.config.requestOptions(false, ctx, opts...)
-	if err != nil {
-		return nil, err
-	}
-	if cfn != nil {
-		defer cfn()
-	}
+	o := d.config.requestOptions(false, opts...)
+	ctx, cancel := d.SetTimeout(ctx)
+	defer cancel()
 	return d.client.PutItemWithOptions(ctx, input, &dynamodb.PutItemOutput{}, o)
 }
 
 func (d *Dax) DeleteItem(ctx context.Context, input *dynamodb.DeleteItemInput, opts ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error) {
-	o, cfn, err := d.config.requestOptions(false, ctx, opts...)
-	if err != nil {
-		return nil, err
-	}
-	if cfn != nil {
-		defer cfn()
-	}
+	o := d.config.requestOptions(false, opts...)
+	ctx, cancel := d.SetTimeout(ctx)
+	defer cancel()
 	return d.client.DeleteItemWithOptions(ctx, input, &dynamodb.DeleteItemOutput{}, o)
 }
 
 func (d *Dax) UpdateItem(ctx context.Context, input *dynamodb.UpdateItemInput, opts ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
-	o, cfn, err := d.config.requestOptions(false, ctx, opts...)
-	if err != nil {
-		return nil, err
-	}
-	if cfn != nil {
-		defer cfn()
-	}
+	o := d.config.requestOptions(false, opts...)
+	ctx, cancel := d.SetTimeout(ctx)
+	defer cancel()
 	return d.client.UpdateItemWithOptions(ctx, input, &dynamodb.UpdateItemOutput{}, o)
 }
 
 func (d *Dax) GetItem(ctx context.Context, input *dynamodb.GetItemInput, opts ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
-	o, cfn, err := d.config.requestOptions(true, ctx, opts...)
-	if err != nil {
-		return nil, err
-	}
-	if cfn != nil {
-		defer cfn()
-	}
+	o := d.config.requestOptions(true, opts...)
+	ctx, cancel := d.SetTimeout(ctx)
+	defer cancel()
 	return d.client.GetItemWithOptions(ctx, input, &dynamodb.GetItemOutput{}, o)
 }
 
 func (d *Dax) Scan(ctx context.Context, input *dynamodb.ScanInput, opts ...func(*dynamodb.Options)) (*dynamodb.ScanOutput, error) {
-	o, cfn, err := d.config.requestOptions(true, ctx, opts...)
-	if err != nil {
-		return nil, err
-	}
-	if cfn != nil {
-		defer cfn()
-	}
+	o := d.config.requestOptions(true, opts...)
+	ctx, cancel := d.SetTimeout(ctx)
+	defer cancel()
 	return d.client.ScanWithOptions(ctx, input, &dynamodb.ScanOutput{}, o)
 }
 
 func (d *Dax) Query(ctx context.Context, input *dynamodb.QueryInput, opts ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
-	o, cfn, err := d.config.requestOptions(true, ctx, opts...)
-	if err != nil {
-		return nil, err
-	}
-	if cfn != nil {
-		defer cfn()
-	}
+	o := d.config.requestOptions(true, opts...)
+	ctx, cancel := d.SetTimeout(ctx)
+	defer cancel()
 	return d.client.QueryWithOptions(ctx, input, &dynamodb.QueryOutput{}, o)
 }
 
 func (d *Dax) BatchWriteItem(ctx context.Context, input *dynamodb.BatchWriteItemInput, opts ...func(*dynamodb.Options)) (*dynamodb.BatchWriteItemOutput, error) {
-	o, cfn, err := d.config.requestOptions(false, ctx, opts...)
-	if err != nil {
-		return nil, err
-	}
-	if cfn != nil {
-		defer cfn()
-	}
+	o := d.config.requestOptions(false, opts...)
+	ctx, cancel := d.SetTimeout(ctx)
+	defer cancel()
 	return d.client.BatchWriteItemWithOptions(ctx, input, &dynamodb.BatchWriteItemOutput{}, o)
 }
 
 func (d *Dax) BatchGetItem(ctx context.Context, input *dynamodb.BatchGetItemInput, opts ...func(*dynamodb.Options)) (*dynamodb.BatchGetItemOutput, error) {
-	o, cfn, err := d.config.requestOptions(true, ctx, opts...)
-	if err != nil {
-		return nil, err
-	}
-	if cfn != nil {
-		defer cfn()
-	}
+	o := d.config.requestOptions(true, opts...)
+	ctx, cancel := d.SetTimeout(ctx)
+	defer cancel()
 	return d.client.BatchGetItemWithOptions(ctx, input, &dynamodb.BatchGetItemOutput{}, o)
 }
 
 func (d *Dax) TransactWriteItems(ctx context.Context, input *dynamodb.TransactWriteItemsInput, opts ...func(*dynamodb.Options)) (*dynamodb.TransactWriteItemsOutput, error) {
-	o, cfn, err := d.config.requestOptions(false, ctx, opts...)
-	if err != nil {
-		return nil, err
-	}
-	if cfn != nil {
-		defer cfn()
-	}
+	o := d.config.requestOptions(false, opts...)
+	ctx, cancel := d.SetTimeout(ctx)
+	defer cancel()
 	return d.client.TransactWriteItemsWithOptions(ctx, input, &dynamodb.TransactWriteItemsOutput{}, o)
 }
 
 func (d *Dax) TransactGetItems(ctx context.Context, input *dynamodb.TransactGetItemsInput, opts ...func(*dynamodb.Options)) (*dynamodb.TransactGetItemsOutput, error) {
-	o, cfn, err := d.config.requestOptions(true, ctx, opts...)
-	if err != nil {
-		return nil, err
-	}
-	if cfn != nil {
-		defer cfn()
-	}
+	o := d.config.requestOptions(true, opts...)
+	ctx, cancel := d.SetTimeout(ctx)
+	defer cancel()
 	return d.client.TransactGetItemsWithOptions(ctx, input, &dynamodb.TransactGetItemsOutput{}, o)
 }
 
@@ -442,3 +402,12 @@ func (d *Dax) Close() error {
 	}
 	return nil
 }
+
+func (d *Dax) SetTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	if d.config.RequestTimeout > 0 {
+		return context.WithTimeout(ctx, d.config.RequestTimeout)
+	}
+	return ctx, cancelEmpty
+}
+
+func cancelEmpty() {}
