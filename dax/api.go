@@ -90,7 +90,7 @@ func (d *Dax) PutItem(ctx context.Context, input *dynamodb.PutItemInput, opts ..
 	if cfn != nil {
 		defer cfn()
 	}
-	return d.client.PutItemWithOptions(input, &dynamodb.PutItemOutput{}, o)
+	return d.client.PutItemWithOptions(ctx, input, &dynamodb.PutItemOutput{}, o)
 }
 
 func (d *Dax) DeleteItem(ctx context.Context, input *dynamodb.DeleteItemInput, opts ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error) {
@@ -101,7 +101,7 @@ func (d *Dax) DeleteItem(ctx context.Context, input *dynamodb.DeleteItemInput, o
 	if cfn != nil {
 		defer cfn()
 	}
-	return d.client.DeleteItemWithOptions(input, &dynamodb.DeleteItemOutput{}, o)
+	return d.client.DeleteItemWithOptions(ctx, input, &dynamodb.DeleteItemOutput{}, o)
 }
 
 func (d *Dax) UpdateItem(ctx context.Context, input *dynamodb.UpdateItemInput, opts ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
@@ -112,7 +112,7 @@ func (d *Dax) UpdateItem(ctx context.Context, input *dynamodb.UpdateItemInput, o
 	if cfn != nil {
 		defer cfn()
 	}
-	return d.client.UpdateItemWithOptions(input, &dynamodb.UpdateItemOutput{}, o)
+	return d.client.UpdateItemWithOptions(ctx, input, &dynamodb.UpdateItemOutput{}, o)
 }
 
 func (d *Dax) GetItem(ctx context.Context, input *dynamodb.GetItemInput, opts ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
@@ -123,7 +123,7 @@ func (d *Dax) GetItem(ctx context.Context, input *dynamodb.GetItemInput, opts ..
 	if cfn != nil {
 		defer cfn()
 	}
-	return d.client.GetItemWithOptions(input, &dynamodb.GetItemOutput{}, o)
+	return d.client.GetItemWithOptions(ctx, input, &dynamodb.GetItemOutput{}, o)
 }
 
 func (d *Dax) Scan(ctx context.Context, input *dynamodb.ScanInput, opts ...func(*dynamodb.Options)) (*dynamodb.ScanOutput, error) {
@@ -134,7 +134,7 @@ func (d *Dax) Scan(ctx context.Context, input *dynamodb.ScanInput, opts ...func(
 	if cfn != nil {
 		defer cfn()
 	}
-	return d.client.ScanWithOptions(input, &dynamodb.ScanOutput{}, o)
+	return d.client.ScanWithOptions(ctx, input, &dynamodb.ScanOutput{}, o)
 }
 
 func (d *Dax) Query(ctx context.Context, input *dynamodb.QueryInput, opts ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
@@ -145,7 +145,7 @@ func (d *Dax) Query(ctx context.Context, input *dynamodb.QueryInput, opts ...fun
 	if cfn != nil {
 		defer cfn()
 	}
-	return d.client.QueryWithOptions(input, &dynamodb.QueryOutput{}, o)
+	return d.client.QueryWithOptions(ctx, input, &dynamodb.QueryOutput{}, o)
 }
 
 func (d *Dax) BatchWriteItem(ctx context.Context, input *dynamodb.BatchWriteItemInput, opts ...func(*dynamodb.Options)) (*dynamodb.BatchWriteItemOutput, error) {
@@ -156,7 +156,7 @@ func (d *Dax) BatchWriteItem(ctx context.Context, input *dynamodb.BatchWriteItem
 	if cfn != nil {
 		defer cfn()
 	}
-	return d.client.BatchWriteItemWithOptions(input, &dynamodb.BatchWriteItemOutput{}, o)
+	return d.client.BatchWriteItemWithOptions(ctx, input, &dynamodb.BatchWriteItemOutput{}, o)
 }
 
 func (d *Dax) BatchGetItem(ctx context.Context, input *dynamodb.BatchGetItemInput, opts ...func(*dynamodb.Options)) (*dynamodb.BatchGetItemOutput, error) {
@@ -167,7 +167,7 @@ func (d *Dax) BatchGetItem(ctx context.Context, input *dynamodb.BatchGetItemInpu
 	if cfn != nil {
 		defer cfn()
 	}
-	return d.client.BatchGetItemWithOptions(input, &dynamodb.BatchGetItemOutput{}, o)
+	return d.client.BatchGetItemWithOptions(ctx, input, &dynamodb.BatchGetItemOutput{}, o)
 }
 
 func (d *Dax) TransactWriteItems(ctx context.Context, input *dynamodb.TransactWriteItemsInput, opts ...func(*dynamodb.Options)) (*dynamodb.TransactWriteItemsOutput, error) {
@@ -178,7 +178,7 @@ func (d *Dax) TransactWriteItems(ctx context.Context, input *dynamodb.TransactWr
 	if cfn != nil {
 		defer cfn()
 	}
-	return d.client.TransactWriteItemsWithOptions(input, &dynamodb.TransactWriteItemsOutput{}, o)
+	return d.client.TransactWriteItemsWithOptions(ctx, input, &dynamodb.TransactWriteItemsOutput{}, o)
 }
 
 func (d *Dax) TransactGetItems(ctx context.Context, input *dynamodb.TransactGetItemsInput, opts ...func(*dynamodb.Options)) (*dynamodb.TransactGetItemsOutput, error) {
@@ -189,7 +189,7 @@ func (d *Dax) TransactGetItems(ctx context.Context, input *dynamodb.TransactGetI
 	if cfn != nil {
 		defer cfn()
 	}
-	return d.client.TransactGetItemsWithOptions(input, &dynamodb.TransactGetItemsOutput{}, o)
+	return d.client.TransactGetItemsWithOptions(ctx, input, &dynamodb.TransactGetItemsOutput{}, o)
 }
 
 //func (d *Dax) BatchGetItemPages(ctx context.Context, input *dynamodb.BatchGetItemInput, fn func(*dynamodb.BatchGetItemOutput, bool) bool, opts ...func(*dynamodb.Options)) error {

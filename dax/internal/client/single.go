@@ -165,13 +165,15 @@ func (client *SingleDaxClient) Close() error {
 	return nil
 }
 
-func (client *SingleDaxClient) startHealthChecks(cc *cluster, host hostPort) {
+func (client *SingleDaxClient) startHealthChecks(ctx context.Context, cc *cluster, host hostPort) {
 	cc.debugLog("Starting health checks for :: " + host.host)
 	client.executor.start(cc.config.ClientHealthCheckInterval, func() error {
-		ctx, cfn := context.WithTimeout(aws.BackgroundContext(), 1*time.Second)
+		ctx, cfn := context.WithTimeout(ctx, 1*time.Second)
 		defer cfn()
 		var err error
-		_, err = client.endpoints(RequestOptions{MaxRetries: 2, Context: ctx})
+		opts := RequestOptions{}
+		opts.RetryMaxAttempts = 2
+		_, err = client.endpoints(ctx, opts)
 		if err != nil {
 			cc.debugLog("Health checks failed with error " + err.Error() + " for host :: " + host.host)
 			cc.onHealthCheckFailed(host)
@@ -182,7 +184,7 @@ func (client *SingleDaxClient) startHealthChecks(cc *cluster, host hostPort) {
 	})
 }
 
-func (client *SingleDaxClient) endpoints(opt RequestOptions) ([]serviceEndpoint, error) {
+func (client *SingleDaxClient) endpoints(ctx context.Context, opt RequestOptions) ([]serviceEndpoint, error) {
 	encoder := func(writer *cbor.Writer) error {
 		return encodeEndpointsInput(writer)
 	}
@@ -192,13 +194,13 @@ func (client *SingleDaxClient) endpoints(opt RequestOptions) ([]serviceEndpoint,
 		out, err = decodeEndpointsOutput(reader)
 		return err
 	}
-	if err = client.executeWithRetries(opEndpoints, opt, encoder, decoder); err != nil {
+	if err = client.executeWithRetries(ctx, opEndpoints, opt, encoder, decoder); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (client *SingleDaxClient) defineAttributeListId(ctx aws.Context, attrNames []string) (int64, error) {
+func (client *SingleDaxClient) defineAttributeListId(ctx context.Context, attrNames []string) (int64, error) {
 	if len(attrNames) == 0 {
 		return emptyAttributeListId, nil
 	}
@@ -211,14 +213,14 @@ func (client *SingleDaxClient) defineAttributeListId(ctx aws.Context, attrNames 
 		out, err = decodeDefineAttributeListIdOutput(reader)
 		return err
 	}
-	opt := RequestOptions{Context: ctx}
-	if err = client.executeWithRetries(opDefineAttributeListId, opt, encoder, decoder); err != nil {
+	opt := RequestOptions{}
+	if err = client.executeWithRetries(ctx, opDefineAttributeListId, opt, encoder, decoder); err != nil {
 		return 0, err
 	}
 	return out, nil
 }
 
-func (client *SingleDaxClient) defineAttributeList(ctx aws.Context, id int64) ([]string, error) {
+func (client *SingleDaxClient) defineAttributeList(ctx context.Context, id int64) ([]string, error) {
 	if id == emptyAttributeListId {
 		return []string{}, nil
 	}
@@ -231,14 +233,14 @@ func (client *SingleDaxClient) defineAttributeList(ctx aws.Context, id int64) ([
 		out, err = decodeDefineAttributeListOutput(reader)
 		return err
 	}
-	opt := RequestOptions{Context: ctx}
-	if err = client.executeWithRetries(opDefineAttributeList, opt, encoder, decoder); err != nil {
+	opt := RequestOptions{}
+	if err = client.executeWithRetries(ctx, opDefineAttributeList, opt, encoder, decoder); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (client *SingleDaxClient) defineKeySchema(ctx aws.Context, table string) ([]types.AttributeDefinition, error) {
+func (client *SingleDaxClient) defineKeySchema(ctx context.Context, table string) ([]types.AttributeDefinition, error) {
 	encoder := func(writer *cbor.Writer) error {
 		return encodeDefineKeySchemaInput(table, writer)
 	}
@@ -248,147 +250,147 @@ func (client *SingleDaxClient) defineKeySchema(ctx aws.Context, table string) ([
 		out, err = decodeDefineKeySchemaOutput(reader)
 		return err
 	}
-	opt := RequestOptions{Context: ctx}
-	if err = client.executeWithRetries(opDefineKeySchema, opt, encoder, decoder); err != nil {
+	opt := RequestOptions{}
+	if err = client.executeWithRetries(ctx, opDefineKeySchema, opt, encoder, decoder); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (client *SingleDaxClient) PutItemWithOptions(input *dynamodb.PutItemInput, output *dynamodb.PutItemOutput, opt RequestOptions) (*dynamodb.PutItemOutput, error) {
+func (client *SingleDaxClient) PutItemWithOptions(ctx context.Context, input *dynamodb.PutItemInput, output *dynamodb.PutItemOutput, opt RequestOptions) (*dynamodb.PutItemOutput, error) {
 	encoder := func(writer *cbor.Writer) error {
-		return encodePutItemInput(opt.Context, input, client.keySchema, client.attrNamesListToId, writer)
+		return encodePutItemInput(ctx, input, client.keySchema, client.attrNamesListToId, writer)
 	}
 	var err error
 	decoder := func(reader *cbor.Reader) error {
-		output, err = decodePutItemOutput(opt.Context, reader, input, client.keySchema, client.attrListIdToNames, output)
+		output, err = decodePutItemOutput(ctx, reader, input, client.keySchema, client.attrListIdToNames, output)
 		return err
 	}
-	if err = client.executeWithRetries(OpPutItem, opt, encoder, decoder); err != nil {
+	if err = client.executeWithRetries(ctx, OpPutItem, opt, encoder, decoder); err != nil {
 		return output, err
 	}
 	return output, nil
 }
 
-func (client *SingleDaxClient) DeleteItemWithOptions(input *dynamodb.DeleteItemInput, output *dynamodb.DeleteItemOutput, opt RequestOptions) (*dynamodb.DeleteItemOutput, error) {
+func (client *SingleDaxClient) DeleteItemWithOptions(ctx context.Context, input *dynamodb.DeleteItemInput, output *dynamodb.DeleteItemOutput, opt RequestOptions) (*dynamodb.DeleteItemOutput, error) {
 	encoder := func(writer *cbor.Writer) error {
-		return encodeDeleteItemInput(opt.Context, input, client.keySchema, writer)
+		return encodeDeleteItemInput(ctx, input, client.keySchema, writer)
 	}
 	var err error
 	decoder := func(reader *cbor.Reader) error {
-		output, err = decodeDeleteItemOutput(opt.Context, reader, input, client.keySchema, client.attrListIdToNames, output)
+		output, err = decodeDeleteItemOutput(ctx, reader, input, client.keySchema, client.attrListIdToNames, output)
 		return err
 	}
-	if err = client.executeWithRetries(OpDeleteItem, opt, encoder, decoder); err != nil {
+	if err = client.executeWithRetries(ctx, OpDeleteItem, opt, encoder, decoder); err != nil {
 		return output, err
 	}
 	return output, nil
 }
 
-func (client *SingleDaxClient) UpdateItemWithOptions(input *dynamodb.UpdateItemInput, output *dynamodb.UpdateItemOutput, opt RequestOptions) (*dynamodb.UpdateItemOutput, error) {
+func (client *SingleDaxClient) UpdateItemWithOptions(ctx context.Context, input *dynamodb.UpdateItemInput, output *dynamodb.UpdateItemOutput, opt RequestOptions) (*dynamodb.UpdateItemOutput, error) {
 	encoder := func(writer *cbor.Writer) error {
-		return encodeUpdateItemInput(opt.Context, input, client.keySchema, writer)
+		return encodeUpdateItemInput(ctx, input, client.keySchema, writer)
 	}
 	var err error
 	decoder := func(reader *cbor.Reader) error {
-		output, err = decodeUpdateItemOutput(opt.Context, reader, input, client.keySchema, client.attrListIdToNames, output)
+		output, err = decodeUpdateItemOutput(ctx, reader, input, client.keySchema, client.attrListIdToNames, output)
 		return err
 	}
-	if err = client.executeWithRetries(OpUpdateItem, opt, encoder, decoder); err != nil {
+	if err = client.executeWithRetries(ctx, OpUpdateItem, opt, encoder, decoder); err != nil {
 		return output, err
 	}
 	return output, nil
 }
 
-func (client *SingleDaxClient) GetItemWithOptions(input *dynamodb.GetItemInput, output *dynamodb.GetItemOutput, opt RequestOptions) (*dynamodb.GetItemOutput, error) {
+func (client *SingleDaxClient) GetItemWithOptions(ctx context.Context, input *dynamodb.GetItemInput, output *dynamodb.GetItemOutput, opt RequestOptions) (*dynamodb.GetItemOutput, error) {
 	encoder := func(writer *cbor.Writer) error {
-		return encodeGetItemInput(opt.Context, input, client.keySchema, writer)
+		return encodeGetItemInput(ctx, input, client.keySchema, writer)
 	}
 	var err error
 	decoder := func(reader *cbor.Reader) error {
-		output, err = decodeGetItemOutput(opt.Context, reader, input, client.attrListIdToNames, output)
+		output, err = decodeGetItemOutput(ctx, reader, input, client.attrListIdToNames, output)
 		return err
 	}
-	if err = client.executeWithRetries(OpGetItem, opt, encoder, decoder); err != nil {
+	if err = client.executeWithRetries(ctx, OpGetItem, opt, encoder, decoder); err != nil {
 		return output, err
 	}
 	return output, nil
 }
 
-func (client *SingleDaxClient) ScanWithOptions(input *dynamodb.ScanInput, output *dynamodb.ScanOutput, opt RequestOptions) (*dynamodb.ScanOutput, error) {
+func (client *SingleDaxClient) ScanWithOptions(ctx context.Context, input *dynamodb.ScanInput, output *dynamodb.ScanOutput, opt RequestOptions) (*dynamodb.ScanOutput, error) {
 	encoder := func(writer *cbor.Writer) error {
-		return encodeScanInput(opt.Context, input, client.keySchema, writer)
+		return encodeScanInput(ctx, input, client.keySchema, writer)
 	}
 	var err error
 	decoder := func(reader *cbor.Reader) error {
-		output, err = decodeScanOutput(opt.Context, reader, input, client.keySchema, client.attrListIdToNames, output)
+		output, err = decodeScanOutput(ctx, reader, input, client.keySchema, client.attrListIdToNames, output)
 		return err
 	}
-	if err = client.executeWithRetries(OpScan, opt, encoder, decoder); err != nil {
+	if err = client.executeWithRetries(ctx, OpScan, opt, encoder, decoder); err != nil {
 		return output, err
 	}
 	return output, nil
 }
 
-func (client *SingleDaxClient) QueryWithOptions(input *dynamodb.QueryInput, output *dynamodb.QueryOutput, opt RequestOptions) (*dynamodb.QueryOutput, error) {
+func (client *SingleDaxClient) QueryWithOptions(ctx context.Context, input *dynamodb.QueryInput, output *dynamodb.QueryOutput, opt RequestOptions) (*dynamodb.QueryOutput, error) {
 	encoder := func(writer *cbor.Writer) error {
-		return encodeQueryInput(opt.Context, input, client.keySchema, writer)
+		return encodeQueryInput(ctx, input, client.keySchema, writer)
 	}
 	var err error
 	decoder := func(reader *cbor.Reader) error {
-		output, err = decodeQueryOutput(opt.Context, reader, input, client.keySchema, client.attrListIdToNames, output)
+		output, err = decodeQueryOutput(ctx, reader, input, client.keySchema, client.attrListIdToNames, output)
 		return err
 	}
-	if err = client.executeWithRetries(OpQuery, opt, encoder, decoder); err != nil {
+	if err = client.executeWithRetries(ctx, OpQuery, opt, encoder, decoder); err != nil {
 		return output, err
 	}
 	return output, nil
 }
 
-func (client *SingleDaxClient) BatchWriteItemWithOptions(input *dynamodb.BatchWriteItemInput, output *dynamodb.BatchWriteItemOutput, opt RequestOptions) (*dynamodb.BatchWriteItemOutput, error) {
+func (client *SingleDaxClient) BatchWriteItemWithOptions(ctx context.Context, input *dynamodb.BatchWriteItemInput, output *dynamodb.BatchWriteItemOutput, opt RequestOptions) (*dynamodb.BatchWriteItemOutput, error) {
 	encoder := func(writer *cbor.Writer) error {
-		return encodeBatchWriteItemInput(opt.Context, input, client.keySchema, client.attrNamesListToId, writer)
+		return encodeBatchWriteItemInput(ctx, input, client.keySchema, client.attrNamesListToId, writer)
 	}
 	var err error
 	decoder := func(reader *cbor.Reader) error {
-		output, err = decodeBatchWriteItemOutput(opt.Context, reader, client.keySchema, client.attrListIdToNames, output)
+		output, err = decodeBatchWriteItemOutput(ctx, reader, client.keySchema, client.attrListIdToNames, output)
 		return err
 	}
-	if err = client.executeWithRetries(OpBatchWriteItem, opt, encoder, decoder); err != nil {
+	if err = client.executeWithRetries(ctx, OpBatchWriteItem, opt, encoder, decoder); err != nil {
 		return output, err
 	}
 	return output, nil
 }
 
-func (client *SingleDaxClient) BatchGetItemWithOptions(input *dynamodb.BatchGetItemInput, output *dynamodb.BatchGetItemOutput, opt RequestOptions) (*dynamodb.BatchGetItemOutput, error) {
+func (client *SingleDaxClient) BatchGetItemWithOptions(ctx context.Context, input *dynamodb.BatchGetItemInput, output *dynamodb.BatchGetItemOutput, opt RequestOptions) (*dynamodb.BatchGetItemOutput, error) {
 	encoder := func(writer *cbor.Writer) error {
-		return encodeBatchGetItemInput(opt.Context, input, client.keySchema, writer)
+		return encodeBatchGetItemInput(ctx, input, client.keySchema, writer)
 	}
 	var err error
 	decoder := func(reader *cbor.Reader) error {
-		output, err = decodeBatchGetItemOutput(opt.Context, reader, input, client.keySchema, client.attrListIdToNames, output)
+		output, err = decodeBatchGetItemOutput(ctx, reader, input, client.keySchema, client.attrListIdToNames, output)
 		return err
 	}
-	if err = client.executeWithRetries(OpBatchGetItem, opt, encoder, decoder); err != nil {
+	if err = client.executeWithRetries(ctx, OpBatchGetItem, opt, encoder, decoder); err != nil {
 		return output, err
 	}
 	return output, nil
 }
 
-func (client *SingleDaxClient) TransactWriteItemsWithOptions(input *dynamodb.TransactWriteItemsInput, output *dynamodb.TransactWriteItemsOutput, opt RequestOptions) (*dynamodb.TransactWriteItemsOutput, error) {
+func (client *SingleDaxClient) TransactWriteItemsWithOptions(ctx context.Context, input *dynamodb.TransactWriteItemsInput, output *dynamodb.TransactWriteItemsOutput, opt RequestOptions) (*dynamodb.TransactWriteItemsOutput, error) {
 	extractedKeys := make([]map[string]types.AttributeValue, len(input.TransactItems))
 	encoder := func(writer *cbor.Writer) error {
-		return encodeTransactWriteItemsInput(opt.Context, input, client.keySchema, client.attrNamesListToId, writer, extractedKeys)
+		return encodeTransactWriteItemsInput(ctx, input, client.keySchema, client.attrNamesListToId, writer, extractedKeys)
 	}
 	var err error
 	decoder := func(reader *cbor.Reader) error {
-		output, err = decodeTransactWriteItemsOutput(opt.Context, reader, input, client.keySchema, client.attrListIdToNames, output)
+		output, err = decodeTransactWriteItemsOutput(ctx, reader, input, client.keySchema, client.attrListIdToNames, output)
 		return err
 	}
-	if err = client.executeWithRetries(OpBatchWriteItem, opt, encoder, decoder); err != nil {
+	if err = client.executeWithRetries(ctx, OpBatchWriteItem, opt, encoder, decoder); err != nil {
 		if failure, ok := err.(*daxTransactionCanceledFailure); ok {
 			var cancellationReasons []types.CancellationReason
-			if cancellationReasons, err = decodeTransactionCancellationReasons(opt.Context, failure, extractedKeys, client.attrListIdToNames); err != nil {
+			if cancellationReasons, err = decodeTransactionCancellationReasons(ctx, failure, extractedKeys, client.attrListIdToNames); err != nil {
 				return output, err
 			}
 			failure.cancellationReasons = cancellationReasons
@@ -399,20 +401,20 @@ func (client *SingleDaxClient) TransactWriteItemsWithOptions(input *dynamodb.Tra
 	return output, nil
 }
 
-func (client *SingleDaxClient) TransactGetItemsWithOptions(input *dynamodb.TransactGetItemsInput, output *dynamodb.TransactGetItemsOutput, opt RequestOptions) (*dynamodb.TransactGetItemsOutput, error) {
+func (client *SingleDaxClient) TransactGetItemsWithOptions(ctx context.Context, input *dynamodb.TransactGetItemsInput, output *dynamodb.TransactGetItemsOutput, opt RequestOptions) (*dynamodb.TransactGetItemsOutput, error) {
 	extractedKeys := make([]map[string]types.AttributeValue, len(input.TransactItems))
 	encoder := func(writer *cbor.Writer) error {
-		return encodeTransactGetItemsInput(opt.Context, input, client.keySchema, writer, extractedKeys)
+		return encodeTransactGetItemsInput(ctx, input, client.keySchema, writer, extractedKeys)
 	}
 	var err error
 	decoder := func(reader *cbor.Reader) error {
-		output, err = decodeTransactGetItemsOutput(opt.Context, reader, input, client.keySchema, client.attrListIdToNames, output)
+		output, err = decodeTransactGetItemsOutput(ctx, reader, input, client.keySchema, client.attrListIdToNames, output)
 		return err
 	}
-	if err = client.executeWithRetries(OpBatchWriteItem, opt, encoder, decoder); err != nil {
+	if err = client.executeWithRetries(ctx, OpBatchWriteItem, opt, encoder, decoder); err != nil {
 		if failure, ok := err.(*daxTransactionCanceledFailure); ok {
 			var cancellationReasons []types.CancellationReason
-			if cancellationReasons, err = decodeTransactionCancellationReasons(opt.Context, failure, extractedKeys, client.attrListIdToNames); err != nil {
+			if cancellationReasons, err = decodeTransactionCancellationReasons(ctx, failure, extractedKeys, client.attrListIdToNames); err != nil {
 				return output, err
 			}
 			failure.cancellationReasons = cancellationReasons
@@ -537,7 +539,7 @@ func (client *SingleDaxClient) build(req *request.Request) {
 	req.SetBufferBody(buf.Bytes())
 }
 
-func (client *SingleDaxClient) send(req *request.Request) {
+func (client *SingleDaxClient) send(ctx context.Context, req *request.Request) {
 	opt := RequestOptions{}
 	if err := opt.mergeFromRequest(req, true); err != nil {
 		req.Error = err
@@ -555,7 +557,7 @@ func (client *SingleDaxClient) send(req *request.Request) {
 			req.Error = awserr.New(request.ErrCodeSerialization, "expected *GetItemOutput", nil)
 			return
 		}
-		req.Data, req.Error = client.GetItemWithOptions(input, output, opt)
+		req.Data, req.Error = client.GetItemWithOptions(ctx, input, output, opt)
 	case OpScan:
 		input, ok := req.Params.(*dynamodb.ScanInput)
 		if !ok {
@@ -567,7 +569,7 @@ func (client *SingleDaxClient) send(req *request.Request) {
 			req.Error = awserr.New(request.ErrCodeSerialization, "expected *ScanOutput", nil)
 			return
 		}
-		req.Data, req.Error = client.ScanWithOptions(input, output, opt)
+		req.Data, req.Error = client.ScanWithOptions(ctx, input, output, opt)
 	case OpQuery:
 		input, ok := req.Params.(*dynamodb.QueryInput)
 		if !ok {
@@ -579,7 +581,7 @@ func (client *SingleDaxClient) send(req *request.Request) {
 			req.Error = awserr.New(request.ErrCodeSerialization, "expected *QueryOutput", nil)
 			return
 		}
-		req.Data, req.Error = client.QueryWithOptions(input, output, opt)
+		req.Data, req.Error = client.QueryWithOptions(ctx, input, output, opt)
 	case OpBatchGetItem:
 		input, ok := req.Params.(*dynamodb.BatchGetItemInput)
 		if !ok {
@@ -591,7 +593,7 @@ func (client *SingleDaxClient) send(req *request.Request) {
 			req.Error = awserr.New(request.ErrCodeSerialization, "expected *BatchGetItemOutput", nil)
 			return
 		}
-		req.Data, req.Error = client.BatchGetItemWithOptions(input, output, opt)
+		req.Data, req.Error = client.BatchGetItemWithOptions(ctx, input, output, opt)
 	case OpPutItem:
 		input, ok := req.Params.(*dynamodb.PutItemInput)
 		if !ok {
@@ -603,7 +605,7 @@ func (client *SingleDaxClient) send(req *request.Request) {
 			req.Error = awserr.New(request.ErrCodeSerialization, "expected *PutItemOutput", nil)
 			return
 		}
-		req.Data, req.Error = client.PutItemWithOptions(input, output, opt)
+		req.Data, req.Error = client.PutItemWithOptions(ctx, input, output, opt)
 	case OpDeleteItem:
 		input, ok := req.Params.(*dynamodb.DeleteItemInput)
 		if !ok {
@@ -615,7 +617,7 @@ func (client *SingleDaxClient) send(req *request.Request) {
 			req.Error = awserr.New(request.ErrCodeSerialization, "expected *DeleteItemOutput", nil)
 			return
 		}
-		req.Data, req.Error = client.DeleteItemWithOptions(input, output, opt)
+		req.Data, req.Error = client.DeleteItemWithOptions(ctx, input, output, opt)
 	case OpUpdateItem:
 		input, ok := req.Params.(*dynamodb.UpdateItemInput)
 		if !ok {
@@ -627,7 +629,7 @@ func (client *SingleDaxClient) send(req *request.Request) {
 			req.Error = awserr.New(request.ErrCodeSerialization, "expected *UpdateItemOutput", nil)
 			return
 		}
-		req.Data, req.Error = client.UpdateItemWithOptions(input, output, opt)
+		req.Data, req.Error = client.UpdateItemWithOptions(ctx, input, output, opt)
 	case OpBatchWriteItem:
 		input, ok := req.Params.(*dynamodb.BatchWriteItemInput)
 		if !ok {
@@ -639,7 +641,7 @@ func (client *SingleDaxClient) send(req *request.Request) {
 			req.Error = awserr.New(request.ErrCodeSerialization, "expected *BatchWriteItemOutput", nil)
 			return
 		}
-		req.Data, req.Error = client.BatchWriteItemWithOptions(input, output, opt)
+		req.Data, req.Error = client.BatchWriteItemWithOptions(ctx, input, output, opt)
 	case OpTransactGetItems:
 		input, ok := req.Params.(*dynamodb.TransactGetItemsInput)
 		if !ok {
@@ -651,7 +653,7 @@ func (client *SingleDaxClient) send(req *request.Request) {
 			req.Error = awserr.New(request.ErrCodeSerialization, "expected *TransactGetItemsOutput", nil)
 			return
 		}
-		req.Data, req.Error = client.TransactGetItemsWithOptions(input, output, opt)
+		req.Data, req.Error = client.TransactGetItemsWithOptions(ctx, input, output, opt)
 	case OpTransactWriteItems:
 		input, ok := req.Params.(*dynamodb.TransactWriteItemsInput)
 		if !ok {
@@ -663,22 +665,14 @@ func (client *SingleDaxClient) send(req *request.Request) {
 			req.Error = awserr.New(request.ErrCodeSerialization, "expected *TransactWriteItemsOutput", nil)
 			return
 		}
-		req.Data, req.Error = client.TransactWriteItemsWithOptions(input, output, opt)
+		req.Data, req.Error = client.TransactWriteItemsWithOptions(ctx, input, output, opt)
 	default:
 		req.Error = awserr.New(request.InvalidParameterErrCode, "unknown op "+req.Operation.Name, nil)
 		return
 	}
 }
 
-func (client *SingleDaxClient) newContext(o RequestOptions) aws.Context {
-	if o.Context != nil {
-		return o.Context
-	}
-	return aws.BackgroundContext()
-}
-
-func (client *SingleDaxClient) executeWithRetries(op string, o RequestOptions, encoder func(writer *cbor.Writer) error, decoder func(reader *cbor.Reader) error) error {
-	ctx := client.newContext(o)
+func (client *SingleDaxClient) executeWithRetries(ctx context.Context, op string, o RequestOptions, encoder func(writer *cbor.Writer) error, decoder func(reader *cbor.Reader) error) error {
 
 	var err error
 	attempts := o.RetryMaxAttempts

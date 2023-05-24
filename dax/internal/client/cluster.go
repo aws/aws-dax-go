@@ -140,12 +140,12 @@ type ClusterDaxClient struct {
 	cluster *cluster
 }
 
-func New(config Config) (*ClusterDaxClient, error) {
+func New(ctx context.Context, config Config) (*ClusterDaxClient, error) {
 	cluster, err := newCluster(config)
 	if err != nil {
 		return nil, err
 	}
-	err = cluster.start()
+	err = cluster.start(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -157,134 +157,134 @@ func (cc *ClusterDaxClient) Close() error {
 	return cc.cluster.Close()
 }
 
-func (cc *ClusterDaxClient) endpoints(opt RequestOptions) ([]serviceEndpoint, error) {
+func (cc *ClusterDaxClient) endpoints(ctx context.Context, opt RequestOptions) ([]serviceEndpoint, error) {
 	var out []serviceEndpoint
 	var err error
 	action := func(client DaxAPI, o RequestOptions) error {
-		out, err = client.endpoints(o)
+		out, err = client.endpoints(ctx, o)
 		return err
 	}
-	if err = cc.retry(opEndpoints, action, opt); err != nil {
+	if err = cc.retry(ctx, opEndpoints, action, opt); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (cc *ClusterDaxClient) PutItemWithOptions(input *dynamodb.PutItemInput, output *dynamodb.PutItemOutput, opt RequestOptions) (*dynamodb.PutItemOutput, error) {
+func (cc *ClusterDaxClient) PutItemWithOptions(ctx context.Context, input *dynamodb.PutItemInput, output *dynamodb.PutItemOutput, opt RequestOptions) (*dynamodb.PutItemOutput, error) {
 	var err error
 	action := func(client DaxAPI, o RequestOptions) error {
-		output, err = client.PutItemWithOptions(input, output, o)
+		output, err = client.PutItemWithOptions(ctx, input, output, o)
 		return err
 	}
-	if err = cc.retry(OpPutItem, action, opt); err != nil {
+	if err = cc.retry(ctx, OpPutItem, action, opt); err != nil {
 		return output, err
 	}
 	return output, nil
 }
 
-func (cc *ClusterDaxClient) DeleteItemWithOptions(input *dynamodb.DeleteItemInput, output *dynamodb.DeleteItemOutput, opt RequestOptions) (*dynamodb.DeleteItemOutput, error) {
+func (cc *ClusterDaxClient) DeleteItemWithOptions(ctx context.Context, input *dynamodb.DeleteItemInput, output *dynamodb.DeleteItemOutput, opt RequestOptions) (*dynamodb.DeleteItemOutput, error) {
 	var err error
 	action := func(client DaxAPI, o RequestOptions) error {
-		output, err = client.DeleteItemWithOptions(input, output, o)
+		output, err = client.DeleteItemWithOptions(ctx, input, output, o)
 		return err
 	}
-	if err = cc.retry(OpDeleteItem, action, opt); err != nil {
+	if err = cc.retry(ctx, OpDeleteItem, action, opt); err != nil {
 		return output, err
 	}
 	return output, nil
 }
 
-func (cc *ClusterDaxClient) UpdateItemWithOptions(input *dynamodb.UpdateItemInput, output *dynamodb.UpdateItemOutput, opt RequestOptions) (*dynamodb.UpdateItemOutput, error) {
+func (cc *ClusterDaxClient) UpdateItemWithOptions(ctx context.Context, input *dynamodb.UpdateItemInput, output *dynamodb.UpdateItemOutput, opt RequestOptions) (*dynamodb.UpdateItemOutput, error) {
 	var err error
 	action := func(client DaxAPI, o RequestOptions) error {
-		output, err = client.UpdateItemWithOptions(input, output, o)
+		output, err = client.UpdateItemWithOptions(ctx, input, output, o)
 		return err
 	}
-	if err = cc.retry(OpUpdateItem, action, opt); err != nil {
+	if err = cc.retry(ctx, OpUpdateItem, action, opt); err != nil {
 		return output, err
 	}
 	return output, nil
 }
 
-func (cc *ClusterDaxClient) BatchWriteItemWithOptions(input *dynamodb.BatchWriteItemInput, output *dynamodb.BatchWriteItemOutput, opt RequestOptions) (*dynamodb.BatchWriteItemOutput, error) {
+func (cc *ClusterDaxClient) BatchWriteItemWithOptions(ctx context.Context, input *dynamodb.BatchWriteItemInput, output *dynamodb.BatchWriteItemOutput, opt RequestOptions) (*dynamodb.BatchWriteItemOutput, error) {
 	var err error
 	action := func(client DaxAPI, o RequestOptions) error {
-		output, err = client.BatchWriteItemWithOptions(input, output, o)
+		output, err = client.BatchWriteItemWithOptions(ctx, input, output, o)
 		return err
 	}
-	if err = cc.retry(OpBatchWriteItem, action, opt); err != nil {
+	if err = cc.retry(ctx, OpBatchWriteItem, action, opt); err != nil {
 		return output, err
 	}
 	return output, nil
 }
 
-func (cc *ClusterDaxClient) TransactWriteItemsWithOptions(input *dynamodb.TransactWriteItemsInput, output *dynamodb.TransactWriteItemsOutput, opt RequestOptions) (*dynamodb.TransactWriteItemsOutput, error) {
+func (cc *ClusterDaxClient) TransactWriteItemsWithOptions(ctx context.Context, input *dynamodb.TransactWriteItemsInput, output *dynamodb.TransactWriteItemsOutput, opt RequestOptions) (*dynamodb.TransactWriteItemsOutput, error) {
 	var err error
 	action := func(client DaxAPI, o RequestOptions) error {
-		output, err = client.TransactWriteItemsWithOptions(input, output, o)
+		output, err = client.TransactWriteItemsWithOptions(ctx, input, output, o)
 		return err
 	}
-	if err = cc.retry(OpTransactWriteItems, action, opt); err != nil {
+	if err = cc.retry(ctx, OpTransactWriteItems, action, opt); err != nil {
 		return output, err
 	}
 	return output, nil
 }
 
-func (cc *ClusterDaxClient) TransactGetItemsWithOptions(input *dynamodb.TransactGetItemsInput, output *dynamodb.TransactGetItemsOutput, opt RequestOptions) (*dynamodb.TransactGetItemsOutput, error) {
+func (cc *ClusterDaxClient) TransactGetItemsWithOptions(ctx context.Context, input *dynamodb.TransactGetItemsInput, output *dynamodb.TransactGetItemsOutput, opt RequestOptions) (*dynamodb.TransactGetItemsOutput, error) {
 	var err error
 	action := func(client DaxAPI, o RequestOptions) error {
-		output, err = client.TransactGetItemsWithOptions(input, output, o)
+		output, err = client.TransactGetItemsWithOptions(ctx, input, output, o)
 		return err
 	}
-	if err = cc.retry(OpTransactGetItems, action, opt); err != nil {
+	if err = cc.retry(ctx, OpTransactGetItems, action, opt); err != nil {
 		return output, err
 	}
 	return output, nil
 }
 
-func (cc *ClusterDaxClient) GetItemWithOptions(input *dynamodb.GetItemInput, output *dynamodb.GetItemOutput, opt RequestOptions) (*dynamodb.GetItemOutput, error) {
+func (cc *ClusterDaxClient) GetItemWithOptions(ctx context.Context, input *dynamodb.GetItemInput, output *dynamodb.GetItemOutput, opt RequestOptions) (*dynamodb.GetItemOutput, error) {
 	var err error
 	action := func(client DaxAPI, o RequestOptions) error {
-		output, err = client.GetItemWithOptions(input, output, o)
+		output, err = client.GetItemWithOptions(ctx, input, output, o)
 		return err
 	}
-	if err = cc.retry(OpGetItem, action, opt); err != nil {
+	if err = cc.retry(ctx, OpGetItem, action, opt); err != nil {
 		return output, err
 	}
 	return output, nil
 }
 
-func (cc *ClusterDaxClient) QueryWithOptions(input *dynamodb.QueryInput, output *dynamodb.QueryOutput, opt RequestOptions) (*dynamodb.QueryOutput, error) {
+func (cc *ClusterDaxClient) QueryWithOptions(ctx context.Context, input *dynamodb.QueryInput, output *dynamodb.QueryOutput, opt RequestOptions) (*dynamodb.QueryOutput, error) {
 	var err error
 	action := func(client DaxAPI, o RequestOptions) error {
-		output, err = client.QueryWithOptions(input, output, o)
+		output, err = client.QueryWithOptions(ctx, input, output, o)
 		return err
 	}
-	if err = cc.retry(OpQuery, action, opt); err != nil {
+	if err = cc.retry(ctx, OpQuery, action, opt); err != nil {
 		return output, err
 	}
 	return output, nil
 }
 
-func (cc *ClusterDaxClient) ScanWithOptions(input *dynamodb.ScanInput, output *dynamodb.ScanOutput, opt RequestOptions) (*dynamodb.ScanOutput, error) {
+func (cc *ClusterDaxClient) ScanWithOptions(ctx context.Context, input *dynamodb.ScanInput, output *dynamodb.ScanOutput, opt RequestOptions) (*dynamodb.ScanOutput, error) {
 	var err error
 	action := func(client DaxAPI, o RequestOptions) error {
-		output, err = client.ScanWithOptions(input, output, o)
+		output, err = client.ScanWithOptions(ctx, input, output, o)
 		return err
 	}
-	if err = cc.retry(OpScan, action, opt); err != nil {
+	if err = cc.retry(ctx, OpScan, action, opt); err != nil {
 		return output, err
 	}
 	return output, nil
 }
 
-func (cc *ClusterDaxClient) BatchGetItemWithOptions(input *dynamodb.BatchGetItemInput, output *dynamodb.BatchGetItemOutput, opt RequestOptions) (*dynamodb.BatchGetItemOutput, error) {
+func (cc *ClusterDaxClient) BatchGetItemWithOptions(ctx context.Context, input *dynamodb.BatchGetItemInput, output *dynamodb.BatchGetItemOutput, opt RequestOptions) (*dynamodb.BatchGetItemOutput, error) {
 	var err error
 	action := func(client DaxAPI, o RequestOptions) error {
-		output, err = client.BatchGetItemWithOptions(input, output, o)
+		output, err = client.BatchGetItemWithOptions(ctx, input, output, o)
 		return err
 	}
-	if err = cc.retry(OpBatchGetItem, action, opt); err != nil {
+	if err = cc.retry(ctx, OpBatchGetItem, action, opt); err != nil {
 		return output, err
 	}
 	return output, nil
@@ -300,7 +300,7 @@ func (cc *ClusterDaxClient) build(req *request.Request) {
 	}
 }
 
-func (cc *ClusterDaxClient) send(req *request.Request) {
+func (cc *ClusterDaxClient) send(ctx context.Context, req *request.Request) {
 	opt := RequestOptions{}
 	if err := opt.mergeFromRequest(req, true); err != nil {
 		req.Error = err
@@ -308,22 +308,20 @@ func (cc *ClusterDaxClient) send(req *request.Request) {
 	}
 	action := func(client DaxAPI, o RequestOptions) error {
 		o.applyTo(req)
-		client.send(req)
+		client.send(ctx, req)
 		return req.Error
 	}
-	if err := cc.retry(req.Operation.Name, action, opt); err != nil {
+	if err := cc.retry(ctx, req.Operation.Name, action, opt); err != nil {
 		req.Error = err
 	}
 }
 
-func (cc *ClusterDaxClient) retry(op string, action func(client DaxAPI, o RequestOptions) error, opt RequestOptions) (err error) {
+func (cc *ClusterDaxClient) retry(ctx context.Context, op string, action func(client DaxAPI, o RequestOptions) error, opt RequestOptions) (err error) {
 	defer func() {
 		if daxErr, ok := err.(daxError); ok {
 			err = convertDaxError(daxErr)
 		}
 	}()
-
-	ctx := cc.newContext(opt)
 
 	attempts := opt.RetryMaxAttempts
 	opt.RetryMaxAttempts = 0 // disable retries on single node client
@@ -364,13 +362,6 @@ func (cc *ClusterDaxClient) retry(op string, action func(client DaxAPI, o Reques
 		}
 	}
 	return err
-}
-
-func (cc *ClusterDaxClient) newContext(o RequestOptions) aws.Context {
-	if o.Context != nil {
-		return o.Context
-	}
-	return aws.BackgroundContext()
 }
 
 type cluster struct {
@@ -484,13 +475,13 @@ func parseHostPort(hostPort string) (host string, port int, scheme string, err e
 	return host, port, scheme, nil
 }
 
-func (c *cluster) start() error {
+func (c *cluster) start(ctx context.Context) error {
 	c.executor.start(c.config.ClusterUpdateInterval, func() error {
-		c.safeRefresh(false)
+		c.safeRefresh(ctx, false)
 		return nil
 	})
 	c.executor.start(c.config.IdleConnectionReapDelay, c.reapIdleConnections)
-	c.safeRefresh(false)
+	c.safeRefresh(ctx, false)
 	return nil
 }
 
@@ -542,8 +533,8 @@ func (c *cluster) client(prev DaxAPI) (DaxAPI, error) {
 	return c.routes[r], nil
 }
 
-func (c *cluster) safeRefresh(force bool) {
-	err := c.refresh(force)
+func (c *cluster) safeRefresh(ctx context.Context, force bool) {
+	err := c.refresh(ctx, force)
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.lastRefreshErr = err
@@ -555,19 +546,19 @@ func (c *cluster) lastRefreshError() error {
 	return c.lastRefreshErr
 }
 
-func (c *cluster) refresh(force bool) error {
+func (c *cluster) refresh(ctx context.Context, force bool) error {
 	last := atomic.LoadInt64(&c.lastUpdateNs)
 	now := time.Now().UnixNano()
 	if now-last > c.config.ClusterUpdateThreshold.Nanoseconds() || force {
 		if atomic.CompareAndSwapInt64(&c.lastUpdateNs, last, now) {
-			return c.refreshNow()
+			return c.refreshNow(ctx)
 		}
 	}
 	return nil
 }
 
-func (c *cluster) refreshNow() error {
-	cfg, err := c.pullEndpoints()
+func (c *cluster) refreshNow(ctx context.Context) error {
+	cfg, err := c.pullEndpoints(ctx)
 	if err != nil {
 		c.debugLog("ERROR: Failed to refresh endpoint : %s", err)
 		return err
@@ -700,7 +691,7 @@ func (c *cluster) hasChanged(cfg []serviceEndpoint) bool {
 	return len(cfg) != len(c.active)
 }
 
-func (c *cluster) pullEndpoints() ([]serviceEndpoint, error) {
+func (c *cluster) pullEndpoints(ctx context.Context) ([]serviceEndpoint, error) {
 	var lastErr error // TODO chain errors?
 	for _, s := range c.seeds {
 		ips, err := net.LookupIP(s.host)
@@ -718,7 +709,7 @@ func (c *cluster) pullEndpoints() ([]serviceEndpoint, error) {
 		}
 
 		for _, ip := range ips {
-			endpoints, err := c.pullEndpointsFrom(ip, s.port)
+			endpoints, err := c.pullEndpointsFrom(ctx, ip, s.port)
 			if err != nil {
 				lastErr = err
 				continue
@@ -732,7 +723,7 @@ func (c *cluster) pullEndpoints() ([]serviceEndpoint, error) {
 	return nil, lastErr
 }
 
-func (c *cluster) pullEndpointsFrom(ip net.IP, port int) ([]serviceEndpoint, error) {
+func (c *cluster) pullEndpointsFrom(ctx context.Context, ip net.IP, port int) ([]serviceEndpoint, error) {
 	client, err := c.clientBuilder.newClient(ip, port, c.config.connConfig, c.config.Region, c.config.Credentials, c.config.MaxPendingConnectionsPerHost, c.config.DialContext)
 	if err != nil {
 		return nil, err
@@ -740,7 +731,9 @@ func (c *cluster) pullEndpointsFrom(ip net.IP, port int) ([]serviceEndpoint, err
 	defer c.closeClient(client)
 	ctx, cfn := context.WithTimeout(aws.BackgroundContext(), 5*time.Second)
 	defer cfn()
-	return client.endpoints(RequestOptions{MaxRetries: 2, Context: ctx})
+	opts := RequestOptions{}
+	opts.RetryMaxAttempts = 2
+	return client.endpoints(ctx, opts)
 }
 
 func (c *cluster) closeClient(client DaxAPI) {
