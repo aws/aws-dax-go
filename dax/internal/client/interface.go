@@ -19,7 +19,6 @@ import (
 	"context"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go/aws/request"
 )
 
 type DaxAPI interface {
@@ -36,9 +35,6 @@ type DaxAPI interface {
 
 	TransactWriteItemsWithOptions(ctx context.Context, input *dynamodb.TransactWriteItemsInput, opt RequestOptions) (*dynamodb.TransactWriteItemsOutput, error)
 	TransactGetItemsWithOptions(ctx context.Context, input *dynamodb.TransactGetItemsInput, opt RequestOptions) (*dynamodb.TransactGetItemsOutput, error)
-
-	build(req *request.Request)
-	send(ctx context.Context, req *request.Request)
 
 	endpoints(ctx context.Context, opt RequestOptions) ([]serviceEndpoint, error)
 }

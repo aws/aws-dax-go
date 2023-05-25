@@ -299,32 +299,6 @@ func (cc *ClusterDaxClient) BatchGetItemWithOptions(ctx context.Context, input *
 	return output, nil
 }
 
-func (cc *ClusterDaxClient) build(req *request.Request) {
-	// Do not involve IO. Safe to retry on same client
-	c, err := cc.cluster.client(nil)
-	if err != nil {
-		req.Error = err
-	} else {
-		c.build(req)
-	}
-}
-
-func (cc *ClusterDaxClient) send(ctx context.Context, req *request.Request) {
-	opt := RequestOptions{}
-	if err := opt.mergeFromRequest(req, true); err != nil {
-		req.Error = err
-		return
-	}
-	action := func(client DaxAPI, o RequestOptions) error {
-		o.applyTo(req)
-		client.send(ctx, req)
-		return req.Error
-	}
-	if err := cc.retry(ctx, req.Operation.Name, action, opt); err != nil {
-		req.Error = err
-	}
-}
-
 func (cc *ClusterDaxClient) retry(ctx context.Context, op string, action func(client DaxAPI, o RequestOptions) error, opt RequestOptions) (err error) {
 	defer func() {
 		if daxErr, ok := err.(daxError); ok {
