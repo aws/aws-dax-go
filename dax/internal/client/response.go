@@ -175,7 +175,8 @@ func decodeDefineKeySchemaOutput(reader *cbor.Reader) ([]types.AttributeDefiniti
 	return keys, nil
 }
 
-func decodePutItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.PutItemInput, keySchemaCache *lru.Lru, attrListIdToNames *lru.Lru, output *dynamodb.PutItemOutput) (*dynamodb.PutItemOutput, error) {
+func decodePutItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.PutItemInput, keySchemaCache *lru.Lru, attrListIdToNames *lru.Lru) (*dynamodb.PutItemOutput, error) {
+	output := &dynamodb.PutItemOutput{}
 	if consumed, err := consumeNil(reader); err != nil {
 		return output, err
 	} else if consumed {
@@ -183,13 +184,11 @@ func decodePutItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.P
 	}
 
 	tableName := *input.TableName
-	if output == nil {
-		output = &dynamodb.PutItemOutput{}
-	}
-	var err error
-	err = consumeMap(reader, func(key int, reader *cbor.Reader) error {
+
+	err := consumeMap(reader, func(key int, reader *cbor.Reader) error {
 		switch key {
 		case responseParamConsumedCapacity:
+			var err error
 			if output.ConsumedCapacity, err = decodeConsumedCapacity(reader); err != nil {
 				return err
 			}
@@ -227,7 +226,8 @@ func decodePutItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.P
 	return output, nil
 }
 
-func decodeDeleteItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.DeleteItemInput, keySchemaCache *lru.Lru, attrListIdToNames *lru.Lru, output *dynamodb.DeleteItemOutput) (*dynamodb.DeleteItemOutput, error) {
+func decodeDeleteItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.DeleteItemInput, keySchemaCache *lru.Lru, attrListIdToNames *lru.Lru) (*dynamodb.DeleteItemOutput, error) {
+	output := &dynamodb.DeleteItemOutput{}
 	if consumed, err := consumeNil(reader); err != nil {
 		return output, err
 	} else if consumed {
@@ -235,13 +235,11 @@ func decodeDeleteItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamod
 	}
 
 	tableName := *input.TableName
-	if output == nil {
-		output = &dynamodb.DeleteItemOutput{}
-	}
-	var err error
-	err = consumeMap(reader, func(key int, reader *cbor.Reader) error {
+
+	err := consumeMap(reader, func(key int, reader *cbor.Reader) error {
 		switch key {
 		case responseParamConsumedCapacity:
+			var err error
 			if output.ConsumedCapacity, err = decodeConsumedCapacity(reader); err != nil {
 				return err
 			}
@@ -276,8 +274,9 @@ func decodeDeleteItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamod
 
 func decodeUpdateItemOutput(
 	ctx aws.Context, reader *cbor.Reader, input *dynamodb.UpdateItemInput,
-	keySchemaCache *lru.Lru, attrListIdToNames *lru.Lru, output *dynamodb.UpdateItemOutput,
+	keySchemaCache *lru.Lru, attrListIdToNames *lru.Lru,
 ) (*dynamodb.UpdateItemOutput, error) {
+	output := &dynamodb.UpdateItemOutput{}
 	if consumed, err := consumeNil(reader); err != nil {
 		return output, err
 	} else if consumed {
@@ -285,13 +284,11 @@ func decodeUpdateItemOutput(
 	}
 
 	tableName := *input.TableName
-	if output == nil {
-		output = &dynamodb.UpdateItemOutput{}
-	}
-	var err error
-	err = consumeMap(reader, func(key int, reader *cbor.Reader) error {
+
+	err := consumeMap(reader, func(key int, reader *cbor.Reader) error {
 		switch key {
 		case responseParamConsumedCapacity:
+			var err error
 			if output.ConsumedCapacity, err = decodeConsumedCapacity(reader); err != nil {
 				return err
 			}
@@ -316,6 +313,7 @@ func decodeUpdateItemOutput(
 				}
 				output.Attributes = attrs
 			case types.ReturnValueUpdatedNew, types.ReturnValueUpdatedOld:
+				var err error
 				if output.Attributes, err = decodeAttributeProjection(ctx, reader, attrListIdToNames); err != nil {
 					return err
 				}
@@ -334,7 +332,8 @@ func decodeUpdateItemOutput(
 	return output, nil
 }
 
-func decodeGetItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.GetItemInput, attrListIdToNames *lru.Lru, output *dynamodb.GetItemOutput) (*dynamodb.GetItemOutput, error) {
+func decodeGetItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.GetItemInput, attrListIdToNames *lru.Lru) (*dynamodb.GetItemOutput, error) {
+	output := &dynamodb.GetItemOutput{}
 	if consumed, err := consumeNil(reader); err != nil {
 		return output, err
 	} else if consumed {
@@ -345,9 +344,7 @@ func decodeGetItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.G
 	if err != nil {
 		return output, err
 	}
-	if output == nil {
-		output = &dynamodb.GetItemOutput{}
-	}
+
 	err = consumeMap(reader, func(key int, reader *cbor.Reader) error {
 		switch key {
 		case responseParamConsumedCapacity:
@@ -377,7 +374,8 @@ func decodeGetItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.G
 	return output, nil
 }
 
-func decodeScanOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.ScanInput, keySchemaCache *lru.Lru, attrNamesListToId *lru.Lru, output *dynamodb.ScanOutput) (*dynamodb.ScanOutput, error) {
+func decodeScanOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.ScanInput, keySchemaCache *lru.Lru, attrNamesListToId *lru.Lru) (*dynamodb.ScanOutput, error) {
+	output := &dynamodb.ScanOutput{}
 	out, err := decodeScanQueryOutput(ctx, reader, *input.TableName, input.IndexName != nil, input.ProjectionExpression, input.ExpressionAttributeNames, keySchemaCache, attrNamesListToId)
 	if err != nil {
 		return output, err
@@ -388,7 +386,8 @@ func decodeScanOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.Scan
 	return out.scanOutput(output), nil
 }
 
-func decodeQueryOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.QueryInput, keySchemaCache *lru.Lru, attrNamesListToId *lru.Lru, output *dynamodb.QueryOutput) (*dynamodb.QueryOutput, error) {
+func decodeQueryOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.QueryInput, keySchemaCache *lru.Lru, attrNamesListToId *lru.Lru) (*dynamodb.QueryOutput, error) {
+	output := &dynamodb.QueryOutput{}
 	out, err := decodeScanQueryOutput(ctx, reader, *input.TableName, input.IndexName != nil, input.ProjectionExpression, input.ExpressionAttributeNames, keySchemaCache, attrNamesListToId)
 	if err != nil {
 		return output, err

@@ -86,70 +86,70 @@ func (d *Dax) PutItem(ctx context.Context, input *dynamodb.PutItemInput, opts ..
 	o := d.config.requestOptions(false, opts...)
 	ctx, cancel := d.SetTimeout(ctx)
 	defer cancel()
-	return d.client.PutItemWithOptions(ctx, input, &dynamodb.PutItemOutput{}, o)
+	return d.client.PutItemWithOptions(ctx, input, o)
 }
 
 func (d *Dax) DeleteItem(ctx context.Context, input *dynamodb.DeleteItemInput, opts ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error) {
 	o := d.config.requestOptions(false, opts...)
 	ctx, cancel := d.SetTimeout(ctx)
 	defer cancel()
-	return d.client.DeleteItemWithOptions(ctx, input, &dynamodb.DeleteItemOutput{}, o)
+	return d.client.DeleteItemWithOptions(ctx, input, o)
 }
 
 func (d *Dax) UpdateItem(ctx context.Context, input *dynamodb.UpdateItemInput, opts ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
 	o := d.config.requestOptions(false, opts...)
 	ctx, cancel := d.SetTimeout(ctx)
 	defer cancel()
-	return d.client.UpdateItemWithOptions(ctx, input, &dynamodb.UpdateItemOutput{}, o)
+	return d.client.UpdateItemWithOptions(ctx, input, o)
 }
 
 func (d *Dax) GetItem(ctx context.Context, input *dynamodb.GetItemInput, opts ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
 	o := d.config.requestOptions(true, opts...)
 	ctx, cancel := d.SetTimeout(ctx)
 	defer cancel()
-	return d.client.GetItemWithOptions(ctx, input, &dynamodb.GetItemOutput{}, o)
+	return d.client.GetItemWithOptions(ctx, input, o)
 }
 
 func (d *Dax) Scan(ctx context.Context, input *dynamodb.ScanInput, opts ...func(*dynamodb.Options)) (*dynamodb.ScanOutput, error) {
 	o := d.config.requestOptions(true, opts...)
 	ctx, cancel := d.SetTimeout(ctx)
 	defer cancel()
-	return d.client.ScanWithOptions(ctx, input, &dynamodb.ScanOutput{}, o)
+	return d.client.ScanWithOptions(ctx, input, o)
 }
 
 func (d *Dax) Query(ctx context.Context, input *dynamodb.QueryInput, opts ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
 	o := d.config.requestOptions(true, opts...)
 	ctx, cancel := d.SetTimeout(ctx)
 	defer cancel()
-	return d.client.QueryWithOptions(ctx, input, &dynamodb.QueryOutput{}, o)
+	return d.client.QueryWithOptions(ctx, input, o)
 }
 
 func (d *Dax) BatchWriteItem(ctx context.Context, input *dynamodb.BatchWriteItemInput, opts ...func(*dynamodb.Options)) (*dynamodb.BatchWriteItemOutput, error) {
 	o := d.config.requestOptions(false, opts...)
 	ctx, cancel := d.SetTimeout(ctx)
 	defer cancel()
-	return d.client.BatchWriteItemWithOptions(ctx, input, &dynamodb.BatchWriteItemOutput{}, o)
+	return d.client.BatchWriteItemWithOptions(ctx, input, o)
 }
 
 func (d *Dax) BatchGetItem(ctx context.Context, input *dynamodb.BatchGetItemInput, opts ...func(*dynamodb.Options)) (*dynamodb.BatchGetItemOutput, error) {
 	o := d.config.requestOptions(true, opts...)
 	ctx, cancel := d.SetTimeout(ctx)
 	defer cancel()
-	return d.client.BatchGetItemWithOptions(ctx, input, &dynamodb.BatchGetItemOutput{}, o)
+	return d.client.BatchGetItemWithOptions(ctx, input, o)
 }
 
 func (d *Dax) TransactWriteItems(ctx context.Context, input *dynamodb.TransactWriteItemsInput, opts ...func(*dynamodb.Options)) (*dynamodb.TransactWriteItemsOutput, error) {
 	o := d.config.requestOptions(false, opts...)
 	ctx, cancel := d.SetTimeout(ctx)
 	defer cancel()
-	return d.client.TransactWriteItemsWithOptions(ctx, input, &dynamodb.TransactWriteItemsOutput{}, o)
+	return d.client.TransactWriteItemsWithOptions(ctx, input, o)
 }
 
 func (d *Dax) TransactGetItems(ctx context.Context, input *dynamodb.TransactGetItemsInput, opts ...func(*dynamodb.Options)) (*dynamodb.TransactGetItemsOutput, error) {
 	o := d.config.requestOptions(true, opts...)
 	ctx, cancel := d.SetTimeout(ctx)
 	defer cancel()
-	return d.client.TransactGetItemsWithOptions(ctx, input, &dynamodb.TransactGetItemsOutput{}, o)
+	return d.client.TransactGetItemsWithOptions(ctx, input, o)
 }
 
 //func (d *Dax) BatchGetItemPages(ctx context.Context, input *dynamodb.BatchGetItemInput, fn func(*dynamodb.BatchGetItemOutput, bool) bool, opts ...func(*dynamodb.Options)) error {
