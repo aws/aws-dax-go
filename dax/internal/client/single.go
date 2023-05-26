@@ -579,5 +579,5 @@ func (client *SingleDaxClient) reapIdleConnections() {
 }
 
 type HealthCheckDaxAPI interface {
-	startHealthChecks(cc *cluster, host hostPort)
+	startHealthChecks(ctx context.Context, cc *cluster, host hostPort)
 }
