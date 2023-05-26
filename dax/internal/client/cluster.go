@@ -17,6 +17,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -32,10 +33,13 @@ import (
 	aws2 "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/smithy-go"
 	"github.com/aws/smithy-go/logging"
+)
+
+const (
+	schemeDax  = "dax"
+	schemeDaxs = "daxs"
 )
 
 type serviceEndpoint struct {
@@ -81,19 +85,36 @@ type connConfig struct {
 	skipHostnameVerification bool
 }
 
-func (cfg *Config) validate() error {
+func (cfg *Config) validate(op string) error {
 	if len(cfg.HostPorts) == 0 && cfg.EndpointResolver == nil {
-		return awserr.New(request.ParamRequiredErrCode, "HostPorts or EndpointResolver is required", nil)
+		return &smithy.OperationError{
+			ServiceID:     service,
+			OperationName: op,
+			Err:           errors.New("config.HostPorts or config.EndpointResolver is required"),
+		}
 	}
 	if len(cfg.Region) == 0 {
-		return awserr.New(request.ParamRequiredErrCode, "Region is required", nil)
+		return &smithy.OperationError{
+			ServiceID:     service,
+			OperationName: op,
+			Err:           errors.New("config.Region is required"),
+		}
 	}
 	if cfg.Credentials == nil {
-		return awserr.New(request.ParamRequiredErrCode, "Credentials is required", nil)
+		return &smithy.OperationError{
+			ServiceID:     service,
+			OperationName: op,
+			Err:           errors.New("config.Credentials is required"),
+		}
 	}
 	if cfg.MaxPendingConnectionsPerHost < 0 {
-		return awserr.New(request.InvalidParameterErrCode, "MaxPendingConnectionsPerHost cannot be negative", nil)
+		return &smithy.OperationError{
+			ServiceID:     service,
+			OperationName: op,
+			Err:           errors.New("config.MaxPendingConnectionsPerHost cannot be negative"),
+		}
 	}
+
 	return nil
 }
 
@@ -108,8 +129,8 @@ func (cfg *Config) SetLogger(logger logging.Logger) {
 }
 
 var defaultPorts = map[string]int{
-	"dax":  8111,
-	"daxs": 9111,
+	schemeDax:  8111,
+	schemeDaxs: 9111,
 }
 
 func DefaultConfig() Config {
@@ -315,7 +336,7 @@ func (cc *ClusterDaxClient) retry(ctx context.Context, op string, action func(cl
 		if i > 0 && opt.Logger != nil {
 			opt.Logger.Logf(ClassificationDebug, "Retrying Request %s/%s, attempt %d", service, op, i)
 		}
-		client, err = cc.cluster.client(client)
+		client, err = cc.cluster.client(client, op)
 		if err != nil {
 			if !isRetryable(opt, i+1, err) {
 				return err
@@ -368,7 +389,8 @@ type clientAndConfig struct {
 }
 
 func newCluster(cfg Config) (*cluster, error) {
-	if err := cfg.validate(); err != nil {
+	const op = "NewClient"
+	if err := cfg.validate(op); err != nil {
 		return nil, err
 	}
 	hostPorts := cfg.HostPorts
@@ -379,7 +401,7 @@ func newCluster(cfg Config) (*cluster, error) {
 		}
 		hostPorts = append(hostPorts, endpoint.URL)
 	}
-	seeds, hostname, isEncrypted, err := getHostPorts(hostPorts)
+	seeds, hostname, isEncrypted, err := getHostPorts(hostPorts, op)
 	if err != nil {
 		return nil, err
 	}
@@ -390,7 +412,7 @@ func newCluster(cfg Config) (*cluster, error) {
 	return &cluster{seeds: seeds, config: cfg, executor: newExecutor(), clientBuilder: singleClientBuilder{}}, nil
 }
 
-func getHostPorts(hosts []string) (hostPorts []hostPort, hostname string, isEncrypted bool, err error) {
+func getHostPorts(hosts []string, op string) (hostPorts []hostPort, hostname string, isEncrypted bool, err error) {
 	out := make([]hostPort, len(hosts))
 
 	handle := func(e error) (hostPorts []hostPort, hostname string, isEncrypted bool, err error) {
@@ -398,20 +420,28 @@ func getHostPorts(hosts []string) (hostPorts []hostPort, hostname string, isEncr
 	}
 
 	for i, hp := range hosts {
-		host, port, scheme, err := parseHostPort(hp)
+		host, port, scheme, err := parseHostPort(hp, op)
 		if err != nil {
 			return handle(err)
 		}
 
-		if isEncrypted != (scheme == "daxs") {
+		if isEncrypted != (scheme == schemeDaxs) {
 			if i == 0 {
 				isEncrypted = true
 			} else {
-				return handle(awserr.New(request.ErrCodeRequestError, "Inconsistency between the schemes of provided endpoints.", nil))
+				return handle(&smithy.OperationError{
+					ServiceID:     service,
+					OperationName: op,
+					Err:           errors.New("inconsistency between the schemes of provided endpoints"),
+				})
 			}
 		}
-		if scheme == "daxs" && i > 0 {
-			return handle(awserr.New(request.InvalidParameterErrCode, "Only one cluster discovery endpoint may be provided for encrypted cluster", nil))
+		if scheme == schemeDaxs && i > 0 {
+			return handle(&smithy.OperationError{
+				ServiceID:     service,
+				OperationName: op,
+				Err:           errors.New("only one cluster discovery endpoint may be provided for encrypted cluster"),
+			})
 		}
 		out[i] = hostPort{host, port}
 		hostname = host
@@ -419,7 +449,7 @@ func getHostPorts(hosts []string) (hostPorts []hostPort, hostname string, isEncr
 	return out, hostname, isEncrypted, nil
 }
 
-func parseHostPort(hostPort string) (host string, port int, scheme string, err error) {
+func parseHostPort(hostPort string, op string) (host string, port int, scheme string, err error) {
 	uriString := hostPort
 	colon := strings.Index(hostPort, "://")
 
@@ -429,7 +459,11 @@ func parseHostPort(hostPort string) (host string, port int, scheme string, err e
 
 	if colon == -1 {
 		if strings.Index(hostPort, ":") == -1 {
-			return handle(awserr.New(request.ErrCodeRequestError, "Invalid hostport", nil))
+			return handle(&smithy.OperationError{
+				ServiceID:     service,
+				OperationName: op,
+				Err:           errors.New(hostPort + "is invalid host port."),
+			})
 		}
 		uriString = "dax://" + hostPort
 	}
@@ -442,7 +476,11 @@ func parseHostPort(hostPort string) (host string, port int, scheme string, err e
 	scheme = u.Scheme
 	portStr := u.Port()
 	if host == "" {
-		return handle(awserr.New(request.ErrCodeRequestError, "Invalid hostport", nil))
+		return handle(&smithy.OperationError{
+			ServiceID:     service,
+			OperationName: op,
+			Err:           errors.New("invalid host port"),
+		})
 	}
 
 	port, err = strconv.Atoi(portStr)
@@ -452,7 +490,11 @@ func parseHostPort(hostPort string) (host string, port int, scheme string, err e
 
 	if _, ok := defaultPorts[scheme]; !ok {
 		schemes := strings.Join(strings.Fields(fmt.Sprint(reflect.ValueOf(defaultPorts).MapKeys())), ",")
-		return handle(awserr.New(request.ErrCodeRequestError, "URL scheme must be one of "+schemes, nil))
+		return handle(&smithy.OperationError{
+			ServiceID:     service,
+			OperationName: op,
+			Err:           errors.New("URL scheme must be one of " + schemes),
+		})
 	}
 
 	return host, port, scheme, nil
@@ -495,13 +537,17 @@ func (c *cluster) reapIdleConnections() error {
 	return nil
 }
 
-func (c *cluster) client(prev DaxAPI) (DaxAPI, error) {
+func (c *cluster) client(prev DaxAPI, op string) (DaxAPI, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
 	n := len(c.routes)
 	if n == 0 {
-		return nil, awserr.New(ErrCodeServiceUnavailable, "No routes found", c.lastRefreshError())
+		return nil, &smithy.OperationError{
+			ServiceID:     service,
+			OperationName: op,
+			Err:           fmt.Errorf("no routes found. lastRefreshError: %v", c.lastRefreshError()),
+		}
 	}
 	if n == 1 {
 		return c.routes[0], nil
@@ -549,12 +595,13 @@ func (c *cluster) refreshNow(ctx context.Context) error {
 	if !c.hasChanged(cfg) {
 		return nil
 	}
-	return c.update(ctx, cfg)
+	c.update(ctx, cfg)
+	return nil
 }
 
 // This method is responsible for updating the set of active routes tracked by
 // the clsuter-dax-client in response to updates in the roster.
-func (c *cluster) update(ctx context.Context, config []serviceEndpoint) error {
+func (c *cluster) update(ctx context.Context, config []serviceEndpoint) {
 	newEndpoints := make(map[hostPort]struct{}, len(config))
 	for _, cfg := range config {
 		newEndpoints[cfg.hostPort()] = struct{}{}
@@ -619,7 +666,6 @@ func (c *cluster) update(ctx context.Context, config []serviceEndpoint) error {
 			c.closeClient(client.client)
 		}
 	}()
-	return nil
 }
 
 func (c *cluster) onHealthCheckFailed(ctx context.Context, host hostPort) {
