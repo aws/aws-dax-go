@@ -30,9 +30,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/client/metadata"
-	"github.com/aws/aws-sdk-go/aws/request"
 )
 
 const (
@@ -62,8 +59,6 @@ const (
 	OpQuery                 = "Query"
 	OpScan                  = "Scan"
 )
-
-var clientInfo = metadata.ClientInfo{ServiceName: serviceName}
 
 const (
 	keySchemaLruCacheSize     = 100
@@ -109,7 +104,7 @@ func newSingleClientWithOptions(endpoint string, connConfigData connConfig, regi
 		LoadFunc: func(ctx aws.Context, key lru.Key) (interface{}, error) {
 			table, ok := key.(string)
 			if !ok {
-				return nil, awserr.New(request.ErrCodeSerialization, "unexpected type for table name", nil)
+				return nil, &smithy.SerializationError{Err: errors.New("unexpected type for table name")}
 			}
 			if ctx == nil {
 				ctx = aws.BackgroundContext()
@@ -123,7 +118,7 @@ func newSingleClientWithOptions(endpoint string, connConfigData connConfig, regi
 		LoadFunc: func(ctx aws.Context, key lru.Key) (interface{}, error) {
 			attrNames, ok := key.([]string)
 			if !ok {
-				return nil, awserr.New(request.ErrCodeSerialization, "unexpected type for attribute list", nil)
+				return nil, &smithy.SerializationError{Err: errors.New("unexpected type for attribute list")}
 			}
 			if ctx == nil {
 				ctx = aws.BackgroundContext()
@@ -135,9 +130,9 @@ func newSingleClientWithOptions(endpoint string, connConfigData connConfig, regi
 			w := cbor.NewWriter(&buf)
 			defer w.Close()
 			for _, v := range key.([]string) {
-				w.WriteString(v)
+				_ = w.WriteString(v)
 			}
-			w.Flush()
+			_ = w.Flush()
 			return string(buf.Bytes())
 		},
 	}
@@ -147,7 +142,7 @@ func newSingleClientWithOptions(endpoint string, connConfigData connConfig, regi
 		LoadFunc: func(ctx aws.Context, key lru.Key) (interface{}, error) {
 			id, ok := key.(int64)
 			if !ok {
-				return nil, awserr.New(request.ErrCodeSerialization, "unexpected type for attribute list id", nil)
+				return nil, &smithy.SerializationError{Err: errors.New("unexpected type for attribute list id")}
 			}
 			if ctx == nil {
 				ctx = aws.BackgroundContext()
@@ -178,7 +173,7 @@ func (client *SingleDaxClient) startHealthChecks(ctx context.Context, cc *cluste
 		_, err = client.endpoints(ctx, opts)
 		if err != nil {
 			cc.debugLog("Health checks failed with error " + err.Error() + " for host :: " + host.host)
-			cc.onHealthCheckFailed(host)
+			cc.onHealthCheckFailed(ctx, host)
 		} else {
 			cc.debugLog("Health checks succeeded for host:: " + host.host)
 		}
