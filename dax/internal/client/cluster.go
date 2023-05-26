@@ -30,7 +30,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	aws2 "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/smithy-go"
@@ -70,8 +70,8 @@ type Config struct {
 
 	HostPorts        []string
 	Region           string
-	EndpointResolver aws2.EndpointResolverWithOptions
-	Credentials      aws2.CredentialsProvider
+	EndpointResolver aws.EndpointResolverWithOptions
+	Credentials      aws.CredentialsProvider
 	DialContext      func(ctx context.Context, network string, address string) (net.Conn, error)
 	connConfig       connConfig
 
@@ -779,7 +779,7 @@ func (c *cluster) newSingleClient(cfg serviceEndpoint) (*SingleDaxClient, error)
 
 type singleClientBuilder struct{}
 
-func (*singleClientBuilder) newClient(ip net.IP, port int, connConfigData connConfig, region string, credentials aws2.CredentialsProvider, maxPendingConnects int, dialContextFn dialContext) (*SingleDaxClient, error) {
+func (*singleClientBuilder) newClient(ip net.IP, port int, connConfigData connConfig, region string, credentials aws.CredentialsProvider, maxPendingConnects int, dialContextFn dialContext) (*SingleDaxClient, error) {
 	endpoint := fmt.Sprintf("%s:%d", ip, port)
 	return newSingleClientWithOptions(endpoint, connConfigData, region, credentials, maxPendingConnects, dialContextFn)
 }
