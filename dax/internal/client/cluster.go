@@ -185,7 +185,7 @@ func (cc *ClusterDaxClient) endpoints(ctx context.Context, opt RequestOptions) (
 		return err
 	}
 	if err = cc.retry(ctx, opEndpoints, action, opt); err != nil {
-		return nil, err
+		return nil, operationError(opEndpoints, err)
 	}
 	return out, nil
 }
@@ -198,7 +198,7 @@ func (cc *ClusterDaxClient) PutItemWithOptions(ctx context.Context, input *dynam
 		return err
 	}
 	if err := cc.retry(ctx, OpPutItem, action, opt); err != nil {
-		return nil, err
+		return nil, operationError(OpPutItem, err)
 	}
 	return output, nil
 }
@@ -211,7 +211,7 @@ func (cc *ClusterDaxClient) DeleteItemWithOptions(ctx context.Context, input *dy
 		return err
 	}
 	if err := cc.retry(ctx, OpDeleteItem, action, opt); err != nil {
-		return nil, err
+		return nil, operationError(OpDeleteItem, err)
 	}
 	return output, nil
 }
@@ -224,7 +224,7 @@ func (cc *ClusterDaxClient) UpdateItemWithOptions(ctx context.Context, input *dy
 		return err
 	}
 	if err := cc.retry(ctx, OpUpdateItem, action, opt); err != nil {
-		return nil, err
+		return nil, operationError(OpUpdateItem, err)
 	}
 	return output, nil
 }
@@ -237,7 +237,7 @@ func (cc *ClusterDaxClient) BatchWriteItemWithOptions(ctx context.Context, input
 		return err
 	}
 	if err := cc.retry(ctx, OpBatchWriteItem, action, opt); err != nil {
-		return nil, err
+		return nil, operationError(OpBatchWriteItem, err)
 	}
 	return output, nil
 }
@@ -250,7 +250,7 @@ func (cc *ClusterDaxClient) TransactWriteItemsWithOptions(ctx context.Context, i
 		return err
 	}
 	if err := cc.retry(ctx, OpTransactWriteItems, action, opt); err != nil {
-		return nil, err
+		return nil, operationError(OpTransactWriteItems, err)
 	}
 	return output, nil
 }
@@ -263,7 +263,7 @@ func (cc *ClusterDaxClient) TransactGetItemsWithOptions(ctx context.Context, inp
 		return err
 	}
 	if err := cc.retry(ctx, OpTransactGetItems, action, opt); err != nil {
-		return nil, err
+		return nil, operationError(OpTransactGetItems, err)
 	}
 	return output, nil
 }
@@ -276,7 +276,7 @@ func (cc *ClusterDaxClient) GetItemWithOptions(ctx context.Context, input *dynam
 		return err
 	}
 	if err := cc.retry(ctx, OpGetItem, action, opt); err != nil {
-		return nil, err
+		return nil, operationError(OpGetItem, err)
 	}
 	return output, nil
 }
@@ -289,7 +289,7 @@ func (cc *ClusterDaxClient) QueryWithOptions(ctx context.Context, input *dynamod
 		return err
 	}
 	if err := cc.retry(ctx, OpQuery, action, opt); err != nil {
-		return nil, err
+		return nil, operationError(OpQuery, err)
 	}
 	return output, nil
 }
@@ -302,7 +302,7 @@ func (cc *ClusterDaxClient) ScanWithOptions(ctx context.Context, input *dynamodb
 		return err
 	}
 	if err := cc.retry(ctx, OpScan, action, opt); err != nil {
-		return nil, err
+		return nil, operationError(OpScan, err)
 	}
 	return output, nil
 }
@@ -315,7 +315,7 @@ func (cc *ClusterDaxClient) BatchGetItemWithOptions(ctx context.Context, input *
 		return err
 	}
 	if err := cc.retry(ctx, OpBatchGetItem, action, opt); err != nil {
-		return nil, err
+		return nil, operationError(OpBatchGetItem, err)
 	}
 	return output, nil
 }
@@ -361,7 +361,7 @@ func (cc *ClusterDaxClient) retry(ctx context.Context, op string, action func(cl
 			return err
 		}
 
-		if err != nil && opt.Logger != nil {
+		if opt.Logger != nil {
 			opt.Logger.Logf(ClassificationDebug, "Error in executing request %s/%s. : %s", service, op, err)
 		}
 	}

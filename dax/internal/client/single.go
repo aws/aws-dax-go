@@ -180,7 +180,7 @@ func (client *SingleDaxClient) endpoints(ctx context.Context, opt RequestOptions
 		return err
 	}
 	if err = client.executeWithRetries(ctx, opEndpoints, opt, encoder, decoder); err != nil {
-		return nil, err
+		return nil, operationError(opEndpoints, err)
 	}
 	return out, nil
 }
@@ -200,7 +200,7 @@ func (client *SingleDaxClient) defineAttributeListId(ctx context.Context, attrNa
 	}
 	opt := RequestOptions{}
 	if err = client.executeWithRetries(ctx, opDefineAttributeListId, opt, encoder, decoder); err != nil {
-		return 0, err
+		return 0, operationError(opDefineAttributeListId, err)
 	}
 	return out, nil
 }
@@ -220,7 +220,7 @@ func (client *SingleDaxClient) defineAttributeList(ctx context.Context, id int64
 	}
 	opt := RequestOptions{}
 	if err = client.executeWithRetries(ctx, opDefineAttributeList, opt, encoder, decoder); err != nil {
-		return nil, err
+		return nil, operationError(opDefineAttributeList, err)
 	}
 	return out, nil
 }
@@ -237,7 +237,7 @@ func (client *SingleDaxClient) defineKeySchema(ctx context.Context, table string
 	}
 	opt := RequestOptions{}
 	if err = client.executeWithRetries(ctx, opDefineKeySchema, opt, encoder, decoder); err != nil {
-		return nil, err
+		return nil, operationError(opDefineKeySchema, err)
 	}
 	return out, nil
 }
@@ -253,7 +253,7 @@ func (client *SingleDaxClient) PutItemWithOptions(ctx context.Context, input *dy
 		return err
 	}
 	if err := client.executeWithRetries(ctx, OpPutItem, opt, encoder, decoder); err != nil {
-		return output, err
+		return output, operationError(OpPutItem, err)
 	}
 	return output, nil
 }
@@ -269,7 +269,7 @@ func (client *SingleDaxClient) DeleteItemWithOptions(ctx context.Context, input 
 		return err
 	}
 	if err := client.executeWithRetries(ctx, OpDeleteItem, opt, encoder, decoder); err != nil {
-		return output, err
+		return output, operationError(OpDeleteItem, err)
 	}
 	return output, nil
 }
@@ -285,7 +285,7 @@ func (client *SingleDaxClient) UpdateItemWithOptions(ctx context.Context, input 
 		return err
 	}
 	if err := client.executeWithRetries(ctx, OpUpdateItem, opt, encoder, decoder); err != nil {
-		return output, err
+		return output, operationError(OpUpdateItem, err)
 	}
 	return output, nil
 }
@@ -301,7 +301,7 @@ func (client *SingleDaxClient) GetItemWithOptions(ctx context.Context, input *dy
 		return err
 	}
 	if err := client.executeWithRetries(ctx, OpGetItem, opt, encoder, decoder); err != nil {
-		return output, err
+		return output, operationError(OpGetItem, err)
 	}
 	return output, nil
 }
@@ -317,7 +317,7 @@ func (client *SingleDaxClient) ScanWithOptions(ctx context.Context, input *dynam
 		return err
 	}
 	if err := client.executeWithRetries(ctx, OpScan, opt, encoder, decoder); err != nil {
-		return output, err
+		return output, operationError(OpScan, err)
 	}
 	return output, nil
 }
@@ -333,7 +333,7 @@ func (client *SingleDaxClient) QueryWithOptions(ctx context.Context, input *dyna
 		return err
 	}
 	if err := client.executeWithRetries(ctx, OpQuery, opt, encoder, decoder); err != nil {
-		return output, err
+		return output, operationError(OpQuery, err)
 	}
 	return output, nil
 }
@@ -349,7 +349,7 @@ func (client *SingleDaxClient) BatchWriteItemWithOptions(ctx context.Context, in
 		return err
 	}
 	if err := client.executeWithRetries(ctx, OpBatchWriteItem, opt, encoder, decoder); err != nil {
-		return output, err
+		return output, operationError(OpBatchWriteItem, err)
 	}
 	return output, nil
 }
@@ -365,7 +365,7 @@ func (client *SingleDaxClient) BatchGetItemWithOptions(ctx context.Context, inpu
 		return err
 	}
 	if err := client.executeWithRetries(ctx, OpBatchGetItem, opt, encoder, decoder); err != nil {
-		return output, err
+		return output, operationError(OpBatchGetItem, err)
 	}
 	return output, nil
 }
@@ -439,12 +439,12 @@ func (client *SingleDaxClient) executeWithRetries(ctx context.Context, op string
 		}
 
 		if !isRetryable(o, i+1, err) {
-			return &smithy.OperationError{Err: err, OperationName: op}
+			return &smithy.OperationError{Err: err, ServiceID: service, OperationName: op}
 		}
 
 		d, err := o.Retryer.RetryDelay(i+1, err)
 		if err != nil {
-			return &smithy.OperationError{Err: err, OperationName: op}
+			return &smithy.OperationError{Err: err, ServiceID: service, OperationName: op}
 		}
 		if err = Sleep(ctx, op, d); err != nil {
 			return err
