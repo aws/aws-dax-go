@@ -372,7 +372,7 @@ func (p *tubePool) sessionBump() {
 // Logs debug logs if DEBUG logging is enabled.
 func (p *tubePool) logDebug(opt RequestOptions, logString string) {
 	if opt.Logger != nil {
-		opt.Logger.Debug(logString)
+		opt.Logger.Logf(ClassificationDebug, logString)
 	}
 }
 
