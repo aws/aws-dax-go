@@ -21,15 +21,12 @@ import (
 	"errors"
 	"time"
 
-	"github.com/aws/smithy-go"
-
-	aws2 "github.com/aws/aws-sdk-go-v2/aws"
-
 	"github.com/aws/aws-dax-go/dax/internal/cbor"
 	"github.com/aws/aws-dax-go/dax/internal/lru"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/smithy-go"
 )
 
 const (
@@ -67,7 +64,7 @@ const (
 
 type SingleDaxClient struct {
 	region             string
-	credentials        aws2.CredentialsProvider
+	credentials        aws.CredentialsProvider
 	tubeAuthWindowSecs int64
 	executor           *taskExecutor
 
@@ -79,11 +76,11 @@ type SingleDaxClient struct {
 
 var _ DaxAPI = (*SingleDaxClient)(nil)
 
-func NewSingleClient(endpoint string, connConfigData connConfig, region string, credentials aws2.CredentialsProvider) (*SingleDaxClient, error) {
+func NewSingleClient(endpoint string, connConfigData connConfig, region string, credentials aws.CredentialsProvider) (*SingleDaxClient, error) {
 	return newSingleClientWithOptions(endpoint, connConfigData, region, credentials, -1, defaultDialer.DialContext)
 }
 
-func newSingleClientWithOptions(endpoint string, connConfigData connConfig, region string, credentials aws2.CredentialsProvider, maxPendingConnections int, dialContextFn dialContext) (*SingleDaxClient, error) {
+func newSingleClientWithOptions(endpoint string, connConfigData connConfig, region string, credentials aws.CredentialsProvider, maxPendingConnections int, dialContextFn dialContext) (*SingleDaxClient, error) {
 	po := defaultTubePoolOptions
 	if maxPendingConnections > 0 {
 		po.maxConcurrentConnAttempts = maxPendingConnections
@@ -101,13 +98,10 @@ func newSingleClientWithOptions(endpoint string, connConfigData connConfig, regi
 
 	client.keySchema = &lru.Lru{
 		MaxEntries: keySchemaLruCacheSize,
-		LoadFunc: func(ctx aws.Context, key lru.Key) (interface{}, error) {
+		LoadFunc: func(ctx context.Context, key lru.Key) (interface{}, error) {
 			table, ok := key.(string)
 			if !ok {
 				return nil, &smithy.SerializationError{Err: errors.New("unexpected type for table name")}
-			}
-			if ctx == nil {
-				ctx = aws.BackgroundContext()
 			}
 			return client.defineKeySchema(ctx, table)
 		},
@@ -115,13 +109,10 @@ func newSingleClientWithOptions(endpoint string, connConfigData connConfig, regi
 
 	client.attrNamesListToId = &lru.Lru{
 		MaxEntries: attributeListLruCacheSize,
-		LoadFunc: func(ctx aws.Context, key lru.Key) (interface{}, error) {
+		LoadFunc: func(ctx context.Context, key lru.Key) (interface{}, error) {
 			attrNames, ok := key.([]string)
 			if !ok {
 				return nil, &smithy.SerializationError{Err: errors.New("unexpected type for attribute list")}
-			}
-			if ctx == nil {
-				ctx = aws.BackgroundContext()
 			}
 			return client.defineAttributeListId(ctx, attrNames)
 		},
@@ -139,13 +130,10 @@ func newSingleClientWithOptions(endpoint string, connConfigData connConfig, regi
 
 	client.attrListIdToNames = &lru.Lru{
 		MaxEntries: attributeListLruCacheSize,
-		LoadFunc: func(ctx aws.Context, key lru.Key) (interface{}, error) {
+		LoadFunc: func(ctx context.Context, key lru.Key) (interface{}, error) {
 			id, ok := key.(int64)
 			if !ok {
 				return nil, &smithy.SerializationError{Err: errors.New("unexpected type for attribute list id")}
-			}
-			if ctx == nil {
-				ctx = aws.BackgroundContext()
 			}
 			return client.defineAttributeList(ctx, id)
 		},
