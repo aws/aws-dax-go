@@ -17,11 +17,12 @@ package cbor
 
 import (
 	"encoding/binary"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
+	"errors"
 	"io"
 	"math"
 	"math/big"
+
+	"github.com/aws/smithy-go"
 )
 
 /* Encoding of header:
@@ -353,7 +354,7 @@ func decodeInt32BE(reader BytesReader) (int, error) {
 		return len, nil
 	}
 	if len != 4 {
-		return len, awserr.New(request.ErrCodeSerialization, "incomplete lexdecimal", nil)
+		return len, &smithy.SerializationError{Err: errors.New("incomplete lexdecimal")}
 	}
 	v := int32(binary.BigEndian.Uint32(bytes[:]))
 	return int(v), nil

@@ -17,17 +17,16 @@ package cbor
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"sort"
 
 	"github.com/aws/aws-dax-go/dax/internal/lru"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
 )
 
-var ErrMissingKey = awserr.New(request.ParamRequiredErrCode, "One of the required keys was not given a value", nil)
+var ErrMissingKey = errors.New("one of the required keys was not given a value")
 
 func EncodeItemKey(item map[string]types.AttributeValue, keydef []types.AttributeDefinition, writer *Writer) error {
 	keyBytes, err := GetEncodedItemKey(item, keydef)
@@ -39,7 +38,7 @@ func EncodeItemKey(item map[string]types.AttributeValue, keydef []types.Attribut
 
 func GetEncodedItemKey(item map[string]types.AttributeValue, keydef []types.AttributeDefinition) ([]byte, error) {
 	if item == nil {
-		return nil, awserr.New(request.InvalidParameterErrCode, "item cannot be nil", nil)
+		return nil, errors.New("item cannot be nil")
 	}
 
 	hk := keydef[0]
@@ -79,7 +78,7 @@ func GetEncodedItemKey(item map[string]types.AttributeValue, keydef []types.Attr
 				return nil, err
 			}
 		default:
-			return nil, awserr.New(request.InvalidParameterErrCode, fmt.Sprintf("Unsupported KeyType encountered in Hash Attribute: %s", hk.AttributeType), nil)
+			return nil, fmt.Errorf("unsupported KeyType encountered in Hash Attribute: %s", hk.AttributeType)
 		}
 	} else {
 		switch hk.AttributeType {
@@ -108,7 +107,7 @@ func GetEncodedItemKey(item map[string]types.AttributeValue, keydef []types.Attr
 				return nil, err
 			}
 		default:
-			return nil, awserr.New(request.InvalidParameterErrCode, fmt.Sprintf("Unsupported KeyType encountered in Hash Attribute: %s", hk.AttributeType), nil)
+			return nil, fmt.Errorf("unsupported KeyType encountered in Hash Attribute: %s", hk.AttributeType)
 		}
 
 		rk := keydef[1]
@@ -133,7 +132,7 @@ func GetEncodedItemKey(item map[string]types.AttributeValue, keydef []types.Attr
 			d := new(Decimal)
 			d, ok = d.SetString(n.Value)
 			if !ok {
-				return nil, awserr.New(request.InvalidParameterErrCode, "invalid number "+n.Value, nil)
+				return nil, errors.New("invalid number " + n.Value)
 			}
 			if _, err := EncodeLexDecimal(d, w.bw); err != nil {
 				return nil, err
@@ -147,7 +146,7 @@ func GetEncodedItemKey(item map[string]types.AttributeValue, keydef []types.Attr
 				return nil, err
 			}
 		default:
-			return nil, awserr.New(request.InvalidParameterErrCode, fmt.Sprintf("Unsupported KeyType encountered in Range Attribute: %s", rk.AttributeType), nil)
+			return nil, fmt.Errorf("unsupported KeyType encountered in Range Attribute: %s", rk.AttributeType)
 		}
 	}
 
@@ -192,7 +191,7 @@ func DecodeItemKey(reader *Reader, keydef []types.AttributeDefinition) (map[stri
 			}
 			keys[*hk.AttributeName] = &types.AttributeValueMemberB{Value: kb}
 		default:
-			return nil, awserr.New(request.InvalidParameterErrCode, fmt.Sprintf("Unsupported KeyType encountered in Hash Attribute: %s", hk.AttributeType), nil)
+			return nil, fmt.Errorf("unsupported KeyType encountered in Hash Attribute: %s", hk.AttributeType)
 		}
 	} else {
 		r, err := reader.BytesReader()
@@ -224,7 +223,7 @@ func DecodeItemKey(reader *Reader, keydef []types.AttributeDefinition) (map[stri
 			}
 			keys[*hk.AttributeName] = &types.AttributeValueMemberB{Value: b}
 		default:
-			return nil, awserr.New(request.InvalidParameterErrCode, fmt.Sprintf("Unsupported KeyType encountered in Hash Attribute: %s", hk.AttributeType), nil)
+			return nil, fmt.Errorf("unsupported KeyType encountered in Hash Attribute: %s", hk.AttributeType)
 		}
 
 		rk := keydef[1]
@@ -250,14 +249,14 @@ func DecodeItemKey(reader *Reader, keydef []types.AttributeDefinition) (map[stri
 			}
 			keys[*rk.AttributeName] = &types.AttributeValueMemberB{Value: buf.Bytes()}
 		default:
-			return nil, awserr.New(request.InvalidParameterErrCode, fmt.Sprintf("Unsupported KeyType encountered in Range Attribute: %s", rk.AttributeType), nil)
+			return nil, fmt.Errorf("unsupported KeyType encountered in Range Attribute: %s", rk.AttributeType)
 		}
 	}
 
 	return keys, nil
 }
 
-func EncodeItemNonKeyAttributes(ctx aws.Context, item map[string]types.AttributeValue, keydef []types.AttributeDefinition,
+func EncodeItemNonKeyAttributes(ctx context.Context, item map[string]types.AttributeValue, keydef []types.AttributeDefinition,
 	attrNamesListToId *lru.Lru, writer *Writer) error {
 
 	keydeflen := len(keydef)
@@ -291,7 +290,7 @@ func EncodeItemNonKeyAttributes(ctx aws.Context, item map[string]types.Attribute
 	return nil
 }
 
-func DecodeItemNonKeyAttributes(ctx aws.Context, reader *Reader, attrListIdToNames *lru.Lru) (map[string]types.AttributeValue, error) {
+func DecodeItemNonKeyAttributes(ctx context.Context, reader *Reader, attrListIdToNames *lru.Lru) (map[string]types.AttributeValue, error) {
 	id, err := reader.ReadInt64()
 	if err != nil {
 		return nil, err

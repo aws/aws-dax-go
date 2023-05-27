@@ -16,14 +16,14 @@
 package cbor
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"strconv"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/smithy-go"
 )
 
 const (
@@ -35,7 +35,7 @@ const (
 
 func EncodeAttributeValue(value types.AttributeValue, writer *Writer) error {
 	if value == nil {
-		return awserr.New(request.InvalidParameterErrCode, "invalid attribute value: nil", nil)
+		return &smithy.SerializationError{Err: errors.New("invalid attribute value: nil")}
 	}
 
 	var err error
@@ -107,7 +107,7 @@ func EncodeAttributeValue(value types.AttributeValue, writer *Writer) error {
 		err = writer.WriteBoolean(v.Value)
 	case *types.AttributeValueMemberNULL:
 		if !v.Value {
-			return awserr.New(request.InvalidParameterErrCode, "invalid null attribute value", nil) // DaxJavaClient suppress this error
+			return &smithy.SerializationError{Err: errors.New("invalid null attribute value")} // DaxJavaClient suppress this error
 		}
 		err = writer.WriteNull()
 	}
@@ -118,7 +118,7 @@ func writeStringNumber(val string, writer *Writer) error {
 	if strings.IndexAny(val, ".eE") >= 0 {
 		dec := new(Decimal)
 		if _, ok := dec.SetString(val); !ok {
-			return awserr.New(request.InvalidParameterErrCode, fmt.Sprintf("invalid number %v", val), nil)
+			return &smithy.SerializationError{Err: fmt.Errorf("invalid number %v", val)}
 		}
 		err := writer.WriteDecimal(dec)
 		return err
@@ -131,7 +131,7 @@ func writeStringNumber(val string, writer *Writer) error {
 	}
 	i, err := strconv.ParseInt(val, 10, 64)
 	if err != nil {
-		return awserr.New(request.InvalidParameterErrCode, fmt.Sprintf("invalid number %v", val), err)
+		return &smithy.SerializationError{Err: fmt.Errorf("invalid number %v", val)}
 	}
 	err = writer.WriteInt64(i)
 	return err
@@ -208,7 +208,7 @@ func DecodeAttributeValue(reader *Reader) (types.AttributeValue, error) {
 		case Nil:
 			return &types.AttributeValueMemberNULL{Value: true}, nil
 		default:
-			return nil, awserr.New(request.ErrCodeSerialization, fmt.Sprintf("unknown minor type %d for simple major type", minor), nil)
+			return nil, &smithy.DeserializationError{Err: fmt.Errorf("unknown minor type %d for simple major type", minor)}
 		}
 	case Tag:
 		switch minor {
@@ -257,7 +257,7 @@ func DecodeAttributeValue(reader *Reader) (types.AttributeValue, error) {
 					}
 					n, ok := av.(*types.AttributeValueMemberN)
 					if !ok {
-						return nil, awserr.New(request.ErrCodeSerialization, fmt.Sprintf("attribute type is not number. type: %T", av), nil)
+						return nil, &smithy.DeserializationError{Err: fmt.Errorf("attribute type is not number. type: %T", av)}
 					}
 					ss[i] = n.Value
 				}
@@ -277,10 +277,10 @@ func DecodeAttributeValue(reader *Reader) (types.AttributeValue, error) {
 				}
 				return &types.AttributeValueMemberBS{Value: bs}, nil
 			default:
-				return nil, awserr.New(request.ErrCodeSerialization, fmt.Sprintf("unknown minor type %d or tag %d", minor, tag), nil)
+				return nil, &smithy.DeserializationError{Err: fmt.Errorf("unknown minor type %d or tag %d", minor, tag)}
 			}
 		}
 	default:
-		return nil, awserr.New(request.ErrCodeSerialization, fmt.Sprintf("unknown major type %d", major), nil)
+		return nil, &smithy.DeserializationError{Err: fmt.Errorf("unknown major type %d", major)}
 	}
 }

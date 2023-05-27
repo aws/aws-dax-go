@@ -17,6 +17,7 @@ package cbor
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -24,8 +25,8 @@ import (
 	"testing"
 
 	"github.com/aws/aws-dax-go/dax/internal/lru"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-sdk-go/aws"
 )
 
 func TestItemKey(t *testing.T) {
@@ -210,7 +211,7 @@ func TestItemNonKeyAttributes(t *testing.T) {
 		return fmt.Sprintf("%q", key)
 	}
 	attrNamesListToId := &lru.Lru{
-		LoadFunc: func(ctx aws.Context, key lru.Key) (interface{}, error) {
+		LoadFunc: func(ctx context.Context, key lru.Key) (interface{}, error) {
 			an := key.([]string)
 			if !reflect.DeepEqual(an, attrNames) {
 				return nil, errors.New(fmt.Sprintf("unknown attribute list %v %v", an, strings.Join(an, ",")))
@@ -220,7 +221,7 @@ func TestItemNonKeyAttributes(t *testing.T) {
 		KeyMarshaller: km,
 	}
 	attrListIdToNames := &lru.Lru{
-		LoadFunc: func(ctx aws.Context, key lru.Key) (interface{}, error) {
+		LoadFunc: func(ctx context.Context, key lru.Key) (interface{}, error) {
 			id := key.(int64)
 			if id != attrListId {
 				return nil, errors.New(fmt.Sprintf("unknown attribute list id %v", id))
