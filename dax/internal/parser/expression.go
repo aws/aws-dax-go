@@ -26,8 +26,6 @@ import (
 	"github.com/aws/aws-dax-go/dax/internal/cbor"
 	"github.com/aws/aws-dax-go/dax/internal/parser/generated"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
 )
 
 const (
@@ -611,8 +609,8 @@ func (e *ExpressionEncoder) pop() sexpr {
 	return v
 }
 
-func newInvalidParameterError(msg string) awserr.Error {
-	return awserr.New(request.InvalidParameterErrCode, msg, nil)
+func newInvalidParameterError(msg string) error {
+	return fmt.Errorf("invalid parameter: %s", msg)
 }
 
 type sexpr struct {
