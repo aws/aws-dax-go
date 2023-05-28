@@ -19,10 +19,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/smithy-go"
 )
 
 const (
@@ -57,7 +57,6 @@ func translateLegacyPutItemInput(input *dynamodb.PutItemInput) (*dynamodb.PutIte
 	if err != nil {
 		return input, err
 	}
-	output.ConditionalOperator = nil
 	output.Expected = nil
 	return output, err
 }
@@ -71,7 +70,6 @@ func translateLegacyDeleteItemInput(input *dynamodb.DeleteItemInput) (*dynamodb.
 	output := input
 	output.ConditionExpression, output.ExpressionAttributeNames, output.ExpressionAttributeValues, err =
 		translateExpected(output.ConditionalOperator, output.Expected, input.ExpressionAttributeNames, output.ExpressionAttributeValues)
-	output.ConditionalOperator = nil
 	output.Expected = nil
 	if err != nil {
 		return input, err
@@ -99,7 +97,6 @@ func translateLegacyUpdateItemInput(input *dynamodb.UpdateItemInput) (*dynamodb.
 		if err != nil {
 			return input, err
 		}
-		output.ConditionalOperator = nil
 		output.Expected = nil
 	}
 	if uf {
@@ -141,7 +138,6 @@ func translateLegacyScanInput(input *dynamodb.ScanInput) (*dynamodb.ScanInput, e
 		if err != nil {
 			return input, err
 		}
-		output.ConditionalOperator = nil
 		output.ScanFilter = nil
 	}
 
@@ -180,7 +176,6 @@ func translateLegacyQueryInput(input *dynamodb.QueryInput) (*dynamodb.QueryInput
 		if err != nil {
 			return input, err
 		}
-		//output.ConditionalOperator = nil
 		output.QueryFilter = nil
 	}
 	if kf {
@@ -220,7 +215,11 @@ func hasAttributesToGet(a []string, p *string) (bool, error) {
 	af := len(a) != 0
 	pf := p != nil
 	if af && pf {
-		return false, awserr.New(ErrCodeValidationException, "Cannot specify both AttributesToGet and ProjectionExpression", nil)
+		return false, &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: "Cannot specify both AttributesToGet and ProjectionExpression",
+			Fault:   smithy.FaultClient,
+		}
 	}
 	return af, nil
 }
@@ -229,7 +228,11 @@ func hasExpected(e map[string]types.ExpectedAttributeValue, c *string) (bool, er
 	ef := len(e) != 0
 	cf := c != nil
 	if ef && cf {
-		return false, awserr.New(ErrCodeValidationException, "Cannot specify both Expected and ConditionExpression", nil)
+		return false, &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: "Cannot specify both Expected and ConditionExpression",
+			Fault:   smithy.FaultClient,
+		}
 	}
 	return ef, nil
 }
@@ -238,7 +241,11 @@ func hasAttributeUpdates(u map[string]types.AttributeValueUpdate, e *string) (bo
 	uf := len(u) > 0
 	ef := e != nil
 	if uf && ef {
-		return false, awserr.New(ErrCodeValidationException, "Cannot specify both AttributeUpdates and UpdateExpression", nil)
+		return false, &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: "Cannot specify both AttributeUpdates and UpdateExpression",
+			Fault:   smithy.FaultClient,
+		}
 	}
 	return uf, nil
 }
@@ -247,7 +254,11 @@ func hasFilter(c map[string]types.Condition, e *string) (bool, error) {
 	cf := len(c) > 0
 	ef := e != nil
 	if cf && ef {
-		return false, awserr.New(ErrCodeValidationException, "Cannot specify both [Scan|Query]Filter and [Scan|Query]FilterExpression", nil)
+		return false, &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: "Cannot specify both [Scan|Query]Filter and [Scan|Query]FilterExpression",
+			Fault:   smithy.FaultClient,
+		}
 	}
 	return cf, nil
 }
@@ -311,7 +322,11 @@ func translateAttributeUpdates(avus map[string]types.AttributeValueUpdate, subs 
 	for a, avu := range avus {
 		act := avu.Action
 		if avu.Value == nil && act != types.AttributeActionDelete {
-			return nil, subs, vars, awserr.New(ErrCodeValidationException, "only DELETE action is allowed when no attribute value is specified", nil)
+			return nil, subs, vars, &smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: "only DELETE action is allowed when no attribute value is specified",
+				Fault:   smithy.FaultClient,
+			}
 		}
 
 		var an, av string
@@ -332,7 +347,11 @@ func translateAttributeUpdates(avus map[string]types.AttributeValueUpdate, subs 
 				dels = append(dels, fmt.Sprintf("%s %s", an, av))
 			}
 		default:
-			return nil, subs, vars, awserr.New(ErrCodeValidationException, fmt.Sprintf("unknown AttributeValueUpdate Action: %s", act), nil)
+			return nil, subs, vars, &smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: fmt.Sprintf("unknown AttributeValueUpdate Action: %s", act),
+				Fault:   smithy.FaultClient,
+			}
 		}
 	}
 
@@ -390,14 +409,22 @@ func appendAttributeValues(in []byte, avl []types.AttributeValue, vars map[strin
 
 func appendCondition(in []byte, a string, eav types.ExpectedAttributeValue, subs map[string]string, vars map[string]types.AttributeValue) ([]byte, map[string]string, map[string]types.AttributeValue, error) {
 	if eav.Value != nil && len(eav.AttributeValueList) > 0 {
-		return in, subs, vars, awserr.New(ErrCodeValidationException, fmt.Sprintf("One or more parameter values were invalid: Value and AttributeValueList cannot be used together for Attribute: %s", a), nil)
+		return in, subs, vars, &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: fmt.Sprintf("One or more parameter values were invalid: Value and AttributeValueList cannot be used together for Attribute: %s", a),
+			Fault:   smithy.FaultClient,
+		}
 	}
 
 	op := eav.ComparisonOperator
 	if len(op) == 0 {
 		return appendExistsCondition(in, a, eav, subs, vars)
 	} else if eav.Exists != nil && *eav.Exists {
-		return in, subs, vars, awserr.New(ErrCodeValidationException, fmt.Sprintf("One or more parameter values were invalid: Exists and ComparisonOperator cannot be used together for Attribute: %s", a), nil)
+		return in, subs, vars, &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: fmt.Sprintf("One or more parameter values were invalid: Exists and ComparisonOperator cannot be used together for Attribute: %s", a),
+			Fault:   smithy.FaultClient,
+		}
 	}
 	avl := eav.AttributeValueList
 	if len(avl) == 0 && eav.Value != nil {
@@ -409,14 +436,22 @@ func appendCondition(in []byte, a string, eav types.ExpectedAttributeValue, subs
 func appendFilterCondition(in []byte, a string, c types.Condition, subs map[string]string, vars map[string]types.AttributeValue, keyCondition bool) ([]byte, map[string]string, map[string]types.AttributeValue, error) {
 	op := c.ComparisonOperator
 	if len(op) == 0 {
-		return in, subs, vars, awserr.New(ErrCodeValidationException, fmt.Sprintf("One or more parameter values were invalid: AttributeValueList can only be used with a ComparisonOperator for Attribute: %s", a), nil)
+		return in, subs, vars, &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: fmt.Sprintf("One or more parameter values were invalid: AttributeValueList can only be used with a ComparisonOperator for Attribute: %s", a),
+			Fault:   smithy.FaultClient,
+		}
 	}
 	return appendComparisonCondition(in, a, op, c.AttributeValueList, subs, vars, keyCondition)
 }
 
 func appendExistsCondition(in []byte, a string, eav types.ExpectedAttributeValue, subs map[string]string, vars map[string]types.AttributeValue) ([]byte, map[string]string, map[string]types.AttributeValue, error) {
 	if len(eav.AttributeValueList) != 0 {
-		return in, subs, vars, awserr.New(ErrCodeValidationException, fmt.Sprintf("One or more parameter values were invalid: AttributeValueList can only be used with a ComparisonOperator for Attribute: %s", a), nil)
+		return in, subs, vars, &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: fmt.Sprintf("One or more parameter values were invalid: AttributeValueList can only be used with a ComparisonOperator for Attribute: %s", a),
+			Fault:   smithy.FaultClient,
+		}
 	}
 	if eav.Exists == nil || *eav.Exists {
 		if eav.Value == nil {
@@ -426,7 +461,11 @@ func appendExistsCondition(in []byte, a string, eav types.ExpectedAttributeValue
 			} else {
 				s = fmt.Sprintf("%v", *eav.Exists)
 			}
-			return in, subs, vars, awserr.New(ErrCodeValidationException, fmt.Sprintf("One or more parameter values were invalid: Value must be provided when Exists is %s for Attribute: %s", s, a), nil)
+			return in, subs, vars, &smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: fmt.Sprintf("One or more parameter values were invalid: Value must be provided when Exists is %s for Attribute: %s", s, a),
+				Fault:   smithy.FaultClient,
+			}
 		}
 
 		var an, av string
@@ -437,7 +476,11 @@ func appendExistsCondition(in []byte, a string, eav types.ExpectedAttributeValue
 		in = append(in, []byte(av)...)
 	} else {
 		if eav.Value != nil {
-			return in, subs, vars, awserr.New(ErrCodeValidationException, fmt.Sprintf("One or more parameter values were invalid: Value cannot be used when Exists is false for Attribute: %s", a), nil)
+			return in, subs, vars, &smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: fmt.Sprintf("One or more parameter values were invalid: Value cannot be used when Exists is false for Attribute: %s", a),
+				Fault:   smithy.FaultClient,
+			}
 		}
 
 		var an string
@@ -501,7 +544,11 @@ func appendComparisonCondition(in []byte, a string, op types.ComparisonOperator,
 		case types.ComparisonOperatorGt:
 			// do nothing
 		default:
-			return in, subs, vars, awserr.New(ErrCodeValidationException, fmt.Sprintf("Unknown comparison operator: %s", op), nil)
+			return in, subs, vars, &smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: fmt.Sprintf("Unknown comparison operator: %s", op),
+				Fault:   smithy.FaultClient,
+			}
 		}
 		return appendArithmeticComparisonCondition(in, a, op, avl, subs, vars)
 	}
@@ -589,10 +636,18 @@ func appendNullCondition(in []byte, a string, op types.ComparisonOperator, avl [
 
 func appendInCondition(in []byte, a string, op types.ComparisonOperator, avl []types.AttributeValue, subs map[string]string, vars map[string]types.AttributeValue) ([]byte, map[string]string, map[string]types.AttributeValue, error) {
 	if avl == nil {
-		return in, subs, vars, awserr.New(ErrCodeValidationException, fmt.Sprintf("One or more parameter values were invalid: AttributeValueList must be used with ComparisonOperator: %s for Attribute: %s", op, a), nil)
+		return in, subs, vars, &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: fmt.Sprintf("One or more parameter values were invalid: AttributeValueList must be used with ComparisonOperator: %s for Attribute: %s", op, a),
+			Fault:   smithy.FaultClient,
+		}
 	}
 	if len(avl) == 0 {
-		return in, subs, vars, awserr.New(ErrCodeValidationException, fmt.Sprintf("One or more parameter values were invalid: Invalid number of argument(s)0 for the %s ComparisonOperator", op), nil)
+		return in, subs, vars, &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: fmt.Sprintf("One or more parameter values were invalid: Invalid number of argument(s)0 for the %s ComparisonOperator", op),
+			Fault:   smithy.FaultClient,
+		}
 	}
 	if err := validateScalarAttribute(avl, op); err != nil {
 		return in, subs, vars, err
@@ -660,14 +715,26 @@ func appendAttributeValue(vars map[string]types.AttributeValue, av types.Attribu
 
 func validateArgCount(e int, a []types.AttributeValue, op types.ComparisonOperator, n string) error {
 	if a == nil && e > 0 {
-		return awserr.New(ErrCodeValidationException, fmt.Sprintf("One or more parameter values were invalid: Value or AttributeValueList must be used with ComparisonOperator: %s for Attribute %s", op, n), nil)
+		return &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: fmt.Sprintf("One or more parameter values were invalid: Value or AttributeValueList must be used with ComparisonOperator: %s for Attribute %s", op, n),
+			Fault:   smithy.FaultClient,
+		}
 	}
 	if len(a) != e {
-		return awserr.New(ErrCodeValidationException, fmt.Sprintf("One or more parameter values were invalid: Invalid number of argument(s) for the %s ComparisonOperator", op), nil)
+		return &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: fmt.Sprintf("One or more parameter values were invalid: Invalid number of argument(s) for the %s ComparisonOperator", op),
+			Fault:   smithy.FaultClient,
+		}
 	}
 	for _, i := range a {
 		if i == nil {
-			return awserr.New(ErrCodeValidationException, fmt.Sprintf("One or more parameter values were invalid: Invalid number of argument(s) for the %s ComparisonOperator", op), nil)
+			return &smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: fmt.Sprintf("One or more parameter values were invalid: Invalid number of argument(s) for the %s ComparisonOperator", op),
+				Fault:   smithy.FaultClient,
+			}
 		}
 	}
 	return nil
@@ -683,7 +750,11 @@ func validateScalarAttribute(avl []types.AttributeValue, op types.ComparisonOper
 			case *types.AttributeValueMemberS, *types.AttributeValueMemberN, *types.AttributeValueMemberB:
 			// ok
 			default:
-				return awserr.New(ErrCodeValidationException, fmt.Sprintf("One or more parameter values were invalid: ComparisonOperator %s is not valid for %s AttributeValue type", op, attributeTypeName(v)), nil)
+				return &smithy.GenericAPIError{
+					Code:    ErrCodeValidationException,
+					Message: fmt.Sprintf("One or more parameter values were invalid: ComparisonOperator %s is not valid for %s AttributeValue type", op, attributeTypeName(v)),
+					Fault:   smithy.FaultClient,
+				}
 			}
 		}
 	}
@@ -692,7 +763,11 @@ func validateScalarAttribute(avl []types.AttributeValue, op types.ComparisonOper
 
 func validateNotKeyCondition(kc bool, op types.ComparisonOperator) error {
 	if kc {
-		return awserr.New(ErrCodeValidationException, fmt.Sprintf("Unsupported operator on KeyCondition: %s", op), nil)
+		return &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: fmt.Sprintf("Unsupported operator on KeyCondition: %s", op),
+			Fault:   smithy.FaultClient,
+		}
 	}
 	return nil
 }
