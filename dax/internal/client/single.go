@@ -442,12 +442,12 @@ func (client *SingleDaxClient) executeWithRetries(ctx context.Context, op string
 			return &smithy.OperationError{Err: err, ServiceID: service, OperationName: op}
 		}
 
-		d, err := o.Retryer.RetryDelay(i+1, err)
-		if err != nil {
-			return &smithy.OperationError{Err: err, ServiceID: service, OperationName: op}
+		d, retryErr := o.Retryer.RetryDelay(i+1, err)
+		if retryErr != nil {
+			return &smithy.OperationError{Err: retryErr, ServiceID: service, OperationName: op}
 		}
-		if err = Sleep(ctx, op, d); err != nil {
-			return err
+		if sleepErr := Sleep(ctx, op, d); sleepErr != nil {
+			return &smithy.OperationError{Err: sleepErr, ServiceID: service, OperationName: op}
 		}
 
 		if o.Logger != nil {
@@ -455,7 +455,7 @@ func (client *SingleDaxClient) executeWithRetries(ctx context.Context, op string
 		}
 	}
 	// Return the last error occurred
-	return translateError(err)
+	return err
 }
 
 func (client *SingleDaxClient) executeWithContext(ctx context.Context, op string, encoder func(writer *cbor.Writer) error, decoder func(reader *cbor.Reader) error, opt RequestOptions) error {

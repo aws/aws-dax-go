@@ -17,8 +17,6 @@ package client
 
 import (
 	"bytes"
-	"errors"
-	"net"
 	"reflect"
 	"testing"
 
@@ -282,39 +280,4 @@ func TestDecodeNilErrorDetail(t *testing.T) {
 		t.Errorf("expected %v, got %v", expected, d)
 	}
 
-}
-
-func TestTranslateError(t *testing.T) {
-	cases := []struct {
-		input  error
-		output error
-	}{
-		{
-			input:  newDaxRequestFailure([]int{1, 2, 3}, "ec", "msg", "rid", 500),
-			output: newDaxRequestFailure([]int{1, 2, 3}, "ec", "msg", "rid", 500),
-		},
-		{
-			input:  awserr.NewRequestFailure(awserr.New("ec", "msg", nil), 500, "rid"),
-			output: awserr.NewRequestFailure(awserr.New("ec", "msg", nil), 500, "rid"),
-		},
-		{
-			input:  awserr.New("ec", "msg", nil),
-			output: awserr.New("ec", "msg", nil),
-		},
-		{
-			input:  new(net.UnknownNetworkError),
-			output: awserr.New(dynamodb.ErrCodeInternalServerError, "network error", new(net.UnknownNetworkError)),
-		},
-		{
-			input:  errors.New("ex"),
-			output: awserr.New("UnknownError", "unknown error", errors.New("ex")),
-		},
-	}
-
-	for _, c := range cases {
-		actual := translateError(c.input)
-		if !reflect.DeepEqual(c.output, actual) {
-			t.Errorf("expected %v, got %v", c.output, actual)
-		}
-	}
 }

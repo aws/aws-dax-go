@@ -18,7 +18,6 @@ package client
 import (
 	"bytes"
 	"fmt"
-	"net"
 
 	"github.com/aws/aws-dax-go/dax/internal/cbor"
 	"github.com/aws/aws-dax-go/dax/internal/lru"
@@ -26,7 +25,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/private/protocol"
+	"github.com/aws/smithy-go"
 )
 
 const (
@@ -83,26 +82,6 @@ func (f *daxRequestFailure) recoverable() bool {
 func (f *daxRequestFailure) authError() bool {
 	return len(f.codes) > 3 && (f.codes[1] == 23 && f.codes[2] == 31 &&
 		(f.codes[3] == 32 || f.codes[3] == 33 || f.codes[3] == 34))
-}
-
-func translateError(err error) awserr.Error {
-	if err == nil {
-		return nil
-	}
-	switch err.(type) {
-	case awserr.Error:
-		e := err.(awserr.Error)
-		return e
-	case net.Error:
-		e := err.(net.Error)
-		code := dynamodb.ErrCodeInternalServerError
-		if e.Timeout() {
-			code = request.ErrCodeResponseTimeout
-		}
-		return awserr.New(code, "network error", e)
-	default:
-		return awserr.New("UnknownError", "unknown error", err)
-	}
 }
 
 func decodeError(reader *cbor.Reader) (awserr.Error, error) {
