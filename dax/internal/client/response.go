@@ -16,6 +16,7 @@
 package client
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/aws/aws-dax-go/dax/internal/cbor"
@@ -23,8 +24,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/smithy-go"
 )
 
 const (
@@ -111,7 +111,7 @@ func decodeEndpoint(reader *cbor.Reader) (serviceEndpoint, error) {
 				return err
 			} else {
 				if role != roleLeader && role != roleReplica {
-					return awserr.New(request.ErrCodeSerialization, fmt.Sprintf("unknown role %d", role), nil)
+					return &smithy.SerializationError{Err: fmt.Errorf("unknown role %d", role)}
 				}
 				se.role = role
 			}
@@ -215,7 +215,7 @@ func decodePutItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.P
 			}
 			output.Attributes = attrs
 		default:
-			return awserr.New(request.ErrCodeSerialization, fmt.Sprintf("unknown response param key %d", key), nil)
+			return &smithy.SerializationError{Err: fmt.Errorf("unknown response param key %d", key)}
 		}
 		return nil
 	})
@@ -261,7 +261,7 @@ func decodeDeleteItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamod
 			}
 			output.Attributes = attrs
 		default:
-			return awserr.New(request.ErrCodeSerialization, fmt.Sprintf("unknown response param key %d", key), nil)
+			return &smithy.SerializationError{Err: fmt.Errorf("unknown response param key %d", key)}
 		}
 		return nil
 	})
@@ -318,10 +318,10 @@ func decodeUpdateItemOutput(
 					return err
 				}
 			default:
-				return awserr.New(request.ErrCodeSerialization, fmt.Sprintf("unexpected return value %s", rv), nil)
+				return &smithy.SerializationError{Err: fmt.Errorf("unexpected return value %s", rv)}
 			}
 		default:
-			return awserr.New(request.ErrCodeSerialization, fmt.Sprintf("unknown response param key %d", key), nil)
+			return &smithy.SerializationError{Err: fmt.Errorf("unknown response param key %d", key)}
 		}
 		return nil
 	})
@@ -363,7 +363,7 @@ func decodeGetItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.G
 			}
 			output.Item = item
 		default:
-			return awserr.New(request.ErrCodeSerialization, fmt.Sprintf("unknown response param key %d", key), nil)
+			return &smithy.SerializationError{Err: fmt.Errorf("unknown response param key %d", key)}
 		}
 		return nil
 	})
@@ -477,7 +477,7 @@ func decodeScanQueryOutput(ctx aws.Context, reader *cbor.Reader, table string, i
 				out.LastEvaluatedKey = k
 			}
 		default:
-			return awserr.New(request.ErrCodeSerialization, fmt.Sprintf("unknown response param key %d", key), nil)
+			return &smithy.SerializationError{Err: fmt.Errorf("unknown response param key %d", key)}
 		}
 		return nil
 	})
@@ -612,7 +612,7 @@ func decodeBatchGetItemOutput(
 		return output, err
 	}
 	if l != 2 {
-		return output, awserr.New(request.ErrCodeSerialization, fmt.Sprintf("Unexpected number of objects %d in BatchGetItemOutput", l), nil)
+		return output, &smithy.SerializationError{Err: fmt.Errorf("Unexpected number of objects %d in BatchGetItemOutput", l)}
 	}
 
 	projectionsByTable := make(map[string][]documentPath, len(input.RequestItems))
@@ -754,7 +754,7 @@ func decodeTransactWriteItemsOutput(ctx aws.Context, reader *cbor.Reader, input 
 	if len != 3 {
 		// returnValues still in the tube even though it's not being returned
 		// But user shouldn't be able to see it.
-		return output, awserr.New(request.ErrCodeSerialization, fmt.Sprintf("TransactWriteResponse needs to have 2 elements, instead had: %d", len), nil)
+		return output, &smithy.SerializationError{Err: fmt.Errorf("TransactWriteResponse needs to have 2 elements, instead had: %d", len)}
 	}
 	_, err = reader.ReadArrayLength()
 	if err != nil {
@@ -820,7 +820,7 @@ func decodeTransactGetItemsOutput(ctx aws.Context, reader *cbor.Reader, input *d
 		return output, err
 	}
 	if length != 2 {
-		return output, awserr.New(request.ErrCodeSerialization, fmt.Sprintf("TransactGetResponse needs to have 2 elements, instead had: %d", length), nil)
+		return output, &smithy.SerializationError{Err: fmt.Errorf("TransactGetResponse needs to have 2 elements, instead had: %d", length)}
 	}
 
 	if output == nil {
@@ -832,8 +832,8 @@ func decodeTransactGetItemsOutput(ctx aws.Context, reader *cbor.Reader, input *d
 		return output, err
 	}
 	if numR != len(input.TransactItems) {
-		return output, awserr.New(request.ErrCodeSerialization, fmt.Sprintf("TransactGetResponse need to have the same number of Responses "+
-			"as the length of TransactItems in the input: %d, instead had: %d", len(input.TransactItems), numR), nil)
+		return output, &smithy.SerializationError{Err: fmt.Errorf("TransactGetResponse need to have the same number of Responses "+
+			"as the length of TransactItems in the input: %d, instead had: %d", len(input.TransactItems), numR)}
 	}
 
 	responses := make([]types.ItemResponse, numR)
@@ -908,7 +908,7 @@ func decodeScanQueryItems(ctx aws.Context, reader *cbor.Reader, table string, ke
 				return err
 			}
 			if length != 2 {
-				return awserr.New(request.ErrCodeSerialization, fmt.Sprintf("expected array of size 2 containing key and value, got %d", length), nil)
+				return &smithy.SerializationError{Err: fmt.Errorf("expected array of size 2 containing key and value, got %d", length)}
 			}
 			key, err := decodeKey(reader, tableKeys)
 			if err != nil {
@@ -1077,7 +1077,7 @@ func decodeCompoundKey(reader *cbor.Reader) (map[string]types.AttributeValue, er
 		return nil, err
 	}
 	if hdr != cbor.MapStream {
-		return nil, awserr.New(request.ErrCodeSerialization, "bad compound key", nil)
+		return nil, &smithy.SerializationError{Err: errors.New("bad compound key")}
 	}
 	_, err = r.ReadMapLength()
 	if err != nil {
@@ -1133,7 +1133,7 @@ func decodeNonKeyAttributes(ctx aws.Context, reader *cbor.Reader, attrNamesListT
 	case cbor.Map:
 		return decodeProjection(reader, projectionOrdinals)
 	}
-	return nil, awserr.New(request.ErrCodeSerialization, fmt.Sprintf("unexpected cbor type %v", hdr), nil)
+	return nil, &smithy.SerializationError{Err: fmt.Errorf("unexpected cbor type %v", hdr)}
 
 }
 
@@ -1141,7 +1141,7 @@ func decodeProjection(reader *cbor.Reader, projectionOrdinals []documentPath) (m
 	ib := &itemBuilder{}
 	err := consumeMap(reader, func(ord int, r *cbor.Reader) error {
 		if ord > len(projectionOrdinals) {
-			return awserr.New(request.ErrCodeSerialization, fmt.Sprintf("unexpected ordinal %v", ord), nil)
+			return &smithy.SerializationError{Err: fmt.Errorf("unexpected ordinal %v", ord)}
 		}
 		p := projectionOrdinals[ord]
 		v, err := cbor.DecodeAttributeValue(r)
@@ -1174,12 +1174,12 @@ func decodeAttributeProjection(ctx aws.Context, reader *cbor.Reader, attrListIdT
 	}
 	ans, ok := attrNames.([]string)
 	if !ok {
-		return nil, awserr.New(request.ErrCodeSerialization, "invalid type for attribute names list", nil)
+		return nil, &smithy.SerializationError{Err: errors.New("invalid type for attribute names list")}
 	}
 	attrs := make(map[string]types.AttributeValue)
 	err = consumeMap(r, func(ord int, reader *cbor.Reader) error {
 		if ord > len(ans) {
-			return awserr.New(request.ErrCodeSerialization, "invalid ordinal", nil)
+			return &smithy.SerializationError{Err: errors.New("invalid ordinal")}
 		}
 		av, err := cbor.DecodeAttributeValue(reader)
 		if err != nil {
@@ -1299,7 +1299,7 @@ func decodeConsumedCapacityExtended(reader *cbor.Reader) (*types.ConsumedCapacit
 			}
 			cc.LocalSecondaryIndexes = c
 		default:
-			return awserr.New(request.ErrCodeSerialization, fmt.Sprintf("unknown response param key %d", key), nil)
+			return &smithy.SerializationError{Err: fmt.Errorf("unknown response param key %d", key)}
 		}
 		return nil
 	})
@@ -1340,7 +1340,7 @@ func decodeCapacity(reader *cbor.Reader) (*types.Capacity, error) {
 			}
 			c.WriteCapacityUnits = &f
 		default:
-			return awserr.New(request.ErrCodeSerialization, fmt.Sprintf("unknown response param key %d", key), nil)
+			return &smithy.SerializationError{Err: fmt.Errorf("unknown response param key %d", key)}
 		}
 		return nil
 	})
@@ -1432,7 +1432,7 @@ func getKeySchema(ctx aws.Context, keySchemaCache *lru.Lru, table string) ([]typ
 	}
 	keys, ok := k.([]types.AttributeDefinition)
 	if !ok {
-		return nil, awserr.New(request.ErrCodeSerialization, "invalid type for keyschema", nil)
+		return nil, &smithy.SerializationError{Err: errors.New("invalid type for keyschema")}
 	}
 	return keys, nil
 }

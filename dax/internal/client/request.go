@@ -17,6 +17,7 @@ package client
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -27,8 +28,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/smithy-go"
 	"github.com/gofrs/uuid"
 )
 
@@ -217,7 +217,7 @@ func encodeDefineKeySchemaInput(table string, writer *cbor.Writer) error {
 
 func encodePutItemInput(ctx aws.Context, input *dynamodb.PutItemInput, keySchema *lru.Lru, attrNamesListToId *lru.Lru, writer *cbor.Writer) error {
 	if input == nil {
-		return awserr.New(request.ParamRequiredErrCode, fmt.Sprintf("input cannot be nil"), nil)
+		return smithy.NewErrParamRequired("input")
 	}
 	var err error
 	if input, err = translateLegacyPutItemInput(input); err != nil {
@@ -253,7 +253,7 @@ func encodePutItemInput(ctx aws.Context, input *dynamodb.PutItemInput, keySchema
 
 func encodeDeleteItemInput(ctx aws.Context, input *dynamodb.DeleteItemInput, keySchema *lru.Lru, writer *cbor.Writer) error {
 	if input == nil {
-		return awserr.New(request.ParamRequiredErrCode, fmt.Sprintf("input cannot be nil"), nil)
+		return smithy.NewErrParamRequired("input")
 	}
 	var err error
 	if input, err = translateLegacyDeleteItemInput(input); err != nil {
@@ -286,7 +286,7 @@ func encodeDeleteItemInput(ctx aws.Context, input *dynamodb.DeleteItemInput, key
 
 func encodeUpdateItemInput(ctx aws.Context, input *dynamodb.UpdateItemInput, keySchema *lru.Lru, writer *cbor.Writer) error {
 	if input == nil {
-		return awserr.New(request.ParamRequiredErrCode, fmt.Sprintf("input cannot be nil"), nil)
+		return smithy.NewErrParamRequired("input")
 	}
 	var err error
 	if input, err = translateLegacyUpdateItemInput(input); err != nil {
@@ -319,7 +319,7 @@ func encodeUpdateItemInput(ctx aws.Context, input *dynamodb.UpdateItemInput, key
 
 func encodeGetItemInput(ctx aws.Context, input *dynamodb.GetItemInput, keySchema *lru.Lru, writer *cbor.Writer) error {
 	if input == nil {
-		return awserr.New(request.ParamRequiredErrCode, fmt.Sprintf("input cannot be nil"), nil)
+		return smithy.NewErrParamRequired("input")
 	}
 	var err error
 	if input, err = translateLegacyGetItemInput(input); err != nil {
@@ -350,7 +350,7 @@ func encodeGetItemInput(ctx aws.Context, input *dynamodb.GetItemInput, keySchema
 
 func encodeScanInput(ctx aws.Context, input *dynamodb.ScanInput, keySchema *lru.Lru, writer *cbor.Writer) error {
 	if input == nil {
-		return awserr.New(request.ParamRequiredErrCode, fmt.Sprintf("input cannot be nil"), nil)
+		return smithy.NewErrParamRequired("input")
 	}
 	var err error
 	if input, err = translateLegacyScanInput(input); err != nil {
@@ -377,14 +377,14 @@ func encodeScanInput(ctx aws.Context, input *dynamodb.ScanInput, keySchema *lru.
 
 func encodeQueryInput(ctx aws.Context, input *dynamodb.QueryInput, keySchema *lru.Lru, writer *cbor.Writer) error {
 	if input == nil {
-		return awserr.New(request.ParamRequiredErrCode, fmt.Sprintf("input cannot be nil"), nil)
+		return smithy.NewErrParamRequired("input")
 	}
 	var err error
 	if input, err = translateLegacyQueryInput(input); err != nil {
 		return err
 	}
 	if input.KeyConditionExpression == nil {
-		return awserr.New(request.ParamRequiredErrCode, "KeyConditionExpression cannot be nil", nil)
+		return smithy.NewErrParamRequired("input.KeyConditionExpression")
 	}
 	if err := encodeServiceAndMethod(query_N931250863_1_Id, writer); err != nil {
 		return err
@@ -410,7 +410,7 @@ func encodeQueryInput(ctx aws.Context, input *dynamodb.QueryInput, keySchema *lr
 
 func encodeBatchWriteItemInput(ctx aws.Context, input *dynamodb.BatchWriteItemInput, keySchema *lru.Lru, attrNamesListToId *lru.Lru, writer *cbor.Writer) error {
 	if input == nil {
-		return awserr.New(request.ParamRequiredErrCode, fmt.Sprintf("input cannot be nil"), nil)
+		return smithy.NewErrParamRequired("input")
 	}
 	var err error
 	if err = encodeServiceAndMethod(batchWriteItem_116217951_1_Id, writer); err != nil {
@@ -428,13 +428,13 @@ func encodeBatchWriteItemInput(ctx aws.Context, input *dynamodb.BatchWriteItemIn
 
 		l := len(wrs)
 		if l == 0 {
-			return awserr.New(request.InvalidParameterErrCode, fmt.Sprintf("1 validation error detected: Value '{%s=%d}' at 'requestItems' failed to satisfy constraint:"+
-				" Map value must satisfy constraint: [Member must have length less than or equal to 25, Member must have length greater than or equal to 1", table, l), nil)
+			return fmt.Errorf("1 validation error detected: Value '{%s=%d}' at 'requestItems' failed to satisfy constraint:"+
+				" Map value must satisfy constraint: [Member must have length less than or equal to 25, Member must have length greater than or equal to 1", table, l)
 		}
 		totalRequests = totalRequests + l
 		if totalRequests > maxWriteBatchSize {
-			return awserr.New(request.InvalidParameterErrCode, fmt.Sprintf("1 validation error detected: Value '{%s=%d}' at 'requestItems' failed to satisfy constraint:"+
-				" Map value must satisfy constraint: [Member must have length less than or equal to 25, Member must have length greater than or equal to 1", table, totalRequests), nil)
+			return fmt.Errorf("1 validation error detected: Value '{%s=%d}' at 'requestItems' failed to satisfy constraint:"+
+				" Map value must satisfy constraint: [Member must have length less than or equal to 25, Member must have length greater than or equal to 1", table, totalRequests)
 		}
 
 		if err = writer.WriteString(table); err != nil {
@@ -445,7 +445,7 @@ func encodeBatchWriteItemInput(ctx aws.Context, input *dynamodb.BatchWriteItemIn
 		}
 
 		if hasDuplicatesWriteRequests(wrs, keys) {
-			return awserr.New(request.InvalidParameterErrCode, "Provided list of item keys contains duplicates", nil)
+			return errors.New("provided list of item keys contains duplicates")
 		}
 		for _, wr := range wrs {
 			if pr := wr.PutRequest; pr != nil {
@@ -464,7 +464,7 @@ func encodeBatchWriteItemInput(ctx aws.Context, input *dynamodb.BatchWriteItemIn
 					return err
 				}
 			} else {
-				return awserr.New(request.ParamRequiredErrCode, "Both PutRequest and DeleteRequest cannot be empty", nil)
+				return errors.New("both PutRequest and DeleteRequest cannot be empty")
 			}
 		}
 	}
@@ -477,7 +477,7 @@ func encodeBatchWriteItemInput(ctx aws.Context, input *dynamodb.BatchWriteItemIn
 
 func encodeBatchGetItemInput(ctx aws.Context, input *dynamodb.BatchGetItemInput, keySchema *lru.Lru, writer *cbor.Writer) error {
 	if input == nil {
-		return awserr.New(request.ParamRequiredErrCode, fmt.Sprintf("input cannot be nil"), nil)
+		return smithy.NewErrParamRequired("input")
 	}
 	var err error
 	if input, err = translateLegacyBatchGetItemInput(input); err != nil {
@@ -533,7 +533,7 @@ func encodeBatchGetItemInput(ctx aws.Context, input *dynamodb.BatchGetItemInput,
 			return err
 		}
 		if hasDuplicateKeysAndAttributes(kaas, tableKeys) {
-			return awserr.New(request.InvalidParameterErrCode, "Provided list of item keys contains duplicates", nil)
+			return errors.New("provided list of item keys contains duplicates")
 		}
 		for _, keys := range kaas.Keys {
 			if err = cbor.EncodeItemKey(keys, tableKeys, writer); err != nil {
@@ -556,7 +556,7 @@ func encodeTransactWriteItemsInput(
 	extractedKeys []map[string]types.AttributeValue,
 ) error {
 	if input == nil {
-		return awserr.New(request.ParamRequiredErrCode, "input cannot be nil", nil)
+		return smithy.NewErrParamRequired("input")
 	}
 	var err error
 	if err = encodeServiceAndMethod(transactWriteItems_N1160037738_1_Id, writer); err != nil {
@@ -664,10 +664,10 @@ func encodeTransactWriteItemsInput(
 		}
 
 		if opCount == 0 {
-			return awserr.New(request.ParamRequiredErrCode, "Invalid Request: TransactWriteItemsInput should contain Delete or Put or Update request", nil)
+			return errors.New("invalid request: TransactWriteItemsInput should contain Delete or Put or Update request")
 		}
 		if opCount > 1 {
-			return awserr.New(request.ParamRequiredErrCode, "TransactItems can only contain one of ConditionalCheck, Put, Update or Delete", nil)
+			return errors.New("TransactItems can only contain one of ConditionalCheck, Put, Update or Delete")
 		}
 
 		if err := operationWriter.WriteInt(operation); err != nil {
@@ -697,7 +697,7 @@ func encodeTransactWriteItemsInput(
 		tableKey := string(keyBytes)
 		_, ok := tableKeySet[tableKey]
 		if ok {
-			return awserr.New(request.ParamRequiredErrCode, "Transaction request cannot include multiple operations on one item", nil)
+			return errors.New("transaction request cannot include multiple operations on one item")
 		} else {
 			tableKeySet[tableKey] = true
 		}
@@ -822,7 +822,7 @@ func encodeTransactGetItemsInput(
 	extractedKeys []map[string]types.AttributeValue,
 ) error {
 	if input == nil {
-		return awserr.New(request.ParamRequiredErrCode, "input cannot be nil", nil)
+		return smithy.NewErrParamRequired("input")
 	}
 	var err error
 	if err = encodeServiceAndMethod(transactGetItems_1866287579_1_Id, writer); err != nil {

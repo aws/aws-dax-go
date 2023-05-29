@@ -16,13 +16,12 @@
 package client
 
 import (
+	"errors"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
 )
 
 type documentPathElement struct {
@@ -75,7 +74,7 @@ func buildDocumentPath(path string, expressionAttributeNames map[string]string) 
 		}
 
 		if idx == 0 {
-			return documentPath{}, awserr.New(request.InvalidParameterErrCode, "invalid path: "+path, nil)
+			return documentPath{}, errors.New("invalid path: " + path)
 		}
 
 		pre := re[0:idx]
@@ -86,7 +85,7 @@ func buildDocumentPath(path string, expressionAttributeNames map[string]string) 
 			idx = strings.Index(re, "]")
 
 			if idx == -1 {
-				return documentPath{}, awserr.New(request.InvalidParameterErrCode, "invalid path: "+path, nil)
+				return documentPath{}, errors.New("invalid path: " + path)
 			}
 
 			lidx, err := strconv.Atoi(re[:idx])
@@ -98,12 +97,12 @@ func buildDocumentPath(path string, expressionAttributeNames map[string]string) 
 			re = re[idx+1:]
 			idx = strings.Index(re, "[")
 			if idx > 0 {
-				return documentPath{}, awserr.New(request.InvalidParameterErrCode, "invalid path: "+path, nil)
+				return documentPath{}, errors.New("invalid path: " + path)
 			}
 		}
 
 		if len(elements) == 0 {
-			return documentPath{}, awserr.New(request.InvalidParameterErrCode, "invalid path: "+path, nil)
+			return documentPath{}, errors.New("invalid path: " + path)
 		}
 	}
 
