@@ -17,6 +17,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -25,9 +26,9 @@ import (
 	"github.com/aws/aws-dax-go/dax/internal/cbor"
 	"github.com/aws/aws-dax-go/dax/internal/lru"
 	"github.com/aws/aws-dax-go/dax/internal/parser"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/smithy-go"
 	"github.com/gofrs/uuid"
 )
@@ -215,7 +216,7 @@ func encodeDefineKeySchemaInput(table string, writer *cbor.Writer) error {
 	return writer.WriteBytes([]byte(table))
 }
 
-func encodePutItemInput(ctx aws.Context, input *dynamodb.PutItemInput, keySchema *lru.Lru, attrNamesListToId *lru.Lru, writer *cbor.Writer) error {
+func encodePutItemInput(ctx context.Context, input *dynamodb.PutItemInput, keySchema *lru.Lru, attrNamesListToId *lru.Lru, writer *cbor.Writer) error {
 	if input == nil {
 		return smithy.NewErrParamRequired("input")
 	}
@@ -251,7 +252,7 @@ func encodePutItemInput(ctx aws.Context, input *dynamodb.PutItemInput, keySchema
 		nil, input.ConditionExpression, nil, input.ExpressionAttributeNames, input.ExpressionAttributeValues, writer)
 }
 
-func encodeDeleteItemInput(ctx aws.Context, input *dynamodb.DeleteItemInput, keySchema *lru.Lru, writer *cbor.Writer) error {
+func encodeDeleteItemInput(ctx context.Context, input *dynamodb.DeleteItemInput, keySchema *lru.Lru, writer *cbor.Writer) error {
 	if input == nil {
 		return smithy.NewErrParamRequired("input")
 	}
@@ -284,7 +285,7 @@ func encodeDeleteItemInput(ctx aws.Context, input *dynamodb.DeleteItemInput, key
 		nil, input.ConditionExpression, nil, input.ExpressionAttributeNames, input.ExpressionAttributeValues, writer)
 }
 
-func encodeUpdateItemInput(ctx aws.Context, input *dynamodb.UpdateItemInput, keySchema *lru.Lru, writer *cbor.Writer) error {
+func encodeUpdateItemInput(ctx context.Context, input *dynamodb.UpdateItemInput, keySchema *lru.Lru, writer *cbor.Writer) error {
 	if input == nil {
 		return smithy.NewErrParamRequired("input")
 	}
@@ -317,7 +318,7 @@ func encodeUpdateItemInput(ctx aws.Context, input *dynamodb.UpdateItemInput, key
 		nil, input.ConditionExpression, input.UpdateExpression, input.ExpressionAttributeNames, input.ExpressionAttributeValues, writer)
 }
 
-func encodeGetItemInput(ctx aws.Context, input *dynamodb.GetItemInput, keySchema *lru.Lru, writer *cbor.Writer) error {
+func encodeGetItemInput(ctx context.Context, input *dynamodb.GetItemInput, keySchema *lru.Lru, writer *cbor.Writer) error {
 	if input == nil {
 		return smithy.NewErrParamRequired("input")
 	}
@@ -348,7 +349,7 @@ func encodeGetItemInput(ctx aws.Context, input *dynamodb.GetItemInput, keySchema
 		input.ProjectionExpression, nil, nil, input.ExpressionAttributeNames, nil, writer)
 }
 
-func encodeScanInput(ctx aws.Context, input *dynamodb.ScanInput, keySchema *lru.Lru, writer *cbor.Writer) error {
+func encodeScanInput(ctx context.Context, input *dynamodb.ScanInput, keySchema *lru.Lru, writer *cbor.Writer) error {
 	if input == nil {
 		return smithy.NewErrParamRequired("input")
 	}
@@ -375,7 +376,7 @@ func encodeScanInput(ctx aws.Context, input *dynamodb.ScanInput, keySchema *lru.
 		expressions, input.Segment, input.TotalSegments, input.Limit, nil, input.ExclusiveStartKey, keySchema, *input.TableName, writer)
 }
 
-func encodeQueryInput(ctx aws.Context, input *dynamodb.QueryInput, keySchema *lru.Lru, writer *cbor.Writer) error {
+func encodeQueryInput(ctx context.Context, input *dynamodb.QueryInput, keySchema *lru.Lru, writer *cbor.Writer) error {
 	if input == nil {
 		return smithy.NewErrParamRequired("input")
 	}
@@ -408,7 +409,7 @@ func encodeQueryInput(ctx aws.Context, input *dynamodb.QueryInput, keySchema *lr
 		expressions, nil, nil, input.Limit, input.ScanIndexForward, input.ExclusiveStartKey, keySchema, *input.TableName, writer)
 }
 
-func encodeBatchWriteItemInput(ctx aws.Context, input *dynamodb.BatchWriteItemInput, keySchema *lru.Lru, attrNamesListToId *lru.Lru, writer *cbor.Writer) error {
+func encodeBatchWriteItemInput(ctx context.Context, input *dynamodb.BatchWriteItemInput, keySchema *lru.Lru, attrNamesListToId *lru.Lru, writer *cbor.Writer) error {
 	if input == nil {
 		return smithy.NewErrParamRequired("input")
 	}
@@ -475,7 +476,7 @@ func encodeBatchWriteItemInput(ctx aws.Context, input *dynamodb.BatchWriteItemIn
 		nil, nil, nil, nil, nil, nil, writer)
 }
 
-func encodeBatchGetItemInput(ctx aws.Context, input *dynamodb.BatchGetItemInput, keySchema *lru.Lru, writer *cbor.Writer) error {
+func encodeBatchGetItemInput(ctx context.Context, input *dynamodb.BatchGetItemInput, keySchema *lru.Lru, writer *cbor.Writer) error {
 	if input == nil {
 		return smithy.NewErrParamRequired("input")
 	}
@@ -550,7 +551,7 @@ func encodeBatchGetItemInput(ctx aws.Context, input *dynamodb.BatchGetItemInput,
 }
 
 func encodeTransactWriteItemsInput(
-	ctx aws.Context,
+	ctx context.Context,
 	input *dynamodb.TransactWriteItemsInput,
 	keySchema *lru.Lru, attrNamesListToId *lru.Lru, writer *cbor.Writer,
 	extractedKeys []map[string]types.AttributeValue,
@@ -816,7 +817,7 @@ func encodeTransactWriteItemsInput(
 }
 
 func encodeTransactGetItemsInput(
-	ctx aws.Context,
+	ctx context.Context,
 	input *dynamodb.TransactGetItemsInput,
 	keySchema *lru.Lru, writer *cbor.Writer,
 	extractedKeys []map[string]types.AttributeValue,
@@ -946,7 +947,7 @@ func encodeCompoundKey(key map[string]types.AttributeValue, writer *cbor.Writer)
 	return writer.WriteBytes(buf.Bytes())
 }
 
-func encodeNonKeyAttributes(ctx aws.Context, item map[string]types.AttributeValue, keys []types.AttributeDefinition,
+func encodeNonKeyAttributes(ctx context.Context, item map[string]types.AttributeValue, keys []types.AttributeDefinition,
 	attrNamesListToId *lru.Lru, writer *cbor.Writer) error {
 	var buf bytes.Buffer
 	w := cbor.NewWriter(&buf)
@@ -961,7 +962,7 @@ func encodeNonKeyAttributes(ctx aws.Context, item map[string]types.AttributeValu
 }
 
 func encodeScanQueryOptionalParams(
-	ctx aws.Context,
+	ctx context.Context,
 	index *string,
 	selection types.Select,
 	returnConsumedCapacity types.ReturnConsumedCapacity,

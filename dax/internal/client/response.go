@@ -16,14 +16,15 @@
 package client
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
 	"github.com/aws/aws-dax-go/dax/internal/cbor"
 	"github.com/aws/aws-dax-go/dax/internal/lru"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/smithy-go"
 )
 
@@ -175,7 +176,7 @@ func decodeDefineKeySchemaOutput(reader *cbor.Reader) ([]types.AttributeDefiniti
 	return keys, nil
 }
 
-func decodePutItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.PutItemInput, keySchemaCache *lru.Lru, attrListIdToNames *lru.Lru) (*dynamodb.PutItemOutput, error) {
+func decodePutItemOutput(ctx context.Context, reader *cbor.Reader, input *dynamodb.PutItemInput, keySchemaCache *lru.Lru, attrListIdToNames *lru.Lru) (*dynamodb.PutItemOutput, error) {
 	output := &dynamodb.PutItemOutput{}
 	if consumed, err := consumeNil(reader); err != nil {
 		return output, err
@@ -226,7 +227,7 @@ func decodePutItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.P
 	return output, nil
 }
 
-func decodeDeleteItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.DeleteItemInput, keySchemaCache *lru.Lru, attrListIdToNames *lru.Lru) (*dynamodb.DeleteItemOutput, error) {
+func decodeDeleteItemOutput(ctx context.Context, reader *cbor.Reader, input *dynamodb.DeleteItemInput, keySchemaCache *lru.Lru, attrListIdToNames *lru.Lru) (*dynamodb.DeleteItemOutput, error) {
 	output := &dynamodb.DeleteItemOutput{}
 	if consumed, err := consumeNil(reader); err != nil {
 		return output, err
@@ -273,7 +274,7 @@ func decodeDeleteItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamod
 }
 
 func decodeUpdateItemOutput(
-	ctx aws.Context, reader *cbor.Reader, input *dynamodb.UpdateItemInput,
+	ctx context.Context, reader *cbor.Reader, input *dynamodb.UpdateItemInput,
 	keySchemaCache *lru.Lru, attrListIdToNames *lru.Lru,
 ) (*dynamodb.UpdateItemOutput, error) {
 	output := &dynamodb.UpdateItemOutput{}
@@ -332,7 +333,7 @@ func decodeUpdateItemOutput(
 	return output, nil
 }
 
-func decodeGetItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.GetItemInput, attrListIdToNames *lru.Lru) (*dynamodb.GetItemOutput, error) {
+func decodeGetItemOutput(ctx context.Context, reader *cbor.Reader, input *dynamodb.GetItemInput, attrListIdToNames *lru.Lru) (*dynamodb.GetItemOutput, error) {
 	output := &dynamodb.GetItemOutput{}
 	if consumed, err := consumeNil(reader); err != nil {
 		return output, err
@@ -374,7 +375,7 @@ func decodeGetItemOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.G
 	return output, nil
 }
 
-func decodeScanOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.ScanInput, keySchemaCache *lru.Lru, attrNamesListToId *lru.Lru) (*dynamodb.ScanOutput, error) {
+func decodeScanOutput(ctx context.Context, reader *cbor.Reader, input *dynamodb.ScanInput, keySchemaCache *lru.Lru, attrNamesListToId *lru.Lru) (*dynamodb.ScanOutput, error) {
 	output := &dynamodb.ScanOutput{}
 	out, err := decodeScanQueryOutput(ctx, reader, *input.TableName, input.IndexName != nil, input.ProjectionExpression, input.ExpressionAttributeNames, keySchemaCache, attrNamesListToId)
 	if err != nil {
@@ -386,7 +387,7 @@ func decodeScanOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.Scan
 	return out.scanOutput(output), nil
 }
 
-func decodeQueryOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.QueryInput, keySchemaCache *lru.Lru, attrNamesListToId *lru.Lru) (*dynamodb.QueryOutput, error) {
+func decodeQueryOutput(ctx context.Context, reader *cbor.Reader, input *dynamodb.QueryInput, keySchemaCache *lru.Lru, attrNamesListToId *lru.Lru) (*dynamodb.QueryOutput, error) {
 	output := &dynamodb.QueryOutput{}
 	out, err := decodeScanQueryOutput(ctx, reader, *input.TableName, input.IndexName != nil, input.ProjectionExpression, input.ExpressionAttributeNames, keySchemaCache, attrNamesListToId)
 	if err != nil {
@@ -432,7 +433,7 @@ func (o *scanQueryOutput) queryOutput(output *dynamodb.QueryOutput) *dynamodb.Qu
 	}
 }
 
-func decodeScanQueryOutput(ctx aws.Context, reader *cbor.Reader, table string, indexed bool, projection *string, exprAttrNames map[string]string, keySchemaCache *lru.Lru, attrNamesListToId *lru.Lru) (*scanQueryOutput, error) {
+func decodeScanQueryOutput(ctx context.Context, reader *cbor.Reader, table string, indexed bool, projection *string, exprAttrNames map[string]string, keySchemaCache *lru.Lru, attrNamesListToId *lru.Lru) (*scanQueryOutput, error) {
 	if consumed, err := consumeNil(reader); err != nil {
 		return nil, err
 	} else if consumed {
@@ -487,7 +488,7 @@ func decodeScanQueryOutput(ctx aws.Context, reader *cbor.Reader, table string, i
 	return out, nil
 }
 
-func decodeBatchWriteItemOutput(ctx aws.Context, reader *cbor.Reader, keySchemaCache *lru.Lru, attrNamesListToId *lru.Lru, output *dynamodb.BatchWriteItemOutput) (*dynamodb.BatchWriteItemOutput, error) {
+func decodeBatchWriteItemOutput(ctx context.Context, reader *cbor.Reader, keySchemaCache *lru.Lru, attrNamesListToId *lru.Lru, output *dynamodb.BatchWriteItemOutput) (*dynamodb.BatchWriteItemOutput, error) {
 	if output != nil {
 		output.UnprocessedItems = map[string][]types.WriteRequest{}
 	}
@@ -598,7 +599,7 @@ func decodeBatchWriteItemOutput(ctx aws.Context, reader *cbor.Reader, keySchemaC
 }
 
 func decodeBatchGetItemOutput(
-	ctx aws.Context, reader *cbor.Reader, input *dynamodb.BatchGetItemInput,
+	ctx context.Context, reader *cbor.Reader, input *dynamodb.BatchGetItemInput,
 	keySchemaCache *lru.Lru, attrNamesListToId *lru.Lru, output *dynamodb.BatchGetItemOutput,
 ) (*dynamodb.BatchGetItemOutput, error) {
 	if consumed, err := consumeNil(reader); err != nil {
@@ -746,7 +747,7 @@ func decodeBatchGetItemOutput(
 	return output, nil
 }
 
-func decodeTransactWriteItemsOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.TransactWriteItemsInput, keySchemaCache *lru.Lru, attrListIdToNames *lru.Lru, output *dynamodb.TransactWriteItemsOutput) (*dynamodb.TransactWriteItemsOutput, error) {
+func decodeTransactWriteItemsOutput(ctx context.Context, reader *cbor.Reader, input *dynamodb.TransactWriteItemsInput, keySchemaCache *lru.Lru, attrListIdToNames *lru.Lru, output *dynamodb.TransactWriteItemsOutput) (*dynamodb.TransactWriteItemsOutput, error) {
 	len, err := reader.ReadArrayLength()
 	if err != nil {
 		return output, err
@@ -814,7 +815,7 @@ func decodeTransactWriteItemsOutput(ctx aws.Context, reader *cbor.Reader, input 
 	return output, nil
 }
 
-func decodeTransactGetItemsOutput(ctx aws.Context, reader *cbor.Reader, input *dynamodb.TransactGetItemsInput, keySchemaCache *lru.Lru, attrListIdToNames *lru.Lru, output *dynamodb.TransactGetItemsOutput) (*dynamodb.TransactGetItemsOutput, error) {
+func decodeTransactGetItemsOutput(ctx context.Context, reader *cbor.Reader, input *dynamodb.TransactGetItemsInput, keySchemaCache *lru.Lru, attrListIdToNames *lru.Lru, output *dynamodb.TransactGetItemsOutput) (*dynamodb.TransactGetItemsOutput, error) {
 	length, err := reader.ReadArrayLength()
 	if err != nil {
 		return output, err
@@ -875,7 +876,7 @@ func decodeTransactGetItemsOutput(ctx aws.Context, reader *cbor.Reader, input *d
 	return output, nil
 }
 
-func decodeScanQueryItems(ctx aws.Context, reader *cbor.Reader, table string, keySchemaCache *lru.Lru, attrNamesListToId *lru.Lru, projectionOrdinals []documentPath) ([]map[string]types.AttributeValue, error) {
+func decodeScanQueryItems(ctx context.Context, reader *cbor.Reader, table string, keySchemaCache *lru.Lru, attrNamesListToId *lru.Lru, projectionOrdinals []documentPath) ([]map[string]types.AttributeValue, error) {
 	consumed, err := consumeNil(reader)
 	if err != nil {
 		return nil, err
@@ -931,7 +932,7 @@ func decodeScanQueryItems(ctx aws.Context, reader *cbor.Reader, table string, ke
 	return items, nil
 }
 
-func decodeLastEvaluatedKey(ctx aws.Context, reader *cbor.Reader, table string, indexed bool, keySchemaCache *lru.Lru) (map[string]types.AttributeValue, error) {
+func decodeLastEvaluatedKey(ctx context.Context, reader *cbor.Reader, table string, indexed bool, keySchemaCache *lru.Lru) (map[string]types.AttributeValue, error) {
 	if indexed {
 		key, err := decodeCompoundKey(reader)
 		if err != nil {
@@ -1106,7 +1107,7 @@ func decodeCompoundKey(reader *cbor.Reader) (map[string]types.AttributeValue, er
 	return key, nil
 }
 
-func decodeNonKeyAttributes(ctx aws.Context, reader *cbor.Reader, attrNamesListToId *lru.Lru, projectionOrdinals []documentPath) (map[string]types.AttributeValue, error) {
+func decodeNonKeyAttributes(ctx context.Context, reader *cbor.Reader, attrNamesListToId *lru.Lru, projectionOrdinals []documentPath) (map[string]types.AttributeValue, error) {
 	hdr, err := reader.PeekHeader()
 	if err != nil {
 		return nil, err
@@ -1157,7 +1158,7 @@ func decodeProjection(reader *cbor.Reader, projectionOrdinals []documentPath) (m
 	return ib.toItem(), nil
 }
 
-func decodeAttributeProjection(ctx aws.Context, reader *cbor.Reader, attrListIdToNames *lru.Lru) (map[string]types.AttributeValue, error) {
+func decodeAttributeProjection(ctx context.Context, reader *cbor.Reader, attrListIdToNames *lru.Lru) (map[string]types.AttributeValue, error) {
 	r, err := reader.BytesReader()
 	if err != nil {
 		return nil, err
@@ -1425,7 +1426,7 @@ func decodeItemCollectionMetrics(reader *cbor.Reader, partitionKey string) (*typ
 	return &icm, nil
 }
 
-func getKeySchema(ctx aws.Context, keySchemaCache *lru.Lru, table string) ([]types.AttributeDefinition, error) {
+func getKeySchema(ctx context.Context, keySchemaCache *lru.Lru, table string) ([]types.AttributeDefinition, error) {
 	k, err := keySchemaCache.GetWithContext(ctx, table)
 	if err != nil {
 		return nil, err
