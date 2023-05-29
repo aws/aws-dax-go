@@ -20,9 +20,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/aws/smithy-go"
-
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/smithy-go"
 )
 
 ////DaxRetryer implements EqualJitterBackoffStratergy for throttled requests
