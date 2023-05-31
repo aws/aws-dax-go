@@ -17,14 +17,14 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 
 	"github.com/aws/aws-dax-go/dax/internal/cbor"
 	"github.com/aws/aws-dax-go/dax/internal/lru"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/smithy-go"
 )
 
@@ -37,14 +37,20 @@ const (
 )
 
 type daxError interface {
-	awserr.RequestFailure
+	smithy.APIError
 	CodeSequence() []int
+	RequestID() string
+	StatusCode() int
 }
 
 type daxRequestFailure struct {
-	awserr.RequestFailure
-	codes []int
+	*smithy.GenericAPIError
+	codes      []int
+	requestID  string
+	statusCode int
 }
+
+var _ daxError = (*daxRequestFailure)(nil)
 
 type daxTransactionCanceledFailure struct {
 	*daxRequestFailure
@@ -56,8 +62,14 @@ type daxTransactionCanceledFailure struct {
 
 func newDaxRequestFailure(codes []int, errorCode, message, requestId string, statusCode int) *daxRequestFailure {
 	return &daxRequestFailure{
-		RequestFailure: awserr.NewRequestFailure(awserr.New(errorCode, message, nil), statusCode, requestId),
-		codes:          codes,
+		GenericAPIError: &smithy.GenericAPIError{
+			Code:    errorCode,
+			Message: message,
+			Fault:   smithy.FaultServer,
+		},
+		codes:      codes,
+		requestID:  requestId,
+		statusCode: statusCode,
 	}
 }
 
@@ -75,6 +87,14 @@ func (f *daxRequestFailure) CodeSequence() []int {
 	return f.codes
 }
 
+func (f *daxRequestFailure) RequestID() string {
+	return f.requestID
+}
+
+func (f *daxRequestFailure) StatusCode() int {
+	return f.statusCode
+}
+
 func (f *daxRequestFailure) recoverable() bool {
 	return len(f.codes) > 0 && f.codes[0] == 2
 }
@@ -84,7 +104,7 @@ func (f *daxRequestFailure) authError() bool {
 		(f.codes[3] == 32 || f.codes[3] == 33 || f.codes[3] == 34))
 }
 
-func decodeError(reader *cbor.Reader) (awserr.Error, error) {
+func decodeError(reader *cbor.Reader) (error, error) {
 	length, err := reader.ReadArrayLength()
 	if err != nil {
 		return nil, err
@@ -205,6 +225,7 @@ func decodeError(reader *cbor.Reader) (awserr.Error, error) {
 		statusCode = inferStatusCode(codes)
 	}
 
+	// user or server error
 	if cancellationReasonCodes != nil && len(cancellationReasonCodes) > 0 {
 		return newDaxTransactionCanceledFailure(codes, errorCode, msg, requestId, statusCode,
 			cancellationReasonCodes, cancellationReasonMsgs, cancellationReasonItems), nil
@@ -229,12 +250,12 @@ func convertDaxError(e daxError) error {
 			case 24:
 				return &types.ResourceNotFoundException{
 					//RespMetadata: md,
-					Message: aws.String(e.Message()),
+					Message: aws.String(e.Error()),
 				}
 			case 35:
 				return &types.ResourceInUseException{
 					//RespMetadata: md,
-					Message: aws.String(e.Message()),
+					Message: aws.String(e.Error()),
 				}
 			}
 		}
@@ -247,81 +268,85 @@ func convertDaxError(e daxError) error {
 					case 40:
 						return &types.ProvisionedThroughputExceededException{
 							//RespMetadata: md,
-							Message: aws.String(e.Message()),
+							Message: aws.String(e.Error()),
 						}
 					case 41:
 						return &types.ResourceNotFoundException{
 							//RespMetadata: md,
-							Message: aws.String(e.Message()),
+							Message: aws.String(e.Error()),
 						}
 					case 43:
 						return &types.ConditionalCheckFailedException{
 							//RespMetadata: md,
-							Message: aws.String(e.Message()),
+							Message: aws.String(e.Error()),
 						}
 					case 45:
 						return &types.ResourceInUseException{
 							//RespMetadata: md,
-							Message: aws.String(e.Message())}
+							Message: aws.String(e.Error())}
 					case 46:
 						// there's no dynamodb.ValidationException type
 						return &smithy.GenericAPIError{
 							Code:    ErrCodeValidationException,
-							Message: e.Message(),
+							Message: e.Error(),
 							Fault:   smithy.FaultServer,
 						}
 					case 47:
 						return &types.InternalServerError{
 							//RespMetadata: md,
-							Message: aws.String(e.Message()),
+							Message: aws.String(e.Error()),
 						}
 					case 48:
 						return &types.ItemCollectionSizeLimitExceededException{
 							//RespMetadata: md,
-							Message: aws.String(e.Message()),
+							Message: aws.String(e.Error()),
 						}
 					case 49:
 						return &types.LimitExceededException{
 							//RespMetadata: md,
-							Message: aws.String(e.Message()),
+							Message: aws.String(e.Error()),
 						}
 					case 50:
 						// there's no dynamodb.ThrottlingException type
 						return &smithy.GenericAPIError{
 							Code:    ErrCodeThrottlingException,
-							Message: e.Message(),
+							Message: e.Error(),
 							Fault:   smithy.FaultServer,
 						}
 					case 57:
 						return &types.TransactionConflictException{
 							//RespMetadata: md,
-							Message: aws.String(e.Message()),
+							Message: aws.String(e.Error()),
 						}
 					case 58:
 						tcFailure, ok := e.(*daxTransactionCanceledFailure)
 						if ok {
 							return &types.TransactionCanceledException{
 								//RespMetadata:        md,
-								Message:             aws.String(e.Message()),
+								Message:             aws.String(e.Error()),
 								CancellationReasons: tcFailure.cancellationReasons,
+							}
+						} else {
+							return &types.TransactionCanceledException{
+								Message: aws.String(e.Error()),
 							}
 						}
 					case 59:
 						return &types.TransactionInProgressException{
 							//RespMetadata: md,
-							Message: aws.String(e.Message()),
+							Message: aws.String(e.Error()),
 						}
 					case 60:
 						return &types.IdempotentParameterMismatchException{
 							//RespMetadata: md,
-							Message: aws.String(e.Message()),
+							Message: aws.String(e.Error()),
 						}
 					}
 				}
 			case 44:
 				return &smithy.GenericAPIError{
 					Code:    ErrCodeNotImplemented,
-					Message: e.Message(),
+					Message: e.Error(),
 					Fault:   smithy.FaultServer,
 				}
 			}
@@ -329,12 +354,12 @@ func convertDaxError(e daxError) error {
 	}
 	return &smithy.GenericAPIError{
 		Code:    ErrCodeUnknown,
-		Message: e.Message(),
+		Message: e.Error(),
 		Fault:   smithy.FaultServer,
 	}
 }
 
-func decodeTransactionCancellationReasons(ctx aws.Context, failure *daxTransactionCanceledFailure,
+func decodeTransactionCancellationReasons(ctx context.Context, failure *daxTransactionCanceledFailure,
 	keys []map[string]types.AttributeValue, attrListIdToNames *lru.Lru) ([]types.CancellationReason, error) {
 	inputL := len(keys)
 	outputL := len(failure.cancellationReasonCodes)

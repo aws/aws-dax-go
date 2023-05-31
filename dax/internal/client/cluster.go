@@ -380,7 +380,7 @@ type cluster struct {
 
 	seeds         []hostPort
 	config        Config
-	clientBuilder singleClientBuilder
+	clientBuilder clientBuilder
 }
 
 type clientAndConfig struct {
@@ -409,7 +409,7 @@ func newCluster(cfg Config) (*cluster, error) {
 	cfg.connConfig.skipHostnameVerification = cfg.SkipHostnameVerification
 	cfg.connConfig.hostname = hostname
 	cfg.validateConnConfig()
-	return &cluster{seeds: seeds, config: cfg, executor: newExecutor(), clientBuilder: singleClientBuilder{}}, nil
+	return &cluster{seeds: seeds, config: cfg, executor: newExecutor(), clientBuilder: &singleClientBuilder{}}, nil
 }
 
 func getHostPorts(hosts []string, op string) (hostPorts []hostPort, hostname string, isEncrypted bool, err error) {
@@ -644,7 +644,9 @@ func (c *cluster) update(ctx context.Context, config []serviceEndpoint) {
 					newCliCfg = append(newCliCfg, cliAndCfg)
 				}
 
-				cli.startHealthChecks(ctx, c, ep.hostPort())
+				if sc, ok := cli.(*SingleDaxClient); ok {
+					sc.startHealthChecks(ctx, c, ep.hostPort())
+				}
 			}
 			newActive[ep.hostPort()] = cliAndCfg
 			newRoutes[i] = cliAndCfg.client
@@ -675,7 +677,9 @@ func (c *cluster) onHealthCheckFailed(ctx context.Context, host hostPort) {
 	var oldClientConfig, ok = c.active[host]
 	if ok {
 		cli, err := c.newSingleClient(oldClientConfig.cfg)
-		cli.startHealthChecks(ctx, c, host)
+		if sc, ok := cli.(*SingleDaxClient); ok {
+			sc.startHealthChecks(ctx, c, host)
+		}
 
 		if err == nil {
 			c.active[host] = clientAndConfig{client: cli, cfg: oldClientConfig.cfg}
@@ -773,13 +777,19 @@ func (c *cluster) debugLog(format string, args ...interface{}) {
 	}
 }
 
-func (c *cluster) newSingleClient(cfg serviceEndpoint) (*SingleDaxClient, error) {
+func (c *cluster) newSingleClient(cfg serviceEndpoint) (DaxAPI, error) {
 	return c.clientBuilder.newClient(net.IP(cfg.address), cfg.port, c.config.connConfig, c.config.Region, c.config.Credentials, c.config.MaxPendingConnectionsPerHost, c.config.DialContext)
+}
+
+type clientBuilder interface {
+	newClient(net.IP, int, connConfig, string, aws.CredentialsProvider, int, dialContext) (DaxAPI, error)
 }
 
 type singleClientBuilder struct{}
 
-func (*singleClientBuilder) newClient(ip net.IP, port int, connConfigData connConfig, region string, credentials aws.CredentialsProvider, maxPendingConnects int, dialContextFn dialContext) (*SingleDaxClient, error) {
+var _ clientBuilder = (*singleClientBuilder)(nil)
+
+func (*singleClientBuilder) newClient(ip net.IP, port int, connConfigData connConfig, region string, credentials aws.CredentialsProvider, maxPendingConnects int, dialContextFn dialContext) (DaxAPI, error) {
 	endpoint := fmt.Sprintf("%s:%d", ip, port)
 	return newSingleClientWithOptions(endpoint, connConfigData, region, credentials, maxPendingConnects, dialContextFn)
 }
