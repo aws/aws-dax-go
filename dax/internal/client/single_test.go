@@ -12,9 +12,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-dax-go/dax/internal/cbor"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/smithy-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -55,7 +53,7 @@ func TestExecuteErrorHandling(t *testing.T) {
 			&mockConn{rd: []byte{cbor.NegInt}},
 			func(writer *cbor.Writer) error { return nil },
 			nil,
-			awserr.New(request.ErrCodeSerialization, fmt.Sprintf("cbor: expected major type %d, got %d", cbor.Array, cbor.NegInt), nil),
+			&smithy.DeserializationError{Err: fmt.Errorf("cbor: expected major type %d, got %d", cbor.Array, cbor.NegInt)},
 			map[string]int{"Write": 2, "Read": 1, "SetDeadline": 1, "Close": 1},
 		},
 		{ // decode error, discard tube
@@ -82,7 +80,7 @@ func TestExecuteErrorHandling(t *testing.T) {
 	}
 
 	for i, c := range cases {
-		cli, err := newSingleClientWithOptions(":9121", unEncryptedConnConfig, "us-west-2", nil, 1, func(ctx context.Context, a, n string) (net.Conn, error) {
+		cli, err := newSingleClientWithOptions(":9121", unEncryptedConnConfig, "us-west-2", &testCredentialProvider{}, 1, func(ctx context.Context, a, n string) (net.Conn, error) {
 			return c.conn, nil
 		})
 		if err != nil {
@@ -102,7 +100,7 @@ func TestExecuteErrorHandling(t *testing.T) {
 }
 
 func TestRetryPropogatesContextError(t *testing.T) {
-	client, clientErr := newSingleClientWithOptions(":9121", unEncryptedConnConfig, "us-west-2", nil, 1, func(ctx context.Context, a, n string) (net.Conn, error) {
+	client, clientErr := newSingleClientWithOptions(":9121", unEncryptedConnConfig, "us-west-2", &testCredentialProvider{}, 1, func(ctx context.Context, a, n string) (net.Conn, error) {
 		return &mockConn{rd: []byte{cbor.Array + 0}}, nil
 	})
 	defer client.Close()
@@ -112,7 +110,7 @@ func TestRetryPropogatesContextError(t *testing.T) {
 
 	client.pool.closeTubeImmediately = true
 
-	ctx, cancel := context.WithCancel(aws.BackgroundContext())
+	ctx, cancel := context.WithCancel(context.Background())
 	requestOptions := RequestOptions{}
 	requestOptions.RetryMaxAttempts = 2
 
@@ -125,18 +123,18 @@ func TestRetryPropogatesContextError(t *testing.T) {
 	err := client.executeWithRetries(ctx, OpGetItem, requestOptions, writer, reader)
 
 	// Context related error should be returned
-	awsError, ok := err.(awserr.Error)
+	cancelErr, ok := err.(*smithy.CanceledError)
 	if !ok {
-		t.Fatal("Error type is not awserr.Error")
+		t.Fatalf("Error type is not smithy.CanceledError, type is %T", err)
 	}
 
-	if awsError.Code() != request.CanceledErrorCode || awsError.OrigErr() != context.Canceled {
-		t.Errorf("aws error doesn't match expected. %v", awsError)
+	if cancelErr.Err != context.Canceled {
+		t.Errorf("aws error doesn't match expected. %v", cancelErr)
 	}
 }
 
 func TestRetryPropogatesOtherErrors(t *testing.T) {
-	client, clientErr := newSingleClientWithOptions(":9121", unEncryptedConnConfig, "us-west-2", nil, 1, func(ctx context.Context, a, n string) (net.Conn, error) {
+	client, clientErr := newSingleClientWithOptions(":9121", unEncryptedConnConfig, "us-west-2", &testCredentialProvider{}, 1, func(ctx context.Context, a, n string) (net.Conn, error) {
 		return &mockConn{rd: []byte{cbor.Array + 0}}, nil
 	})
 	defer client.Close()
@@ -156,22 +154,22 @@ func TestRetryPropogatesOtherErrors(t *testing.T) {
 	err := client.executeWithRetries(context.Background(), OpGetItem, requestOptions, writer, reader)
 
 	// IO error should be returned
-	awsError, ok := err.(awserr.Error)
+	opeErr, ok := err.(*smithy.OperationError)
 	if !ok {
-		t.Fatal("Error type is not awserr.Error")
+		t.Fatalf("Error type is not smithy.OperationError. type is %T", err)
 	}
 
-	if awsError.OrigErr() == nil {
+	if opeErr.Err == nil {
 		t.Fatal("Original error is empty")
 	}
 
-	if awsError.Code() != "UnknownError" || awsError.OrigErr().Error() != expectedError.Error() {
-		t.Errorf("aws error doesn't match expected. %v", awsError)
+	if opeErr.Err.Error() != expectedError.Error() {
+		t.Errorf("error doesn't match expected. %v", opeErr)
 	}
 }
 
 func TestRetryPropogatesOtherErrorsWithDelay(t *testing.T) {
-	client, clientErr := newSingleClientWithOptions(":9121", unEncryptedConnConfig, "us-west-2", nil, 1, func(ctx context.Context, a, n string) (net.Conn, error) {
+	client, clientErr := newSingleClientWithOptions(":9121", unEncryptedConnConfig, "us-west-2", &testCredentialProvider{}, 1, func(ctx context.Context, a, n string) (net.Conn, error) {
 		return &mockConn{rd: []byte{cbor.Array + 0}}, nil
 	})
 	defer client.Close()
@@ -191,22 +189,22 @@ func TestRetryPropogatesOtherErrorsWithDelay(t *testing.T) {
 	err := client.executeWithRetries(context.Background(), OpGetItem, requestOptions, writer, reader)
 
 	// IO error should be returned
-	awsError, ok := err.(awserr.Error)
+	opeErr, ok := err.(*smithy.OperationError)
 	if !ok {
-		t.Fatal("Error type is not awserr.Error")
+		t.Fatalf("Error type is not smithy.OperationError. type is %T", err)
 	}
 
-	if awsError.OrigErr() == nil {
+	if opeErr.Err == nil {
 		t.Fatal("Original error is empty")
 	}
 
-	if awsError.Code() != "UnknownError" || awsError.OrigErr().Error() != expectedError.Error() {
-		t.Errorf("aws error doesn't match expected. %v", awsError)
+	if opeErr.Err.Error() != expectedError.Error() {
+		t.Errorf("aws error doesn't match expected. %v", opeErr)
 	}
 }
 
 func TestRetrySleepCycleCount(t *testing.T) {
-	client, clientErr := newSingleClientWithOptions(":9121", unEncryptedConnConfig, "us-west-2", nil, 1, func(ctx context.Context, a, n string) (net.Conn, error) {
+	client, clientErr := newSingleClientWithOptions(":9121", unEncryptedConnConfig, "us-west-2", &testCredentialProvider{}, 1, func(ctx context.Context, a, n string) (net.Conn, error) {
 		return &mockConn{rd: []byte{cbor.Array + 0}}, nil
 	})
 	defer client.Close()
@@ -216,7 +214,6 @@ func TestRetrySleepCycleCount(t *testing.T) {
 
 	client.pool.closeTubeImmediately = true
 
-	sleepCallCount := 0
 	requestOptions := RequestOptions{}
 	tr := &testRetryer{}
 	requestOptions.Retryer = tr
@@ -226,20 +223,20 @@ func TestRetrySleepCycleCount(t *testing.T) {
 	client.executeWithRetries(context.Background(), OpGetItem, requestOptions, writer, reader)
 
 	if tr.CalledCount != 0 {
-		t.Fatalf("Sleep was called %d times, but expected none", sleepCallCount)
+		t.Fatalf("Sleep was called %d times, but expected none", tr.CalledCount)
 	}
 
 	requestOptions.RetryMaxAttempts = 3
 	tr.Attemps = requestOptions.RetryMaxAttempts
 	client.executeWithRetries(context.Background(), OpGetItem, requestOptions, writer, reader)
 
-	if sleepCallCount != requestOptions.RetryMaxAttempts {
-		t.Fatalf("Sleep was called %d times, but expected %d", sleepCallCount, requestOptions.RetryMaxAttempts)
+	if tr.CalledCount != requestOptions.RetryMaxAttempts {
+		t.Fatalf("Sleep was called %d times, but expected %d", tr.CalledCount, requestOptions.RetryMaxAttempts)
 	}
 }
 
 func TestRetryLastError(t *testing.T) {
-	client, clientErr := newSingleClientWithOptions(":9121", unEncryptedConnConfig, "us-west-2", nil, 1, func(ctx context.Context, a, n string) (net.Conn, error) {
+	client, clientErr := newSingleClientWithOptions(":9121", unEncryptedConnConfig, "us-west-2", &testCredentialProvider{}, 1, func(ctx context.Context, a, n string) (net.Conn, error) {
 		return &mockConn{rd: []byte{cbor.Array + 0}}, nil
 	})
 	defer client.Close()
@@ -264,17 +261,17 @@ func TestRetryLastError(t *testing.T) {
 		}
 	}
 	err := client.executeWithRetries(context.Background(), OpGetItem, requestOptions, writer, reader)
-	awsError, ok := err.(awserr.Error)
+	opeErr, ok := err.(*smithy.OperationError)
 	if !ok {
-		t.Fatal("Error type is not awserr.Error")
+		t.Fatalf("Error type is not smithy.OperationError. type is %T", err)
 	}
 
-	if awsError.OrigErr() == nil {
+	if opeErr.Err == nil {
 		t.Fatal("Original error is empty")
 	}
 
-	if awsError.Code() != "UnknownError" || awsError.OrigErr().Error() != "LastError" {
-		t.Fatalf("aws error doesn't match expected. %v", awsError)
+	if opeErr.Err.Error() != "LastError" {
+		t.Fatalf("error doesn't match expected. %v", opeErr)
 	}
 }
 
@@ -283,7 +280,7 @@ func TestSingleClient_customDialer(t *testing.T) {
 	var dialContextFn dialContext = func(ctx context.Context, address string, network string) (net.Conn, error) {
 		return conn, nil
 	}
-	client, err := newSingleClientWithOptions(":9121", unEncryptedConnConfig, "us-west-2", nil, 1, dialContextFn)
+	client, err := newSingleClientWithOptions(":9121", unEncryptedConnConfig, "us-west-2", &testCredentialProvider{}, 1, dialContextFn)
 	require.NoError(t, err)
 	defer client.Close()
 
