@@ -644,7 +644,7 @@ func (c *cluster) update(ctx context.Context, config []serviceEndpoint) {
 					newCliCfg = append(newCliCfg, cliAndCfg)
 				}
 
-				if sc, ok := cli.(*SingleDaxClient); ok {
+				if sc, ok := cli.(HealthCheckDaxAPI); ok {
 					sc.startHealthChecks(ctx, c, ep.hostPort())
 				}
 			}
@@ -677,7 +677,7 @@ func (c *cluster) onHealthCheckFailed(ctx context.Context, host hostPort) {
 	var oldClientConfig, ok = c.active[host]
 	if ok {
 		cli, err := c.newSingleClient(oldClientConfig.cfg)
-		if sc, ok := cli.(*SingleDaxClient); ok {
+		if sc, ok := cli.(HealthCheckDaxAPI); ok {
 			sc.startHealthChecks(ctx, c, host)
 		}
 

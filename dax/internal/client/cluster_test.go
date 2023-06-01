@@ -26,15 +26,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/smithy-go/logging"
-
-	aws2 "github.com/aws/aws-sdk-go-v2/aws"
-
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/smithy-go"
+	"github.com/aws/smithy-go/logging"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -45,7 +41,7 @@ type testRetryer struct {
 	CalledCount int
 }
 
-var _ aws2.Retryer = (*testRetryer)(nil)
+var _ aws.Retryer = (*testRetryer)(nil)
 
 func (r *testRetryer) IsErrorRetryable(_ error) bool {
 	return true
@@ -131,6 +127,8 @@ func TestClusterDaxClient_retry(t *testing.T) {
 
 		opt := RequestOptions{}
 		opt.RetryMaxAttempts = retries
+		opt.Retryer = &testRetryer{Attemps: retries}
+
 		err := cc.retry(context.Background(), "op	", action, opt)
 		maxAttempts := retries + 1
 		if successfulAttempt <= maxAttempts {
@@ -224,7 +222,7 @@ func TestClusterDaxClient_retryReturnsCorrectErrorType(t *testing.T) {
 		{
 			codes:   []int{4, 23, 24},
 			errCode: (&types.ResourceNotFoundException{}).ErrorCode(),
-			class:   reflect.TypeOf(types.ResourceNotFoundException{}),
+			class:   reflect.TypeOf(&types.ResourceNotFoundException{}),
 		},
 		{
 			codes:   []int{4, 23, 35},
@@ -259,7 +257,7 @@ func TestClusterDaxClient_retryReturnsCorrectErrorType(t *testing.T) {
 		{
 			codes:   []int{4, 37, 38, 39, 46},
 			errCode: ErrCodeValidationException,
-			class:   reflect.TypeOf(awserr.NewRequestFailure(nil, 0, "")),
+			class:   reflect.TypeOf(&smithy.GenericAPIError{}),
 		},
 		{
 			codes:   []int{4, 37, 38, 39, 47},
@@ -279,7 +277,7 @@ func TestClusterDaxClient_retryReturnsCorrectErrorType(t *testing.T) {
 		{
 			codes:   []int{4, 37, 38, 39, 50},
 			errCode: ErrCodeThrottlingException,
-			class:   reflect.TypeOf(awserr.NewRequestFailure(nil, 0, "")),
+			class:   reflect.TypeOf(&smithy.GenericAPIError{}),
 		},
 		{
 			codes:   []int{4, 37, 38, 39, 57},
@@ -304,7 +302,7 @@ func TestClusterDaxClient_retryReturnsCorrectErrorType(t *testing.T) {
 		{
 			codes:   []int{4, 37, 38, 44},
 			errCode: ErrCodeNotImplemented,
-			class:   reflect.TypeOf(awserr.NewRequestFailure(nil, 0, "")),
+			class:   reflect.TypeOf(&smithy.GenericAPIError{}),
 		},
 	}
 
@@ -323,12 +321,9 @@ func TestClusterDaxClient_retryReturnsCorrectErrorType(t *testing.T) {
 		if actualClass != c.class {
 			t.Errorf("conversion of code sequence %v failed: expected %s, but got %s", c.codes, c.class.String(), actualClass.String())
 		}
-		f, _ := err.(awserr.RequestFailure)
-		require.NotNilf(t, f, "conversion of code sequence %v failed: expected implement awserr.Error", c.codes)
-		require.Equal(t, c.errCode, f.Code())
-		require.Equal(t, statusCode, f.StatusCode())
-		require.Equal(t, requestID, f.RequestID())
-		require.Equal(t, message, f.Message())
+		f, _ := err.(smithy.APIError)
+		require.NotNilf(t, f, "conversion of code sequence %v failed: expected implement smithy.APIError", c.codes)
+		assert.Equal(t, c.errCode, f.ErrorCode())
 	}
 }
 
@@ -650,7 +645,7 @@ func Test_MissingPortForDaxs(t *testing.T) {
 func Test_UnsupportedScheme(t *testing.T) {
 	hostPort := "sample://test.nds.clustercfg.dax.usw2integ.cache.amazonaws.com"
 	_, _, _, err := parseHostPort(hostPort, "op")
-	assertEqual(t, reflect.TypeOf(err), reflect.TypeOf(awserr.New(request.ErrCodeRequestError, "", nil)), "")
+	assertEqual(t, reflect.TypeOf(err), reflect.TypeOf(&smithy.OperationError{}), "")
 }
 
 func Test_DaxsCorrectUrlFormat(t *testing.T) {
@@ -668,7 +663,7 @@ var encNodeEp = "daxs://cluster2-a.random.nodes.alpha-dax-clusters.us-east-1.ama
 
 func Test_InconsistentScheme(t *testing.T) {
 	_, _, _, err := getHostPorts([]string{nonEncEp, encEp}, "op")
-	assertEqual(t, reflect.TypeOf(err), reflect.TypeOf(awserr.New(request.ErrCodeRequestError, "", nil)), "")
+	assertEqual(t, reflect.TypeOf(err), reflect.TypeOf(&smithy.OperationError{}), "")
 }
 
 func Test_MultipleUnEncryptedEndpoints(t *testing.T) {
@@ -679,7 +674,7 @@ func Test_MultipleUnEncryptedEndpoints(t *testing.T) {
 
 func Test_MultipleEncryptedEndpoints(t *testing.T) {
 	_, _, _, err := getHostPorts([]string{encEp, encNodeEp}, "op")
-	assertEqual(t, reflect.TypeOf(err), reflect.TypeOf(awserr.New(request.ErrCodeRequestError, "", nil)), "")
+	assertEqual(t, reflect.TypeOf(err), reflect.TypeOf(&smithy.OperationError{}), "")
 }
 
 func assertConnections(cluster *cluster, endpoints []serviceEndpoint, t *testing.T) {
@@ -702,6 +697,7 @@ func assertConnections(cluster *cluster, endpoints []serviceEndpoint, t *testing
 }
 
 func assertNumRoutes(cluster *cluster, num int, t *testing.T) {
+	t.Helper()
 	if len(cluster.active) != num {
 		t.Errorf("expected %d, got %d", num, len(cluster.active))
 	}
@@ -711,6 +707,7 @@ func assertNumRoutes(cluster *cluster, num int, t *testing.T) {
 }
 
 func assertHealthCheckCalls(cluster *cluster, t *testing.T) {
+	t.Helper()
 	for _, cliAndCfg := range cluster.active {
 		healtCheckCalls := cliAndCfg.client.(*testClient).healthCheckCalls
 		if healtCheckCalls != 1 {
@@ -720,6 +717,7 @@ func assertHealthCheckCalls(cluster *cluster, t *testing.T) {
 }
 
 func assertCloseCalls(cluster *cluster, num int, t *testing.T) {
+	t.Helper()
 	cnt := 0
 	for _, client := range cluster.clientBuilder.(*testClientBuilder).clients {
 		if client.closeCalls == 1 {
@@ -730,6 +728,7 @@ func assertCloseCalls(cluster *cluster, num int, t *testing.T) {
 }
 
 func assertDiscoveryClient(client *testClient, t *testing.T) {
+	t.Helper()
 	if client.endpointsCalls != 1 {
 		t.Errorf("expected 1, got %d", client.endpointsCalls)
 	}
@@ -739,6 +738,7 @@ func assertDiscoveryClient(client *testClient, t *testing.T) {
 }
 
 func assertActiveClient(client *testClient, t *testing.T) {
+	t.Helper()
 	if client.endpointsCalls != 0 {
 		t.Errorf("expected 0, got %d", client.endpointsCalls)
 	}
@@ -748,6 +748,7 @@ func assertActiveClient(client *testClient, t *testing.T) {
 }
 
 func assertEqual(t *testing.T, a interface{}, b interface{}, message string) {
+	t.Helper()
 	if a == b {
 		return
 	}
@@ -798,7 +799,7 @@ func TestCluster_customDialer(t *testing.T) {
 	cfg := Config{
 		MaxPendingConnectionsPerHost: 1,
 		ClusterUpdateInterval:        1 * time.Second,
-		Credentials:                  nil,
+		Credentials:                  &testCredentialProvider{},
 		DialContext:                  dialContextFn,
 		Region:                       "us-west-2",
 		HostPorts:                    []string{"localhost:9121"},
@@ -821,7 +822,7 @@ type testClientBuilder struct {
 
 var _ clientBuilder = (*testClientBuilder)(nil)
 
-func (b *testClientBuilder) newClient(ip net.IP, port int, _ connConfig, _ string, _ aws2.CredentialsProvider, _ int, _ dialContext) (DaxAPI, error) {
+func (b *testClientBuilder) newClient(ip net.IP, port int, _ connConfig, _ string, _ aws.CredentialsProvider, _ int, _ dialContext) (DaxAPI, error) {
 	t := &testClient{ep: b.ep, hp: hostPort{ip.String(), port}}
 	b.clients = append(b.clients, []*testClient{t}...)
 	return t, nil
@@ -835,7 +836,7 @@ type testClient struct {
 
 var _ DaxAPI = (*testClient)(nil)
 
-func (c *testClient) startHealthChecks(_ *cluster, _ hostPort) {
+func (c *testClient) startHealthChecks(_ context.Context, _ *cluster, _ hostPort) {
 	c.healthCheckCalls++
 }
 
@@ -852,9 +853,11 @@ func (c *testClient) Close() error {
 func (c *testClient) PutItemWithOptions(_ context.Context, _ *dynamodb.PutItemInput, _ RequestOptions) (*dynamodb.PutItemOutput, error) {
 	panic("not implemented")
 }
+
 func (c *testClient) DeleteItemWithOptions(_ context.Context, _ *dynamodb.DeleteItemInput, _ RequestOptions) (*dynamodb.DeleteItemOutput, error) {
 	panic("not implemented")
 }
+
 func (c *testClient) UpdateItemWithOptions(_ context.Context, _ *dynamodb.UpdateItemInput, _ RequestOptions) (*dynamodb.UpdateItemOutput, error) {
 	panic("not implemented")
 }
@@ -862,9 +865,11 @@ func (c *testClient) UpdateItemWithOptions(_ context.Context, _ *dynamodb.Update
 func (c *testClient) GetItemWithOptions(_ context.Context, _ *dynamodb.GetItemInput, _ RequestOptions) (*dynamodb.GetItemOutput, error) {
 	panic("not implemented")
 }
+
 func (c *testClient) ScanWithOptions(_ context.Context, _ *dynamodb.ScanInput, _ RequestOptions) (*dynamodb.ScanOutput, error) {
 	panic("not implemented")
 }
+
 func (c *testClient) QueryWithOptions(_ context.Context, _ *dynamodb.QueryInput, _ RequestOptions) (*dynamodb.QueryOutput, error) {
 	panic("not implemented")
 }
@@ -872,19 +877,26 @@ func (c *testClient) QueryWithOptions(_ context.Context, _ *dynamodb.QueryInput,
 func (c *testClient) BatchWriteItemWithOptions(_ context.Context, _ *dynamodb.BatchWriteItemInput, _ RequestOptions) (*dynamodb.BatchWriteItemOutput, error) {
 	panic("not implemented")
 }
+
 func (c *testClient) BatchGetItemWithOptions(_ context.Context, _ *dynamodb.BatchGetItemInput, _ RequestOptions) (*dynamodb.BatchGetItemOutput, error) {
-	panic("not implemented")
-}
-func (c *testClient) NewDaxRequest(op *request.Operation, input, output interface{}, _ RequestOptions) *request.Request {
 	panic("not implemented")
 }
 
 func (c *testClient) TransactWriteItemsWithOptions(_ context.Context, _ *dynamodb.TransactWriteItemsInput, _ RequestOptions) (*dynamodb.TransactWriteItemsOutput, error) {
 	panic("not implemented")
 }
+
 func (c *testClient) TransactGetItemsWithOptions(_ context.Context, _ *dynamodb.TransactGetItemsInput, _ RequestOptions) (*dynamodb.TransactGetItemsOutput, error) {
 	panic("not implemented")
 }
 
-func (c *testClient) build(req *request.Request) { panic("not implemented") }
-func (c *testClient) send(req *request.Request)  { panic("not implemented") }
+type testCredentialProvider struct {
+}
+
+func (p *testCredentialProvider) Retrieve(_ context.Context) (aws.Credentials, error) {
+	return aws.Credentials{
+		AccessKeyID:     "id",
+		SecretAccessKey: "secret",
+		SessionToken:    "token",
+	}, nil
+}
