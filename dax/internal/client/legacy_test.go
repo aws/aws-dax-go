@@ -19,10 +19,10 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/smithy-go"
 )
 
 var functions = map[reflect.Type]interface{}{
@@ -398,14 +398,18 @@ func TestTranslateLegacyPositive(t *testing.T) {
 func TestTranslateLegacyNegative(t *testing.T) {
 	cases := []struct {
 		inp interface{}
-		err awserr.Error
+		err error
 	}{
 		{
 			&dynamodb.GetItemInput{
 				AttributesToGet:      []string{"a1", "a2"},
 				ProjectionExpression: aws.String("a1, a2"),
 			},
-			awserr.New(ErrCodeValidationException, "Cannot specify both AttributesToGet and ProjectionExpression", nil),
+			&smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: "Cannot specify both AttributesToGet and ProjectionExpression",
+				Fault:   smithy.FaultClient,
+			},
 		},
 		{
 			&dynamodb.PutItemInput{
@@ -415,7 +419,11 @@ func TestTranslateLegacyNegative(t *testing.T) {
 				},
 				ExpressionAttributeValues: map[string]types.AttributeValue{":v": &types.AttributeValueMemberN{Value: "5"}},
 			},
-			awserr.New(ErrCodeValidationException, "Cannot specify both Expected and ConditionExpression", nil),
+			&smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: "Cannot specify both Expected and ConditionExpression",
+				Fault:   smithy.FaultClient,
+			},
 		},
 		{
 			&dynamodb.PutItemInput{
@@ -426,7 +434,11 @@ func TestTranslateLegacyNegative(t *testing.T) {
 					},
 				},
 			},
-			awserr.New(ErrCodeValidationException, "One or more parameter values were invalid: Value and AttributeValueList cannot be used together for Attribute: a", nil),
+			&smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: "One or more parameter values were invalid: Value and AttributeValueList cannot be used together for Attribute: a",
+				Fault:   smithy.FaultClient,
+			},
 		},
 		{
 			&dynamodb.PutItemInput{
@@ -434,7 +446,11 @@ func TestTranslateLegacyNegative(t *testing.T) {
 					"a": {AttributeValueList: []types.AttributeValue{&types.AttributeValueMemberN{Value: "5"}}},
 				},
 			},
-			awserr.New(ErrCodeValidationException, "One or more parameter values were invalid: AttributeValueList can only be used with a ComparisonOperator for Attribute: a", nil),
+			&smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: "One or more parameter values were invalid: AttributeValueList can only be used with a ComparisonOperator for Attribute: a",
+				Fault:   smithy.FaultClient,
+			},
 		},
 		{
 			&dynamodb.PutItemInput{
@@ -442,7 +458,11 @@ func TestTranslateLegacyNegative(t *testing.T) {
 					"a": {Exists: aws.Bool(true)},
 				},
 			},
-			awserr.New(ErrCodeValidationException, "One or more parameter values were invalid: Value must be provided when Exists is true for Attribute: a", nil),
+			&smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: "One or more parameter values were invalid: Value must be provided when Exists is true for Attribute: a",
+				Fault:   smithy.FaultClient,
+			},
 		},
 		{
 			&dynamodb.PutItemInput{
@@ -450,7 +470,11 @@ func TestTranslateLegacyNegative(t *testing.T) {
 					"a": {Exists: aws.Bool(false), Value: &types.AttributeValueMemberN{Value: "5"}},
 				},
 			},
-			awserr.New(ErrCodeValidationException, "One or more parameter values were invalid: Value cannot be used when Exists is false for Attribute: a", nil),
+			&smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: "One or more parameter values were invalid: Value cannot be used when Exists is false for Attribute: a",
+				Fault:   smithy.FaultClient,
+			},
 		},
 		{
 			&dynamodb.PutItemInput{
@@ -462,7 +486,11 @@ func TestTranslateLegacyNegative(t *testing.T) {
 							&types.AttributeValueMemberNULL{Value: true}}},
 				},
 			},
-			awserr.New(ErrCodeValidationException, "One or more parameter values were invalid: ComparisonOperator BETWEEN is not valid for NULL AttributeValue type", nil),
+			&smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: "One or more parameter values were invalid: ComparisonOperator BETWEEN is not valid for NULL AttributeValue type",
+				Fault:   smithy.FaultClient,
+			},
 		},
 		{
 			&dynamodb.UpdateItemInput{
@@ -472,7 +500,11 @@ func TestTranslateLegacyNegative(t *testing.T) {
 				},
 				ExpressionAttributeValues: map[string]types.AttributeValue{":v": &types.AttributeValueMemberN{Value: "5"}},
 			},
-			awserr.New(ErrCodeValidationException, "Cannot specify both AttributeUpdates and UpdateExpression", nil),
+			&smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: "Cannot specify both AttributeUpdates and UpdateExpression",
+				Fault:   smithy.FaultClient,
+			},
 		},
 		{
 			&dynamodb.UpdateItemInput{
@@ -480,13 +512,21 @@ func TestTranslateLegacyNegative(t *testing.T) {
 				Expected:                  map[string]types.ExpectedAttributeValue{"a": {Exists: aws.Bool(true), Value: &types.AttributeValueMemberN{Value: "5"}}},
 				ExpressionAttributeValues: map[string]types.AttributeValue{":v": &types.AttributeValueMemberN{Value: "5"}},
 			},
-			awserr.New(ErrCodeValidationException, "Cannot specify both Expected and ConditionExpression", nil),
+			&smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: "Cannot specify both Expected and ConditionExpression",
+				Fault:   smithy.FaultClient,
+			},
 		},
 		{
 			&dynamodb.ScanInput{
 				ScanFilter: map[string]types.Condition{"a": {}},
 			},
-			awserr.New(ErrCodeValidationException, "One or more parameter values were invalid: AttributeValueList can only be used with a ComparisonOperator for Attribute: a", nil),
+			&smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: "One or more parameter values were invalid: AttributeValueList can only be used with a ComparisonOperator for Attribute: a",
+				Fault:   smithy.FaultClient,
+			},
 		},
 		{
 			&dynamodb.QueryInput{
@@ -495,7 +535,11 @@ func TestTranslateLegacyNegative(t *testing.T) {
 						ComparisonOperator: types.ComparisonOperatorContains,
 						AttributeValueList: []types.AttributeValue{&types.AttributeValueMemberN{Value: "5"}}}},
 			},
-			awserr.New(ErrCodeValidationException, "Unsupported operator on KeyCondition: CONTAINS", nil),
+			&smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: "Unsupported operator on KeyCondition: CONTAINS",
+				Fault:   smithy.FaultClient,
+			},
 		},
 	}
 
