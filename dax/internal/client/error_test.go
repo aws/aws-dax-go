@@ -133,8 +133,8 @@ func TestDecodeTransactionCanceledException(t *testing.T) {
 		t.Errorf("expected daxTransactionCanceledFailure type")
 	}
 
-	reasonCodes := make([]*string, len(exception.CancellationReasons))
-	reasonMsgs := make([]*string, len(exception.CancellationReasons))
+	reasonCodes := make([]*string, 0, len(exception.CancellationReasons))
+	reasonMsgs := make([]*string, 0, len(exception.CancellationReasons))
 	for _, r := range exception.CancellationReasons {
 		reasonCodes = append(reasonCodes, r.Code)
 		reasonMsgs = append(reasonMsgs, r.Message)
@@ -164,9 +164,9 @@ func TestDecodeTransactionCanceledException(t *testing.T) {
 // TestDecodeTransactionCancellationReasons tests decoding transaction cancellations reasons in daxTransactionCanceledFailure.
 //
 // Specifically, the decoding of items in cancellation reasons are being testing here. It covers three situations:
-//    1. transact item didn't fail conditional check
-//    2. transact item failed conditional check and was configured to return ALL_OLD item
-//    3. transact item failed conditional check and was configured to return NONE item
+//  1. transact item didn't fail conditional check
+//  2. transact item failed conditional check and was configured to return ALL_OLD item
+//  3. transact item failed conditional check and was configured to return NONE item
 func TestDecodeTransactionCancellationReasons(t *testing.T) {
 	expCodes := []int{1, 2, 3, 4}
 
