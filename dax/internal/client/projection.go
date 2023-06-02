@@ -145,6 +145,7 @@ func (in *itemNode) toAttribute() types.AttributeValue {
 			for k, v := range m {
 				attr.Value[k.name] = v.toAttribute()
 			}
+			val = &attr
 		} else {
 			// order in the response item should be same as order in actual item, not the one in projection expression
 			// eg: projection expression "list[1],list[0]" returns "list[valAt(0),valAt(1)]
@@ -155,6 +156,7 @@ func (in *itemNode) toAttribute() types.AttributeValue {
 			for _, k := range keys {
 				attr.Value = append(attr.Value, m[k].toAttribute())
 			}
+			val = &attr
 		}
 	}
 	return val

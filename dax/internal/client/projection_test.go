@@ -115,21 +115,24 @@ func TestItemBuilder(t *testing.T) {
 		item                     map[string]types.AttributeValue
 	}{
 		{
-			"a", nil,
-			map[int]types.AttributeValue{
+			projectionExpression:     "a",
+			expressionAttributeNames: nil,
+			values: map[int]types.AttributeValue{
 				0: &types.AttributeValueMemberS{Value: "av"},
 			},
-			map[string]types.AttributeValue{
+			item: map[string]types.AttributeValue{
 				"a": &types.AttributeValueMemberS{Value: "av"},
 			},
 		},
 		{
-			"a,b[2],c.d", nil,
-			map[int]types.AttributeValue{},
-			map[string]types.AttributeValue{},
+			projectionExpression:     "a,b[2],c.d",
+			expressionAttributeNames: nil,
+			values:                   map[int]types.AttributeValue{},
+			item:                     map[string]types.AttributeValue{},
 		},
 		{
-			projectionExpression: "a.b",
+			projectionExpression:     "a.b",
+			expressionAttributeNames: nil,
 			values: map[int]types.AttributeValue{
 				0: &types.AttributeValueMemberS{Value: "av"},
 			},
@@ -142,24 +145,27 @@ func TestItemBuilder(t *testing.T) {
 			},
 		},
 		{
-			projectionExpression: "a[3]",
+			projectionExpression:     "a[3]",
+			expressionAttributeNames: nil,
 			values: map[int]types.AttributeValue{
 				0: &types.AttributeValueMemberS{Value: "av"},
 			},
 			item: map[string]types.AttributeValue{
-				"a": &types.AttributeValueMemberL{Value: []types.AttributeValue{
-					&types.AttributeValueMemberS{Value: "av"},
-				},
+				"a": &types.AttributeValueMemberL{
+					Value: []types.AttributeValue{
+						&types.AttributeValueMemberS{Value: "av"},
+					},
 				},
 			},
 		},
 		{
-			"a[3],a[2]", nil,
-			map[int]types.AttributeValue{
+			projectionExpression:     "a[3],a[2]",
+			expressionAttributeNames: nil,
+			values: map[int]types.AttributeValue{
 				0: &types.AttributeValueMemberS{Value: "av3"},
 				1: &types.AttributeValueMemberS{Value: "av2"},
 			},
-			map[string]types.AttributeValue{
+			item: map[string]types.AttributeValue{
 				"a": &types.AttributeValueMemberL{
 					Value: []types.AttributeValue{
 						&types.AttributeValueMemberS{Value: "av2"},
@@ -169,12 +175,13 @@ func TestItemBuilder(t *testing.T) {
 			},
 		},
 		{
-			"a[2],a[3]", nil,
-			map[int]types.AttributeValue{
+			projectionExpression:     "a[2],a[3]",
+			expressionAttributeNames: nil,
+			values: map[int]types.AttributeValue{
 				0: &types.AttributeValueMemberS{Value: "av2"},
 				1: &types.AttributeValueMemberS{Value: "av3"},
 			},
-			map[string]types.AttributeValue{
+			item: map[string]types.AttributeValue{
 				"a": &types.AttributeValueMemberL{
 					Value: []types.AttributeValue{
 						&types.AttributeValueMemberS{Value: "av2"},
@@ -184,15 +191,16 @@ func TestItemBuilder(t *testing.T) {
 			},
 		},
 		{
-			"a[2].b.c,a[2].b.d,a[1].b.e", nil,
-			map[int]types.AttributeValue{
+			projectionExpression:     "a[2].b.c,a[2].b.d,a[1].b.e",
+			expressionAttributeNames: nil,
+			values: map[int]types.AttributeValue{
 				2: &types.AttributeValueMemberM{Value: map[string]types.AttributeValue{
 					"field": &types.AttributeValueMemberS{Value: "value"},
 				}},
 				0: &types.AttributeValueMemberN{Value: "4"},
 				1: &types.AttributeValueMemberN{Value: "2"},
 			},
-			map[string]types.AttributeValue{
+			item: map[string]types.AttributeValue{
 				"a": &types.AttributeValueMemberL{
 					Value: []types.AttributeValue{
 						&types.AttributeValueMemberM{Value: map[string]types.AttributeValue{
@@ -213,15 +221,16 @@ func TestItemBuilder(t *testing.T) {
 			},
 		},
 		{
-			"a[4],a[2],b.c[12]", nil,
-			map[int]types.AttributeValue{
+			projectionExpression:     "a[4],a[2],b.c[12]",
+			expressionAttributeNames: nil,
+			values: map[int]types.AttributeValue{
 				2: &types.AttributeValueMemberL{Value: []types.AttributeValue{
 					&types.AttributeValueMemberS{Value: "elem"},
 				}},
 				0: &types.AttributeValueMemberN{Value: "4"},
 				1: &types.AttributeValueMemberN{Value: "2"},
 			},
-			map[string]types.AttributeValue{
+			item: map[string]types.AttributeValue{
 				"a": &types.AttributeValueMemberL{
 					Value: []types.AttributeValue{
 						&types.AttributeValueMemberN{Value: "2"},
@@ -244,15 +253,15 @@ func TestItemBuilder(t *testing.T) {
 			},
 		},
 		{
-			"#a[1].#b",
-			map[string]string{
+			projectionExpression: "#a[1].#b",
+			expressionAttributeNames: map[string]string{
 				"#a": "with.dot",
 				"#b": "sub.field",
 			},
-			map[int]types.AttributeValue{
+			values: map[int]types.AttributeValue{
 				0: &types.AttributeValueMemberN{Value: "4"},
 			},
-			map[string]types.AttributeValue{
+			item: map[string]types.AttributeValue{
 				"with.dot": &types.AttributeValueMemberL{
 					Value: []types.AttributeValue{
 						&types.AttributeValueMemberM{
