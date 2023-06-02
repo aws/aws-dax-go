@@ -57,6 +57,7 @@ func translateLegacyPutItemInput(input *dynamodb.PutItemInput) (*dynamodb.PutIte
 	if err != nil {
 		return input, err
 	}
+	output.ConditionalOperator = ""
 	output.Expected = nil
 	return output, err
 }
@@ -70,6 +71,7 @@ func translateLegacyDeleteItemInput(input *dynamodb.DeleteItemInput) (*dynamodb.
 	output := input
 	output.ConditionExpression, output.ExpressionAttributeNames, output.ExpressionAttributeValues, err =
 		translateExpected(output.ConditionalOperator, output.Expected, input.ExpressionAttributeNames, output.ExpressionAttributeValues)
+	output.ConditionalOperator = ""
 	output.Expected = nil
 	if err != nil {
 		return input, err
@@ -97,6 +99,7 @@ func translateLegacyUpdateItemInput(input *dynamodb.UpdateItemInput) (*dynamodb.
 		if err != nil {
 			return input, err
 		}
+		output.ConditionalOperator = ""
 		output.Expected = nil
 	}
 	if uf {
@@ -138,6 +141,7 @@ func translateLegacyScanInput(input *dynamodb.ScanInput) (*dynamodb.ScanInput, e
 		if err != nil {
 			return input, err
 		}
+		output.ConditionalOperator = ""
 		output.ScanFilter = nil
 	}
 
@@ -176,6 +180,7 @@ func translateLegacyQueryInput(input *dynamodb.QueryInput) (*dynamodb.QueryInput
 		if err != nil {
 			return input, err
 		}
+		output.ConditionalOperator = ""
 		output.QueryFilter = nil
 	}
 	if kf {
@@ -195,7 +200,7 @@ func translateLegacyBatchGetItemInput(input *dynamodb.BatchGetItemInput) (*dynam
 		return input, nil
 	}
 
-	for _, kaas := range input.RequestItems {
+	for i, kaas := range input.RequestItems {
 		f, err := hasAttributesToGet(kaas.AttributesToGet, kaas.ProjectionExpression)
 		if err != nil {
 			return input, err
@@ -207,6 +212,7 @@ func translateLegacyBatchGetItemInput(input *dynamodb.BatchGetItemInput) (*dynam
 		if err != nil {
 			return input, err
 		}
+		input.RequestItems[i] = kaas
 	}
 	return input, nil
 }
@@ -320,7 +326,10 @@ func translateAttributeUpdates(avus map[string]types.AttributeValueUpdate, subs 
 	var sets, adds, dels, rems []string
 
 	for a, avu := range avus {
-		act := avu.Action
+		act := types.AttributeActionPut
+		if avu.Action != "" {
+			act = avu.Action
+		}
 		if avu.Value == nil && act != types.AttributeActionDelete {
 			return nil, subs, vars, &smithy.GenericAPIError{
 				Code:    ErrCodeValidationException,
@@ -669,6 +678,10 @@ func appendArithmeticComparisonCondition(in []byte, a string, op types.Compariso
 	if err := validateScalarAttribute(avl, op); err != nil {
 		return in, subs, vars, err
 	}
+	eop, err := convertArithmeticComparisonOperator(op)
+	if err != nil {
+		return in, subs, vars, err
+	}
 
 	var an, av0 string
 	subs, an = appendAttributeName(subs, a)
@@ -676,7 +689,7 @@ func appendArithmeticComparisonCondition(in []byte, a string, op types.Compariso
 
 	in = append(in, []byte(an)...)
 	in = append(in, []byte(" ")...)
-	in = append(in, []byte(op)...)
+	in = append(in, []byte(eop)...)
 	in = append(in, []byte(" ")...)
 	in = append(in, []byte(av0)...)
 	return in, subs, vars, nil
@@ -796,5 +809,28 @@ func attributeTypeName(v types.AttributeValue) string {
 		return "NULL"
 	default:
 		return ""
+	}
+}
+
+func convertArithmeticComparisonOperator(op types.ComparisonOperator) (string, error) {
+	// convert inequality operator
+	switch op {
+	case types.ComparisonOperatorEq:
+		return "=", nil
+	case types.ComparisonOperatorNe:
+		return "<>", nil
+	case types.ComparisonOperatorLe:
+		return "<=", nil
+	case types.ComparisonOperatorGe:
+		return ">=", nil
+	case types.ComparisonOperatorLt:
+		return "<", nil
+	case types.ComparisonOperatorGt:
+		return ">", nil
+	}
+	return "", &smithy.GenericAPIError{
+		Code:    ErrCodeValidationException,
+		Message: fmt.Sprintf("Unknown arithmetic comparison operator: %s", op),
+		Fault:   smithy.FaultClient,
 	}
 }
