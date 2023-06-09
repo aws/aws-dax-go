@@ -112,8 +112,11 @@ func translateLegacyUpdateItemInput(input *dynamodb.UpdateItemInput) (*dynamodb.
 	}
 	return output, nil
 }
-
 func translateLegacyScanInput(input *dynamodb.ScanInput) (*dynamodb.ScanInput, error) {
+	// if ProjectionExpression is not nil, Should set Select type.
+	if input.ProjectionExpression != nil {
+		input.Select = types.SelectSpecificAttributes
+	}
 	pf, err := hasAttributesToGet(input.AttributesToGet, input.ProjectionExpression)
 	if err != nil {
 		return input, err
