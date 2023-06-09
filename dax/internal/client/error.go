@@ -239,22 +239,16 @@ func convertDaxError(e daxError) error {
 	if len(codes) < 2 {
 		return e
 	}
-	//md := protocol.ResponseMetadata{
-	//	StatusCode: e.StatusCode(),
-	//	RequestID:  e.RequestID(),
-	//}
 	switch codes[1] {
 	case 23:
 		if len(codes) > 2 {
 			switch codes[2] {
 			case 24:
 				return &types.ResourceNotFoundException{
-					//RespMetadata: md,
 					Message: aws.String(e.Error()),
 				}
 			case 35:
 				return &types.ResourceInUseException{
-					//RespMetadata: md,
 					Message: aws.String(e.Error()),
 				}
 			}
@@ -267,22 +261,18 @@ func convertDaxError(e daxError) error {
 					switch codes[4] {
 					case 40:
 						return &types.ProvisionedThroughputExceededException{
-							//RespMetadata: md,
 							Message: aws.String(e.Error()),
 						}
 					case 41:
 						return &types.ResourceNotFoundException{
-							//RespMetadata: md,
 							Message: aws.String(e.Error()),
 						}
 					case 43:
 						return &types.ConditionalCheckFailedException{
-							//RespMetadata: md,
 							Message: aws.String(e.Error()),
 						}
 					case 45:
 						return &types.ResourceInUseException{
-							//RespMetadata: md,
 							Message: aws.String(e.Error())}
 					case 46:
 						// there's no dynamodb.ValidationException type
@@ -293,17 +283,14 @@ func convertDaxError(e daxError) error {
 						}
 					case 47:
 						return &types.InternalServerError{
-							//RespMetadata: md,
 							Message: aws.String(e.Error()),
 						}
 					case 48:
 						return &types.ItemCollectionSizeLimitExceededException{
-							//RespMetadata: md,
 							Message: aws.String(e.Error()),
 						}
 					case 49:
 						return &types.LimitExceededException{
-							//RespMetadata: md,
 							Message: aws.String(e.Error()),
 						}
 					case 50:
@@ -315,14 +302,12 @@ func convertDaxError(e daxError) error {
 						}
 					case 57:
 						return &types.TransactionConflictException{
-							//RespMetadata: md,
 							Message: aws.String(e.Error()),
 						}
 					case 58:
 						tcFailure, ok := e.(*daxTransactionCanceledFailure)
 						if ok {
 							return &types.TransactionCanceledException{
-								//RespMetadata:        md,
 								Message:             aws.String(e.Error()),
 								CancellationReasons: tcFailure.cancellationReasons,
 							}
@@ -333,12 +318,10 @@ func convertDaxError(e daxError) error {
 						}
 					case 59:
 						return &types.TransactionInProgressException{
-							//RespMetadata: md,
 							Message: aws.String(e.Error()),
 						}
 					case 60:
 						return &types.IdempotentParameterMismatchException{
-							//RespMetadata: md,
 							Message: aws.String(e.Error()),
 						}
 					}
