@@ -1,3 +1,9 @@
+Release v1.2.13 (2023-07-13)
+===
+* On errors close the single connection instead of destroying the whole pool
+* Increase number of retries to 3 for health checks
+* Fix issue where we end up sending error to a closed channel
+
 Release v1.2.12 (2023-01-10)
 ===
 * Add support for healthcheck infrastructure
