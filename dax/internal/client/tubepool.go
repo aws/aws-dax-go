@@ -190,14 +190,13 @@ func (p *tubePool) allocAndReleaseGate(session int64, done chan tube, releaseGat
 		}
 	} else {
 		p.mutex.Lock()
-		cls := p.closed
-		p.mutex.Unlock()
-		if !cls {
+		if !p.closed {
 			select {
 			case p.errCh <- err:
 			default:
 			}
 		}
+		p.mutex.Unlock()
 	}
 	if done != nil {
 		close(done)
@@ -236,9 +235,10 @@ func (p *tubePool) put(t tube) {
 	p.top = t
 }
 
-// Closes the specified tube, and if the tube is using the same version as the current session,
-// then also closes all other idle tubes and performs a version bump.
-func (p *tubePool) discard(t tube) {
+// Make sure to closeTube the tube if you are not sure that the tube is clean
+// Clean tube means nothing is written inside the tube or
+// the things written inside tube is drained completely
+func (p *tubePool) closeTube(t tube) {
 	if t == nil {
 		return
 	}
@@ -249,30 +249,6 @@ func (p *tubePool) discard(t tube) {
 			t.Close()
 		}()
 	}
-
-	p.mutex.Lock()
-
-	var head tube
-	if t.Session() == p.session {
-		p.sessionBump()
-		head = p.clearIdleConnections()
-	}
-
-	// Waiters enter the waiting queue when there's no existing tube
-	// or when they failed to acquire a permit to create a new tube.
-	// There's also a chance the newly created tube was stolen and
-	// the thief must return it back into the pool or discard it.
-	if p.waiters != nil {
-		select {
-		case p.waiters <- nil: // wake up a single waiter, if any
-			break
-		default:
-			close(p.waiters) // or unblock all future waiters who are yet to enter the waiters queue
-			p.waiters = nil
-		}
-	}
-	p.mutex.Unlock()
-	p.closeAll(head)
 }
 
 // Sets the deadline on the underlying net.Conn object
@@ -303,7 +279,7 @@ func (p *tubePool) Close() error {
 			p.waiters = nil
 		}
 		close(p.errCh)
-		// cannot close(p.gate) as send on closed channel will panic. new connections will be closed immediately.
+		// cannot closeTube(p.gate) as send on closed channel will panic. new connections will be closed immediately.
 	}
 	p.mutex.Unlock()
 	p.closeAll(head)

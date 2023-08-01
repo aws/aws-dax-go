@@ -169,7 +169,7 @@ func (client *SingleDaxClient) startHealthChecks(cc *cluster, host hostPort) {
 		ctx, cfn := context.WithTimeout(aws.BackgroundContext(), 1*time.Second)
 		defer cfn()
 		var err error
-		_, err = client.endpoints(RequestOptions{MaxRetries: 2, Context: ctx})
+		_, err = client.endpoints(RequestOptions{MaxRetries: 3, Context: ctx})
 		if err != nil {
 			cc.debugLog(fmt.Sprintf("Health checks failed with error " + err.Error() + " for host :: " + host.host))
 			cc.onHealthCheckFailed(host)
@@ -740,31 +740,41 @@ func (client *SingleDaxClient) executeWithContext(ctx aws.Context, op string, en
 		return err
 	}
 	if err = client.pool.setDeadline(ctx, t); err != nil {
-		client.pool.discard(t)
+		// If the error is just due to context cancelled or timeout
+		// then the tube is still usable because we have not written anything to tube
+		if err == ctx.Err() {
+			client.pool.put(t)
+			return err
+		}
+		// If we get error while setting deadline of tube
+		// probably something is wrong with the tube
+		client.pool.closeTube(t)
 		return err
 	}
 
 	if err = client.auth(t); err != nil {
-		client.pool.discard(t)
+		// Auth method writes in the tube and
+		// it is not guaranteed that it will be drained completely on error
+		client.pool.closeTube(t)
 		return err
 	}
 
 	writer := t.CborWriter()
 	if err = encoder(writer); err != nil {
-		// Validation errors will cause pool to be discarded as there is no guarantee
+		// Validation errors will cause connection to be closed as there is no guarantee
 		// that the validation was performed before any data was written into tube
-		client.pool.discard(t)
+		client.pool.closeTube(t)
 		return err
 	}
 	if err := writer.Flush(); err != nil {
-		client.pool.discard(t)
+		client.pool.closeTube(t)
 		return err
 	}
 
 	reader := t.CborReader()
 	ex, err := decodeError(reader)
-	if err != nil { // decode or network error
-		client.pool.discard(t)
+	if err != nil { // decode or network error - doesn't guarantee completely drained tube
+		client.pool.closeTube(t)
 		return err
 	}
 	if ex != nil { // user or server error
@@ -774,7 +784,8 @@ func (client *SingleDaxClient) executeWithContext(ctx aws.Context, op string, en
 
 	err = decoder(reader)
 	if err != nil {
-		client.pool.discard(t)
+		// we are not able to completely drain tube
+		client.pool.closeTube(t)
 	} else {
 		client.pool.put(t)
 	}
@@ -809,7 +820,7 @@ func (client *SingleDaxClient) recycleTube(t tube, err error) {
 	if recycle {
 		client.pool.put(t)
 	} else {
-		client.pool.discard(t)
+		client.pool.closeTube(t)
 	}
 }
 func (client *SingleDaxClient) auth(t tube) error {

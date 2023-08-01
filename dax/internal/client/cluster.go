@@ -642,7 +642,7 @@ func (c *cluster) update(config []serviceEndpoint) error {
 		for ep, clicfg := range oldActive {
 			_, isPartOfUpdatedEndpointsConfig := newEndpoints[ep]
 			if !isPartOfUpdatedEndpointsConfig {
-				c.debugLog(fmt.Sprintf("Found updated endpoing configs, will close inactive endpoint client : %s", ep.host))
+				c.debugLog(fmt.Sprintf("Found updated endpoint configs, will close inactive endpoint client : %s", ep.host))
 				toClose = append(toClose, clicfg)
 			}
 		}

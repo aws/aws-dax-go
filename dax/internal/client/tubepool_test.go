@@ -509,58 +509,16 @@ func countTubes(pool *tubePool) int {
 	return count
 }
 
-func TestTubePool_DiscardBumpsSession(t *testing.T) {
+func TestTubePool_close(t *testing.T) {
 	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, 5 * time.Second, defaultDialer.DialContext}, connConfigData)
 	origSession := p.session
+	p.closeTubeImmediately = true
 
 	tt := &mockTube{}
-	tt.On("Session").Return(p.session).Once()
 	tt.On("Close").Return(nil).Once()
-	p.discard(tt)
-
-	require.NotEqual(t, origSession, p.session)
-}
-
-func TestTubePool_DiscardWakesUpWaiters(t *testing.T) {
-
-	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, 5 * time.Second, defaultDialer.DialContext}, connConfigData)
-	p.dialContext = func(ctx context.Context, a, n string) (net.Conn, error) {
-		return &mockConn{}, nil
-	}
-	// artificially enter the gate to prevent new connections
-	entered := p.gate.tryEnter()
-	require.True(t, entered)
-
-	var startedWg sync.WaitGroup
-	startedWg.Add(1)
-
-	ch := make(chan struct {
-		tube
-		error
-	})
-	go func() {
-		startedWg.Done()
-		t, err := p.get()
-		ch <- struct {
-			tube
-			error
-		}{t, err}
-	}()
-	startedWg.Wait()
-	// wait some extra time to make sure the caller has entered waiters queue
-	time.Sleep(2 * time.Second)
-
-	// release the gate to allow woken waiters to establish a new connection
-	p.gate.exit()
-	tt := &mockTube{}
-	tt.On("Session").Return(p.session).Once()
-	tt.On("Close").Return(nil).Once()
-
-	p.discard(tt)
-
-	result := <-ch
-	require.NoError(t, result.error)
-	require.NotNil(t, result.tube)
+	p.closeTube(tt)
+	require.Equal(t, origSession, p.session)
+	tt.AssertCalled(t, "Close")
 }
 
 func TestTubePool_PutClosesTubesIfPoolIsClosed(t *testing.T) {
