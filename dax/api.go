@@ -152,30 +152,6 @@ func (d *Dax) TransactGetItems(ctx context.Context, input *dynamodb.TransactGetI
 	return d.client.TransactGetItemsWithOptions(ctx, input, o)
 }
 
-//func (d *Dax) BatchGetItemPages(ctx context.Context, input *dynamodb.BatchGetItemInput, fn func(*dynamodb.BatchGetItemOutput, bool) bool, opts ...func(*dynamodb.Options)) error {
-//	p := request.Pagination{
-//		NewRequest: func() (*request.Request, error) {
-//			var inCpy *dynamodb.BatchGetItemInput
-//			if input != nil {
-//				tmp := *input
-//				inCpy = &tmp
-//			}
-//			req, _ := d.BatchGetItemRequest(inCpy)
-//			req.SetContext(ctx)
-//			req.ApplyOptions(opts...)
-//			return req, nil
-//		},
-//	}
-//
-//	for p.Next() {
-//		if !fn(p.Page().(*dynamodb.BatchGetItemOutput), !p.HasNextPage()) {
-//			break
-//		}
-//	}
-//
-//	return p.Err()
-//}
-
 //func (d *Dax) QueryPages(ctx context.Context, input *dynamodb.QueryInput, fn func(*dynamodb.QueryOutput, bool) bool, opts ...func(*dynamodb.Options)) error {
 //	p := request.Pagination{
 //		NewRequest: func() (*request.Request, error) {
