@@ -115,14 +115,15 @@ func SecureDialContext(endpoint string, skipHostnameVerification bool) (func(ctx
 // Only configurations relevent to DAX will be used, others will be ignored.
 //
 // Example:
-// 		mySession := session.Must(session.NewSession(
-// 			&aws.Config{
-// 				Region: aws.String("us-east-1"),
-// 				Endpoint: aws.String("dax://mycluster.frfx8h.clustercfg.dax.usw2.amazonaws.com:8111"),
-// 			}))
 //
-// 		// Create a DAX client from just a session.
-// 		svc := dax.NewWithSession(mySession)
+//	mySession := session.Must(session.NewSession(
+//		&aws.Config{
+//			Region: aws.String("us-east-1"),
+//			Endpoint: aws.String("dax://mycluster.frfx8h.clustercfg.dax.usw2.amazonaws.com:8111"),
+//		}))
+//
+//	// Create a DAX client from just a session.
+//	svc := dax.NewWithSession(mySession)
 func NewWithSession(session session.Session) (*Dax, error) {
 	dc := DefaultConfig()
 	if session.Config != nil {
@@ -169,6 +170,7 @@ func (c *Config) requestOptions(read bool, ctx context.Context, opts ...request.
 		MaxRetries: r,
 	}
 	if err := opt.MergeFromRequestOptions(ctx, opts...); err != nil {
+		defer cfn()
 		if c.Logger != nil && c.LogLevel.AtLeast(aws.LogDebug) {
 			c.Logger.Log(fmt.Sprintf("DEBUG: Error in merging from Request Options : %s", err))
 		}
@@ -183,7 +185,6 @@ func buildHandlersForUnimplementedOperations() *request.Handlers {
 		Name: "dax.BuildHandler",
 		Fn: func(r *request.Request) {
 			r.Error = errors.New(client.ErrCodeNotImplemented)
-			return
 		}})
 	return h
 }
