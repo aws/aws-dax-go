@@ -1,18 +1,19 @@
 package client
 
 import (
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"testing"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
 func TestHasDuplicatesWriteRequests(t *testing.T) {
 	hk := "hk"
-	d := []dynamodb.AttributeDefinition{
-		{AttributeName: aws.String(hk), AttributeType: aws.String(dynamodb.ScalarAttributeTypeS)},
+	d := []types.AttributeDefinition{
+		{AttributeName: aws.String(hk), AttributeType: types.ScalarAttributeTypeS},
 	}
 	cases := []struct {
-		w []*dynamodb.WriteRequest
+		w []types.WriteRequest
 		e bool
 	}{
 		{
@@ -20,57 +21,49 @@ func TestHasDuplicatesWriteRequests(t *testing.T) {
 			e: false,
 		},
 		{
-			w: []*dynamodb.WriteRequest{},
+			w: []types.WriteRequest{},
 			e: false,
 		},
 		{
-			w: []*dynamodb.WriteRequest{nil},
-			e: false,
-		},
-		{
-			w: []*dynamodb.WriteRequest{nil, nil, nil},
-			e: false, // continue with request processing
-		},
-		{
-			w: []*dynamodb.WriteRequest{
-				{PutRequest: &dynamodb.PutRequest{Item: map[string]*dynamodb.AttributeValue{hk: {S: aws.String("abc")}}}},
+			w: []types.WriteRequest{
+				{PutRequest: &types.PutRequest{Item: map[string]types.AttributeValue{hk: &types.AttributeValueMemberS{Value: "abc"}}}},
 			},
 			e: false,
 		},
 		{
-			w: []*dynamodb.WriteRequest{
-				{PutRequest: &dynamodb.PutRequest{Item: map[string]*dynamodb.AttributeValue{hk: {S: aws.String("abc")}}}},
-				{PutRequest: &dynamodb.PutRequest{Item: map[string]*dynamodb.AttributeValue{hk: {S: aws.String("abc")}}}},
+			w: []types.WriteRequest{
+				{PutRequest: &types.PutRequest{Item: map[string]types.AttributeValue{hk: &types.AttributeValueMemberS{Value: "abc"}}}},
+				{PutRequest: &types.PutRequest{Item: map[string]types.AttributeValue{hk: &types.AttributeValueMemberS{Value: "abc"}}}},
 			},
 			e: true,
 		},
 		{
-			w: []*dynamodb.WriteRequest{
-				{PutRequest: &dynamodb.PutRequest{Item: map[string]*dynamodb.AttributeValue{hk: {S: aws.String("abc")}}}},
-				{PutRequest: &dynamodb.PutRequest{Item: map[string]*dynamodb.AttributeValue{hk: {S: aws.String("def")}}}},
+			w: []types.WriteRequest{
+				{PutRequest: &types.PutRequest{Item: map[string]types.AttributeValue{hk: &types.AttributeValueMemberS{Value: "abc"}}}},
+				{PutRequest: &types.PutRequest{Item: map[string]types.AttributeValue{hk: &types.AttributeValueMemberS{Value: "def"}}}},
 			},
 			e: false,
 		},
 		{
-			w: []*dynamodb.WriteRequest{
-				{PutRequest: &dynamodb.PutRequest{Item: map[string]*dynamodb.AttributeValue{hk: {S: aws.String("abc")}}}},
-				{DeleteRequest: &dynamodb.DeleteRequest{Key: map[string]*dynamodb.AttributeValue{hk: {S: aws.String("abc")}}}},
+			w: []types.WriteRequest{
+				{PutRequest: &types.PutRequest{Item: map[string]types.AttributeValue{hk: &types.AttributeValueMemberS{Value: "abc"}}}},
+				{DeleteRequest: &types.DeleteRequest{Key: map[string]types.AttributeValue{hk: &types.AttributeValueMemberS{Value: "abc"}}}},
 			},
 			e: true,
 		},
 		{
-			w: []*dynamodb.WriteRequest{
-				{PutRequest: &dynamodb.PutRequest{Item: map[string]*dynamodb.AttributeValue{hk: {S: aws.String("abc")}}}},
-				{DeleteRequest: &dynamodb.DeleteRequest{Key: map[string]*dynamodb.AttributeValue{hk: {S: aws.String("def")}}}},
+			w: []types.WriteRequest{
+				{PutRequest: &types.PutRequest{Item: map[string]types.AttributeValue{hk: &types.AttributeValueMemberS{Value: "abc"}}}},
+				{DeleteRequest: &types.DeleteRequest{Key: map[string]types.AttributeValue{hk: &types.AttributeValueMemberS{Value: "def"}}}},
 			},
 			e: false,
 		},
 		{
-			w: []*dynamodb.WriteRequest{
-				{DeleteRequest: &dynamodb.DeleteRequest{Key: map[string]*dynamodb.AttributeValue{hk: {S: aws.String("abc")}}}},
-				{PutRequest: &dynamodb.PutRequest{Item: map[string]*dynamodb.AttributeValue{hk: {S: aws.String("def")}}}},
-				{PutRequest: &dynamodb.PutRequest{Item: map[string]*dynamodb.AttributeValue{hk: {S: aws.String("xyz")}}}},
-				{DeleteRequest: &dynamodb.DeleteRequest{Key: map[string]*dynamodb.AttributeValue{hk: {S: aws.String("def")}}}},
+			w: []types.WriteRequest{
+				{DeleteRequest: &types.DeleteRequest{Key: map[string]types.AttributeValue{hk: &types.AttributeValueMemberS{Value: "abc"}}}},
+				{PutRequest: &types.PutRequest{Item: map[string]types.AttributeValue{hk: &types.AttributeValueMemberS{Value: "def"}}}},
+				{PutRequest: &types.PutRequest{Item: map[string]types.AttributeValue{hk: &types.AttributeValueMemberS{Value: "xyz"}}}},
+				{DeleteRequest: &types.DeleteRequest{Key: map[string]types.AttributeValue{hk: &types.AttributeValueMemberS{Value: "def"}}}},
 			},
 			e: true,
 		},
@@ -86,58 +79,54 @@ func TestHasDuplicatesWriteRequests(t *testing.T) {
 
 func TestHasDuplicateKeysAndAttributes(t *testing.T) {
 	hk := "hk"
-	d := []dynamodb.AttributeDefinition{
-		{AttributeName: aws.String(hk), AttributeType: aws.String(dynamodb.ScalarAttributeTypeS)},
+	d := []types.AttributeDefinition{
+		{AttributeName: aws.String(hk), AttributeType: types.ScalarAttributeTypeS},
 	}
 	cases := []struct {
-		kaas *dynamodb.KeysAndAttributes
+		kaas types.KeysAndAttributes
 		e    bool
 	}{
 		{
-			kaas: nil,
+			kaas: types.KeysAndAttributes{},
 			e:    false,
 		},
 		{
-			kaas: &dynamodb.KeysAndAttributes{},
+			kaas: types.KeysAndAttributes{Keys: []map[string]types.AttributeValue{}},
 			e:    false,
 		},
 		{
-			kaas: &dynamodb.KeysAndAttributes{Keys: []map[string]*dynamodb.AttributeValue{}},
+			kaas: types.KeysAndAttributes{Keys: []map[string]types.AttributeValue{nil}},
 			e:    false,
 		},
 		{
-			kaas: &dynamodb.KeysAndAttributes{Keys: []map[string]*dynamodb.AttributeValue{nil}},
-			e:    false,
-		},
-		{
-			kaas: &dynamodb.KeysAndAttributes{Keys: []map[string]*dynamodb.AttributeValue{nil, nil, nil}},
+			kaas: types.KeysAndAttributes{Keys: []map[string]types.AttributeValue{nil, nil, nil}},
 			e:    false, // continue with request processing
 		},
 		{
-			kaas: &dynamodb.KeysAndAttributes{Keys: []map[string]*dynamodb.AttributeValue{
-				{hk: {S: aws.String("abc")}},
+			kaas: types.KeysAndAttributes{Keys: []map[string]types.AttributeValue{
+				{hk: &types.AttributeValueMemberS{Value: "abc"}},
 			}},
 			e: false,
 		},
 		{
-			kaas: &dynamodb.KeysAndAttributes{Keys: []map[string]*dynamodb.AttributeValue{
-				{hk: {S: aws.String("abc")}},
-				{hk: {S: aws.String("def")}},
+			kaas: types.KeysAndAttributes{Keys: []map[string]types.AttributeValue{
+				{hk: &types.AttributeValueMemberS{Value: "abc"}},
+				{hk: &types.AttributeValueMemberS{Value: "def"}},
 			}},
 			e: false,
 		},
 		{
-			kaas: &dynamodb.KeysAndAttributes{Keys: []map[string]*dynamodb.AttributeValue{
-				{hk: {S: aws.String("abc")}},
-				{hk: {S: aws.String("abc")}},
+			kaas: types.KeysAndAttributes{Keys: []map[string]types.AttributeValue{
+				{hk: &types.AttributeValueMemberS{Value: "abc"}},
+				{hk: &types.AttributeValueMemberS{Value: "abc"}},
 			}},
 			e: true,
 		},
 		{
-			kaas: &dynamodb.KeysAndAttributes{Keys: []map[string]*dynamodb.AttributeValue{
-				{hk: {S: aws.String("abc")}},
-				{hk: {S: aws.String("def")}},
-				{hk: {S: aws.String("abc")}},
+			kaas: types.KeysAndAttributes{Keys: []map[string]types.AttributeValue{
+				{hk: &types.AttributeValueMemberS{Value: "abc"}},
+				{hk: &types.AttributeValueMemberS{Value: "def"}},
+				{hk: &types.AttributeValueMemberS{Value: "abc"}},
 			}},
 			e: true,
 		},

@@ -20,11 +20,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go-v2/aws"
 )
 
 func TestSigV4(t *testing.T) {
-	creds := credentials.Value{AccessKeyID: "ak", SecretAccessKey: "sk"}
+	creds := aws.Credentials{AccessKeyID: "ak", SecretAccessKey: "sk"}
 	endpoint := "dynamodb.us-east-1.amazonaws.com"
 	region := "us-east-1"
 	payload := "payload"
@@ -41,11 +41,10 @@ func TestSigV4(t *testing.T) {
 	}
 
 	// repeat with session token
-	creds = credentials.Value{
+	creds = aws.Credentials{
 		AccessKeyID:     "ak",
 		SecretAccessKey: "sk",
 		SessionToken:    "st",
-		ProviderName:    "",
 	}
 	actualStringToSign, actualSignature = generateSigV4WithTime(creds, endpoint, region, payload, time)
 	if actualStringToSign != stringToSign {
@@ -57,7 +56,7 @@ func TestSigV4(t *testing.T) {
 }
 
 func BenchmarkSigV4(b *testing.B) {
-	creds := credentials.Value{AccessKeyID: "ak", SecretAccessKey: "sk"}
+	creds := aws.Credentials{AccessKeyID: "ak", SecretAccessKey: "sk"}
 	endpoint := "dynamodb.us-east-1.amazonaws.com"
 	region := "us-east-1"
 	payload := "payload"

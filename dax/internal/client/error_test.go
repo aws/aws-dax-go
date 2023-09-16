@@ -17,35 +17,38 @@ package client
 
 import (
 	"bytes"
-	"errors"
-	"net"
+	"context"
 	"reflect"
 	"testing"
 
 	"github.com/aws/aws-dax-go/dax/internal/cbor"
 	"github.com/aws/aws-dax-go/dax/internal/lru"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/aws/smithy-go"
 )
 
 func TestDecodeError(t *testing.T) {
 	var b bytes.Buffer
-	errcode := []int{4, 37, 38, 39, 40}
-	awserr := awserr.NewRequestFailure(awserr.New(dynamodb.ErrCodeProvisionedThroughputExceededException, "ProvisionedThroughputExceededException Message", nil), 400, "request-1")
+	errCodes := []int{4, 37, 38, 39, 40}
+	requestID := "request-1"
+	statusCode := 400
+	exception := types.ProvisionedThroughputExceededException{
+		Message: aws.String("ProvisionedThroughputExceededException Message"),
+	}
 
 	w := cbor.NewWriter(&b)
-	w.WriteArrayHeader(len(errcode))
-	for _, c := range errcode {
-		w.WriteInt(c)
+	_ = w.WriteArrayHeader(len(errCodes))
+	for _, c := range errCodes {
+		_ = w.WriteInt(c)
 	}
-	w.WriteString(awserr.Message())
+	_ = w.WriteString(exception.ErrorMessage())
 
-	w.WriteArrayHeader(3)
-	w.WriteString(awserr.RequestID())
-	w.WriteString(awserr.Code())
-	w.WriteInt(awserr.StatusCode())
-	w.Flush()
+	_ = w.WriteArrayHeader(3)
+	_ = w.WriteString(requestID)
+	_ = w.WriteString(exception.ErrorCode())
+	_ = w.WriteInt(statusCode)
+	_ = w.Flush()
 
 	r := cbor.NewReader(&b)
 	e, err := decodeError(r)
@@ -59,8 +62,14 @@ func TestDecodeError(t *testing.T) {
 	}
 
 	expected := &daxRequestFailure{
-		RequestFailure: awserr,
-		codes:          errcode,
+		GenericAPIError: &smithy.GenericAPIError{
+			Code:    exception.ErrorCode(),
+			Message: exception.ErrorMessage(),
+			Fault:   smithy.FaultServer,
+		},
+		codes:      errCodes,
+		requestID:  requestID,
+		statusCode: statusCode,
 	}
 
 	if !reflect.DeepEqual(expected, d) {
@@ -69,44 +78,49 @@ func TestDecodeError(t *testing.T) {
 }
 
 func TestDecodeTransactionCanceledException(t *testing.T) {
-	errcode := []int{4, 37, 38, 39, 58}
-	awserr := awserr.NewRequestFailure(awserr.New(dynamodb.ErrCodeTransactionCanceledException, "TransactionCanceledException Message", nil), 400, "request-1")
-	reasonLen := 2
-	reasonCodes := []*string{aws.String("reasonCode1"), aws.String("reasonCode2")}
-	reasonMsgs := []*string{aws.String("reasonMsg1"), aws.String("reasonMsg2")}
+	errCodes := []int{4, 37, 38, 39, 58}
+	requestID := "request-1"
+	statusCode := 400
+	exception := types.TransactionCanceledException{
+		Message: aws.String("TransactionCanceledException Message"),
+		CancellationReasons: []types.CancellationReason{
+			{Code: aws.String("reasonCode1"), Item: map[string]types.AttributeValue{}, Message: aws.String("reasonMsg1")},
+			{Code: aws.String("reasonCode2"), Item: map[string]types.AttributeValue{}, Message: aws.String("reasonMsg2")},
+		},
+	}
 	items := []byte{}
 	var expItems []byte
 
 	var b bytes.Buffer
 	w := cbor.NewWriter(&b)
-	w.WriteArrayHeader(len(errcode))
-	for _, c := range errcode {
-		w.WriteInt(c)
+	_ = w.WriteArrayHeader(len(errCodes))
+	for _, c := range errCodes {
+		_ = w.WriteInt(c)
 	}
-	w.WriteString(awserr.Message())
+	_ = w.WriteString(exception.ErrorMessage())
 
-	w.WriteArrayHeader(4)
-	w.WriteString(awserr.RequestID())
-	w.WriteString(awserr.Code())
-	w.WriteInt(awserr.StatusCode())
-	w.WriteArrayHeader(3 * reasonLen)
-	for i := 0; i < reasonLen; i++ {
-		w.WriteString(*reasonCodes[i])
-		w.WriteString(*reasonMsgs[i])
-		w.WriteBytes(items)
+	_ = w.WriteArrayHeader(4)
+	_ = w.WriteString(requestID)
+	_ = w.WriteString(exception.ErrorCode())
+	_ = w.WriteInt(statusCode)
+	_ = w.WriteArrayHeader(3 * len(exception.CancellationReasons))
+	for i := 0; i < len(exception.CancellationReasons); i++ {
+		_ = w.WriteString(*exception.CancellationReasons[i].Code)
+		_ = w.WriteString(*exception.CancellationReasons[i].Message)
+		_ = w.WriteBytes(items)
 
 		buf := bytes.Buffer{}
 		nw := cbor.NewWriter(&buf)
-		nw.WriteBytes(items)
-		nw.Flush()
+		_ = nw.WriteBytes(items)
+		_ = nw.Flush()
 
 		r := cbor.NewReader(&buf)
 		obuf := bytes.Buffer{}
-		r.ReadRawBytes(&obuf)
+		_ = r.ReadRawBytes(&obuf)
 
 		expItems = append(expItems, obuf.Bytes()...)
 	}
-	w.Flush()
+	_ = w.Flush()
 
 	r := cbor.NewReader(&b)
 	e, err := decodeError(r)
@@ -119,10 +133,23 @@ func TestDecodeTransactionCanceledException(t *testing.T) {
 		t.Errorf("expected daxTransactionCanceledFailure type")
 	}
 
+	reasonCodes := make([]*string, 0, len(exception.CancellationReasons))
+	reasonMsgs := make([]*string, 0, len(exception.CancellationReasons))
+	for _, r := range exception.CancellationReasons {
+		reasonCodes = append(reasonCodes, r.Code)
+		reasonMsgs = append(reasonMsgs, r.Message)
+	}
+
 	expected := &daxTransactionCanceledFailure{
 		daxRequestFailure: &daxRequestFailure{
-			RequestFailure: awserr,
-			codes:          errcode,
+			GenericAPIError: &smithy.GenericAPIError{
+				Code:    exception.ErrorCode(),
+				Message: exception.ErrorMessage(),
+				Fault:   smithy.FaultServer,
+			},
+			codes:      errCodes,
+			requestID:  requestID,
+			statusCode: statusCode,
 		},
 		cancellationReasonCodes: reasonCodes,
 		cancellationReasonMsgs:  reasonMsgs,
@@ -137,41 +164,42 @@ func TestDecodeTransactionCanceledException(t *testing.T) {
 // TestDecodeTransactionCancellationReasons tests decoding transaction cancellations reasons in daxTransactionCanceledFailure.
 //
 // Specifically, the decoding of items in cancellation reasons are being testing here. It covers three situations:
-//    1. transact item didn't fail conditional check
-//    2. transact item failed conditional check and was configured to return ALL_OLD item
-//    3. transact item failed conditional check and was configured to return NONE item
+//  1. transact item didn't fail conditional check
+//  2. transact item failed conditional check and was configured to return ALL_OLD item
+//  3. transact item failed conditional check and was configured to return NONE item
 func TestDecodeTransactionCancellationReasons(t *testing.T) {
 	expCodes := []int{1, 2, 3, 4}
-	expErrCode := dynamodb.ErrCodeTransactionCanceledException
+
+	expErrCode := (&types.TransactionCanceledException{}).ErrorCode()
 	expMsg := "Transaction was cancelled."
 	expReqID := "134213414395861"
 	expStatusCode := 400
 	expCanceledCodes := []*string{
 		aws.String("NONE"),
-		aws.String(dynamodb.ErrCodeConditionalCheckFailedException),
-		aws.String(dynamodb.ErrCodeTransactionInProgressException),
+		aws.String((&types.ConditionalCheckFailedException{}).ErrorCode()),
+		aws.String((&types.TransactionInProgressException{}).ErrorCode()),
 	}
 	expCanceledReasons := []*string{
 		nil,
 		aws.String("first reason"),
 		aws.String("second reason"),
 	}
-	keyDef := []dynamodb.AttributeDefinition{
+	keyDef := []types.AttributeDefinition{
 		{AttributeName: aws.String("hk")},
 	}
-	keys := []map[string]*dynamodb.AttributeValue{
-		{"hk": &dynamodb.AttributeValue{N: aws.String("0")}},
-		{"hk": &dynamodb.AttributeValue{N: aws.String("0")}},
-		{"hk": &dynamodb.AttributeValue{N: aws.String("0")}},
+	keys := []map[string]types.AttributeValue{
+		{"hk": &types.AttributeValueMemberN{Value: "0"}},
+		{"hk": &types.AttributeValueMemberN{Value: "0"}},
+		{"hk": &types.AttributeValueMemberN{Value: "0"}},
 	}
-	canceledItems := []map[string]*dynamodb.AttributeValue{
+	canceledItems := []map[string]types.AttributeValue{
 		nil,
-		{"attr": &dynamodb.AttributeValue{N: aws.String("0")}},
+		{"attr": &types.AttributeValueMemberN{Value: "0"}},
 		nil,
 	}
 	attrs := []string{"attr"}
 	attrsToID := &lru.Lru{
-		LoadFunc: func(ctx aws.Context, key lru.Key) (interface{}, error) {
+		LoadFunc: func(ctx context.Context, key lru.Key) (interface{}, error) {
 			return int64(12345), nil
 		},
 		KeyMarshaller: func(key lru.Key) lru.Key {
@@ -179,14 +207,14 @@ func TestDecodeTransactionCancellationReasons(t *testing.T) {
 			w := cbor.NewWriter(&buf)
 			defer w.Close()
 			for _, v := range key.([]string) {
-				w.WriteString(v)
+				_ = w.WriteString(v)
 			}
-			w.Flush()
+			_ = w.Flush()
 			return string(buf.Bytes())
 		},
 	}
 	idToAttrs := &lru.Lru{
-		LoadFunc: func(ctx aws.Context, key lru.Key) (interface{}, error) {
+		LoadFunc: func(ctx context.Context, key lru.Key) (interface{}, error) {
 			return attrs, nil
 		},
 	}
@@ -195,29 +223,29 @@ func TestDecodeTransactionCancellationReasons(t *testing.T) {
 	buf := bytes.Buffer{}
 	w := cbor.NewWriter(&buf)
 	cbor.EncodeItemNonKeyAttributes(nil, canceledItems[1], keyDef, attrsToID, w)
-	w.Flush()
+	_ = w.Flush()
 
 	nbuf := bytes.Buffer{}
 	nw := cbor.NewWriter(&nbuf)
-	nw.WriteNull()
-	nw.WriteBytes(buf.Bytes())
-	nw.WriteNull()
-	nw.Flush()
+	_ = nw.WriteNull()
+	_ = nw.WriteBytes(buf.Bytes())
+	_ = nw.WriteNull()
+	_ = nw.Flush()
 
 	for k, v := range keys[1] {
 		canceledItems[1][k] = v
 	}
 
-	expCancellationReason := []*dynamodb.CancellationReason{
-		&dynamodb.CancellationReason{
+	expCancellationReason := []types.CancellationReason{
+		{
 			Code: expCanceledCodes[0],
 		},
-		&dynamodb.CancellationReason{
+		{
 			Code:    expCanceledCodes[1],
 			Message: expCanceledReasons[1],
 			Item:    canceledItems[1],
 		},
-		&dynamodb.CancellationReason{
+		{
 			Code:    expCanceledCodes[2],
 			Message: expCanceledReasons[2],
 		},
@@ -245,21 +273,24 @@ func TestDecodeTransactionCancellationReasons(t *testing.T) {
 
 func TestDecodeNilErrorDetail(t *testing.T) {
 	var b bytes.Buffer
-	errcode := []int{4, 37, 38, 39, 43}
-	awserr := awserr.NewRequestFailure(awserr.New(dynamodb.ErrCodeConditionalCheckFailedException, "ConditionalCheckFailedException Message", nil), 400, "")
+	errCodes := []int{4, 37, 38, 39, 43}
+	exception := types.ConditionalCheckFailedException{
+		Message: aws.String("ConditionalCheckFailedException Message"),
+	}
+	//awserr := awserr.NewRequestFailure(awserr.New(dynamodb.ErrCodeConditionalCheckFailedException, "ConditionalCheckFailedException Message", nil), 400, "")
 
 	w := cbor.NewWriter(&b)
-	w.WriteArrayHeader(len(errcode))
-	for _, c := range errcode {
-		w.WriteInt(c)
+	_ = w.WriteArrayHeader(len(errCodes))
+	for _, c := range errCodes {
+		_ = w.WriteInt(c)
 	}
-	w.WriteString(awserr.Message())
+	_ = w.WriteString(exception.ErrorMessage())
 
-	w.WriteArrayHeader(3)
-	w.WriteNull()
-	w.WriteString(awserr.Code())
-	w.WriteNull() // status code will be inferred from error code
-	w.Flush()
+	_ = w.WriteArrayHeader(3)
+	_ = w.WriteNull()
+	_ = w.WriteString(exception.ErrorCode())
+	_ = w.WriteNull() // status code will be inferred from error code
+	_ = w.Flush()
 
 	r := cbor.NewReader(&b)
 	e, err := decodeError(r)
@@ -273,47 +304,18 @@ func TestDecodeNilErrorDetail(t *testing.T) {
 	}
 
 	expected := &daxRequestFailure{
-		RequestFailure: awserr,
-		codes:          errcode,
+		GenericAPIError: &smithy.GenericAPIError{
+			Code:    exception.ErrorCode(),
+			Message: exception.ErrorMessage(),
+			Fault:   smithy.FaultServer,
+		},
+		codes:      errCodes,
+		requestID:  "",
+		statusCode: 400,
 	}
 
 	if !reflect.DeepEqual(expected, d) {
 		t.Errorf("expected %v, got %v", expected, d)
 	}
 
-}
-
-func TestTranslateError(t *testing.T) {
-	cases := []struct {
-		input  error
-		output error
-	}{
-		{
-			input:  newDaxRequestFailure([]int{1, 2, 3}, "ec", "msg", "rid", 500),
-			output: newDaxRequestFailure([]int{1, 2, 3}, "ec", "msg", "rid", 500),
-		},
-		{
-			input:  awserr.NewRequestFailure(awserr.New("ec", "msg", nil), 500, "rid"),
-			output: awserr.NewRequestFailure(awserr.New("ec", "msg", nil), 500, "rid"),
-		},
-		{
-			input:  awserr.New("ec", "msg", nil),
-			output: awserr.New("ec", "msg", nil),
-		},
-		{
-			input:  new(net.UnknownNetworkError),
-			output: awserr.New(dynamodb.ErrCodeInternalServerError, "network error", new(net.UnknownNetworkError)),
-		},
-		{
-			input:  errors.New("ex"),
-			output: awserr.New("UnknownError", "unknown error", errors.New("ex")),
-		},
-	}
-
-	for _, c := range cases {
-		actual := translateError(c.input)
-		if !reflect.DeepEqual(c.output, actual) {
-			t.Errorf("expected %v, got %v", c.output, actual)
-		}
-	}
 }

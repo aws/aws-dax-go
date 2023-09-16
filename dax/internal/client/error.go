@@ -17,16 +17,15 @@ package client
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
-	"net"
 
 	"github.com/aws/aws-dax-go/dax/internal/cbor"
 	"github.com/aws/aws-dax-go/dax/internal/lru"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/private/protocol"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/aws/smithy-go"
 )
 
 const (
@@ -38,27 +37,39 @@ const (
 )
 
 type daxError interface {
-	awserr.RequestFailure
+	smithy.APIError
 	CodeSequence() []int
+	RequestID() string
+	StatusCode() int
 }
 
 type daxRequestFailure struct {
-	awserr.RequestFailure
-	codes []int
+	*smithy.GenericAPIError
+	codes      []int
+	requestID  string
+	statusCode int
 }
+
+var _ daxError = (*daxRequestFailure)(nil)
 
 type daxTransactionCanceledFailure struct {
 	*daxRequestFailure
 	cancellationReasonCodes []*string
 	cancellationReasonMsgs  []*string
 	cancellationReasonItems []byte
-	cancellationReasons     []*dynamodb.CancellationReason
+	cancellationReasons     []types.CancellationReason
 }
 
 func newDaxRequestFailure(codes []int, errorCode, message, requestId string, statusCode int) *daxRequestFailure {
 	return &daxRequestFailure{
-		RequestFailure: awserr.NewRequestFailure(awserr.New(errorCode, message, nil), statusCode, requestId),
-		codes:          codes,
+		GenericAPIError: &smithy.GenericAPIError{
+			Code:    errorCode,
+			Message: message,
+			Fault:   smithy.FaultServer,
+		},
+		codes:      codes,
+		requestID:  requestId,
+		statusCode: statusCode,
 	}
 }
 
@@ -76,6 +87,14 @@ func (f *daxRequestFailure) CodeSequence() []int {
 	return f.codes
 }
 
+func (f *daxRequestFailure) RequestID() string {
+	return f.requestID
+}
+
+func (f *daxRequestFailure) StatusCode() int {
+	return f.statusCode
+}
+
 func (f *daxRequestFailure) recoverable() bool {
 	return len(f.codes) > 0 && f.codes[0] == 2
 }
@@ -85,27 +104,7 @@ func (f *daxRequestFailure) authError() bool {
 		(f.codes[3] == 32 || f.codes[3] == 33 || f.codes[3] == 34))
 }
 
-func translateError(err error) awserr.Error {
-	if err == nil {
-		return nil
-	}
-	switch err.(type) {
-	case awserr.Error:
-		e := err.(awserr.Error)
-		return e
-	case net.Error:
-		e := err.(net.Error)
-		code := dynamodb.ErrCodeInternalServerError
-		if e.Timeout() {
-			code = request.ErrCodeResponseTimeout
-		}
-		return awserr.New(code, "network error", e)
-	default:
-		return awserr.New("UnknownError", "unknown error", err)
-	}
-}
-
-func decodeError(reader *cbor.Reader) (awserr.Error, error) {
+func decodeError(reader *cbor.Reader) (error, error) {
 	length, err := reader.ReadArrayLength()
 	if err != nil {
 		return nil, err
@@ -145,7 +144,7 @@ func decodeError(reader *cbor.Reader) (awserr.Error, error) {
 			return nil, err
 		}
 		if (length < 3) || (length > 4) {
-			return nil, awserr.New(request.ErrCodeSerialization, fmt.Sprintf("expected 3 or 4 elements for error info, got %d", length), nil)
+			return nil, &smithy.DeserializationError{Err: fmt.Errorf("expected 3 or 4 elements for error info, got %d", length)}
 		}
 		if hdr, err = reader.PeekHeader(); err != nil {
 			return nil, err
@@ -183,7 +182,7 @@ func decodeError(reader *cbor.Reader) (awserr.Error, error) {
 				return nil, err
 			}
 			if arrLen%3 != 0 {
-				return nil, awserr.New(request.ErrCodeSerialization, "error found when parsing CancellationReasons", nil)
+				return nil, &smithy.DeserializationError{Err: fmt.Errorf("error found when parsing CancellationReasons")}
 			}
 			cancellationReasonsLen := arrLen / 3
 			cancellationReasonCodes = make([]*string, cancellationReasonsLen)
@@ -226,6 +225,7 @@ func decodeError(reader *cbor.Reader) (awserr.Error, error) {
 		statusCode = inferStatusCode(codes)
 	}
 
+	// user or server error
 	if cancellationReasonCodes != nil && len(cancellationReasonCodes) > 0 {
 		return newDaxTransactionCanceledFailure(codes, errorCode, msg, requestId, statusCode,
 			cancellationReasonCodes, cancellationReasonMsgs, cancellationReasonItems), nil
@@ -233,29 +233,23 @@ func decodeError(reader *cbor.Reader) (awserr.Error, error) {
 	return newDaxRequestFailure(codes, errorCode, msg, requestId, statusCode), nil
 }
 
-// convertDAXError converts DAX error to specific error type based on error code sequense returned from server.
+// convertDAXError converts DAX error to specific error type based on error code sequence returned from server.
 func convertDaxError(e daxError) error {
 	codes := e.CodeSequence()
 	if len(codes) < 2 {
 		return e
-	}
-	md := protocol.ResponseMetadata{
-		StatusCode: e.StatusCode(),
-		RequestID:  e.RequestID(),
 	}
 	switch codes[1] {
 	case 23:
 		if len(codes) > 2 {
 			switch codes[2] {
 			case 24:
-				return &dynamodb.ResourceNotFoundException{
-					RespMetadata: md,
-					Message_:     aws.String(e.Message()),
+				return &types.ResourceNotFoundException{
+					Message: aws.String(e.Error()),
 				}
 			case 35:
-				return &dynamodb.ResourceInUseException{
-					RespMetadata: md,
-					Message_:     aws.String(e.Message()),
+				return &types.ResourceInUseException{
+					Message: aws.String(e.Error()),
 				}
 			}
 		}
@@ -266,90 +260,99 @@ func convertDaxError(e daxError) error {
 				if len(codes) > 4 {
 					switch codes[4] {
 					case 40:
-						return &dynamodb.ProvisionedThroughputExceededException{
-							RespMetadata: md,
-							Message_:     aws.String(e.Message()),
+						return &types.ProvisionedThroughputExceededException{
+							Message: aws.String(e.Error()),
 						}
 					case 41:
-						return &dynamodb.ResourceNotFoundException{
-							RespMetadata: md,
-							Message_:     aws.String(e.Message()),
+						return &types.ResourceNotFoundException{
+							Message: aws.String(e.Error()),
 						}
 					case 43:
-						return &dynamodb.ConditionalCheckFailedException{
-							RespMetadata: md,
-							Message_:     aws.String(e.Message()),
+						return &types.ConditionalCheckFailedException{
+							Message: aws.String(e.Error()),
 						}
 					case 45:
-						return &dynamodb.ResourceInUseException{
-							RespMetadata: md,
-							Message_:     aws.String(e.Message())}
+						return &types.ResourceInUseException{
+							Message: aws.String(e.Error())}
 					case 46:
 						// there's no dynamodb.ValidationException type
-						return awserr.NewRequestFailure(awserr.New(ErrCodeValidationException, e.Message(), nil), e.StatusCode(), e.RequestID())
+						return &smithy.GenericAPIError{
+							Code:    ErrCodeValidationException,
+							Message: e.Error(),
+							Fault:   smithy.FaultServer,
+						}
 					case 47:
-						return &dynamodb.InternalServerError{
-							RespMetadata: md,
-							Message_:     aws.String(e.Message()),
+						return &types.InternalServerError{
+							Message: aws.String(e.Error()),
 						}
 					case 48:
-						return &dynamodb.ItemCollectionSizeLimitExceededException{
-							RespMetadata: md,
-							Message_:     aws.String(e.Message()),
+						return &types.ItemCollectionSizeLimitExceededException{
+							Message: aws.String(e.Error()),
 						}
 					case 49:
-						return &dynamodb.LimitExceededException{
-							RespMetadata: md,
-							Message_:     aws.String(e.Message()),
+						return &types.LimitExceededException{
+							Message: aws.String(e.Error()),
 						}
 					case 50:
 						// there's no dynamodb.ThrottlingException type
-						return awserr.NewRequestFailure(awserr.New(ErrCodeThrottlingException, e.Message(), nil), e.StatusCode(), e.RequestID())
+						return &smithy.GenericAPIError{
+							Code:    ErrCodeThrottlingException,
+							Message: e.Error(),
+							Fault:   smithy.FaultServer,
+						}
 					case 57:
-						return &dynamodb.TransactionConflictException{
-							RespMetadata: md,
-							Message_:     aws.String(e.Message()),
+						return &types.TransactionConflictException{
+							Message: aws.String(e.Error()),
 						}
 					case 58:
 						tcFailure, ok := e.(*daxTransactionCanceledFailure)
 						if ok {
-							return &dynamodb.TransactionCanceledException{
-								RespMetadata:        md,
-								Message_:            aws.String(e.Message()),
+							return &types.TransactionCanceledException{
+								Message:             aws.String(e.Error()),
 								CancellationReasons: tcFailure.cancellationReasons,
+							}
+						} else {
+							return &types.TransactionCanceledException{
+								Message: aws.String(e.Error()),
 							}
 						}
 					case 59:
-						return &dynamodb.TransactionInProgressException{
-							RespMetadata: md,
-							Message_:     aws.String(e.Message()),
+						return &types.TransactionInProgressException{
+							Message: aws.String(e.Error()),
 						}
 					case 60:
-						return &dynamodb.IdempotentParameterMismatchException{
-							RespMetadata: md,
-							Message_:     aws.String(e.Message()),
+						return &types.IdempotentParameterMismatchException{
+							Message: aws.String(e.Error()),
 						}
 					}
 				}
 			case 44:
-				return awserr.NewRequestFailure(awserr.New(ErrCodeNotImplemented, e.Message(), nil), e.StatusCode(), e.RequestID())
+				return &smithy.GenericAPIError{
+					Code:    ErrCodeNotImplemented,
+					Message: e.Error(),
+					Fault:   smithy.FaultServer,
+				}
 			}
 		}
 	}
-	return awserr.NewRequestFailure(awserr.New(ErrCodeUnknown, e.Message(), nil), e.StatusCode(), e.RequestID())
+	return &smithy.GenericAPIError{
+		Code:    ErrCodeUnknown,
+		Message: e.Error(),
+		Fault:   smithy.FaultServer,
+	}
 }
 
-func decodeTransactionCancellationReasons(ctx aws.Context, failure *daxTransactionCanceledFailure,
-	keys []map[string]*dynamodb.AttributeValue, attrListIdToNames *lru.Lru) ([]*dynamodb.CancellationReason, error) {
+func decodeTransactionCancellationReasons(ctx context.Context, failure *daxTransactionCanceledFailure,
+	keys []map[string]types.AttributeValue, attrListIdToNames *lru.Lru) ([]types.CancellationReason, error) {
 	inputL := len(keys)
 	outputL := len(failure.cancellationReasonCodes)
 	if inputL != outputL {
-		return nil, awserr.New(request.ErrCodeSerialization, "Cancellation reasons must be the same length as transact items in the request", nil)
+		return nil, &smithy.DeserializationError{Err: errors.New("cancellation reasons must be the same length as transact items in the request")}
 	}
-	reasons := make([]*dynamodb.CancellationReason, outputL)
+	reasons := make([]types.CancellationReason, outputL)
 	r := cbor.NewReader(bytes.NewReader(failure.cancellationReasonItems))
 	for i := 0; i < outputL; i++ {
-		reason := new(dynamodb.CancellationReason)
+		reason := types.CancellationReason{}
 		reason.Code = failure.cancellationReasonCodes[i]
 		reason.Message = failure.cancellationReasonMsgs[i]
 		if consumed, err := consumeNil(r); err != nil {
