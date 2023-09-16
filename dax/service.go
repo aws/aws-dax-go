@@ -20,16 +20,13 @@ import (
 	"crypto/tls"
 	"net"
 	"net/url"
-	"time"
-
-	"github.com/aws/aws-sdk-go-v2/aws/retry"
-
-	"github.com/aws/smithy-go/logging"
 
 	"github.com/aws/aws-dax-go/dax/internal/client"
 	"github.com/aws/aws-dax-go/dax/internal/proxy"
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/smithy-go/logging"
 )
 
 // Dax makes requests to the Amazon DAX API, which conforms to the DynamoDB API.
@@ -48,9 +45,8 @@ type Config struct {
 	client.Config
 
 	// Default request options
-	RequestTimeout time.Duration
-	WriteRetries   int
-	ReadRetries    int
+	WriteRetries int
+	ReadRetries  int
 
 	Logger logging.Logger
 }
@@ -61,11 +57,10 @@ type Config struct {
 // to start up a DAX client.
 func DefaultConfig() Config {
 	return Config{
-		Config:         client.DefaultConfig(),
-		RequestTimeout: 1 * time.Minute,
-		WriteRetries:   2,
-		ReadRetries:    2,
-		Logger:         &logging.Nop{},
+		Config:       client.DefaultConfig(),
+		WriteRetries: 2,
+		ReadRetries:  2,
+		Logger:       &logging.Nop{},
 	}
 }
 
