@@ -4,14 +4,15 @@ ROOT_DIR    := $(shell dirname $(MAKEFILE))
 SOURCES     := $(wildcard *.go */*.go) $(SRC_LINK) $(MAKEFILE)
 REVISION    := $(shell git log -n 1 --pretty=format:%h -- $(SOURCES))
 BUILD_FLAGS := -a -ldflags "-X revision=$(REVISION) -w -extldflags=$(LDFLAGS)" -tags "$(TAGS)"
-__PKGS      = $(or $($PKG), $(shell go list ./... | grep -v "vendor" | grep -v "gopath"))
+__PKGS      = $(or $($PKG), $(shell go list ./... | grep -v "vendor"))
 # Memoize PKGS so it is executed only once on-demand.
 PKGS        = $(if $(__PKGS),,$(eval __PKGS := $$(__PKGS)))$(__PKGS)
 # Allow target test packages to be overridden, e.g. $ make test TEST=TestBasic
 TEST        := .
+GO111MODULE=on
 
 unexport GOBIN
-export GO111MODULE=on
+export GO111MODULE
 
 all: test 
 
