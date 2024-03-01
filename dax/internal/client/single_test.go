@@ -85,7 +85,7 @@ func TestExecuteErrorHandling(t *testing.T) {
 	for i, c := range cases {
 		cli, err := newSingleClientWithOptions(":9121", unEncryptedConnConfig, "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1, func(ctx context.Context, a, n string) (net.Conn, error) {
 			return c.conn, nil
-		})
+		}, nil)
 		if err != nil {
 			t.Fatalf("unexpected error %v", err)
 		}
@@ -105,7 +105,7 @@ func TestExecuteErrorHandling(t *testing.T) {
 func TestRetryPropogatesContextError(t *testing.T) {
 	client, clientErr := newSingleClientWithOptions(":9121", unEncryptedConnConfig, "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1, func(ctx context.Context, a, n string) (net.Conn, error) {
 		return &mockConn{rd: []byte{cbor.Array + 0}}, nil
-	})
+	}, nil)
 	defer client.Close()
 	if clientErr != nil {
 		t.Fatalf("unexpected error %v", clientErr)
@@ -140,7 +140,7 @@ func TestRetryPropogatesContextError(t *testing.T) {
 func TestRetryPropogatesOtherErrors(t *testing.T) {
 	client, clientErr := newSingleClientWithOptions(":9121", unEncryptedConnConfig, "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1, func(ctx context.Context, a, n string) (net.Conn, error) {
 		return &mockConn{rd: []byte{cbor.Array + 0}}, nil
-	})
+	}, nil)
 	defer client.Close()
 	if clientErr != nil {
 		t.Fatalf("unexpected error %v", clientErr)
@@ -176,7 +176,7 @@ func TestRetryPropogatesOtherErrors(t *testing.T) {
 func TestRetryPropogatesOtherErrorsWithDelay(t *testing.T) {
 	client, clientErr := newSingleClientWithOptions(":9121", unEncryptedConnConfig, "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1, func(ctx context.Context, a, n string) (net.Conn, error) {
 		return &mockConn{rd: []byte{cbor.Array + 0}}, nil
-	})
+	}, nil)
 	defer client.Close()
 	if clientErr != nil {
 		t.Fatalf("unexpected error %v", clientErr)
@@ -213,7 +213,7 @@ func TestRetryPropogatesOtherErrorsWithDelay(t *testing.T) {
 func TestRetrySleepCycleCount(t *testing.T) {
 	client, clientErr := newSingleClientWithOptions(":9121", unEncryptedConnConfig, "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1, func(ctx context.Context, a, n string) (net.Conn, error) {
 		return &mockConn{rd: []byte{cbor.Array + 0}}, nil
-	})
+	}, nil)
 	defer client.Close()
 	if clientErr != nil {
 		t.Fatalf("unexpected error %v", clientErr)
@@ -248,7 +248,7 @@ func TestRetrySleepCycleCount(t *testing.T) {
 func TestRetryLastError(t *testing.T) {
 	client, clientErr := newSingleClientWithOptions(":9121", unEncryptedConnConfig, "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1, func(ctx context.Context, a, n string) (net.Conn, error) {
 		return &mockConn{rd: []byte{cbor.Array + 0}}, nil
-	})
+	}, nil)
 	defer client.Close()
 	if clientErr != nil {
 		t.Fatalf("unexpected error %v", clientErr)
@@ -291,7 +291,7 @@ func TestSingleClient_customDialer(t *testing.T) {
 	var dialContextFn dialContext = func(ctx context.Context, address string, network string) (net.Conn, error) {
 		return conn, nil
 	}
-	client, err := newSingleClientWithOptions(":9121", unEncryptedConnConfig, "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1, dialContextFn)
+	client, err := newSingleClientWithOptions(":9121", unEncryptedConnConfig, "us-west-2", credentials.NewStaticCredentials("id", "secret", "tok"), 1, dialContextFn, nil)
 	require.NoError(t, err)
 	defer client.Close()
 

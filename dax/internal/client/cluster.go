@@ -72,6 +72,8 @@ type Config struct {
 	SkipHostnameVerification bool
 	logger                   aws.Logger
 	logLevel                 aws.LogLevelType
+
+	RouteManagerEnabled bool // this flag temporarily removes routes facing network errors.
 }
 
 type connConfig struct {
@@ -120,6 +122,8 @@ var defaultConfig = Config{
 	logger:                   aws.NewDefaultLogger(),
 	logLevel:                 aws.LogOff,
 	IdleConnectionReapDelay:  30 * time.Second,
+
+	RouteManagerEnabled: false,
 }
 
 var defaultPorts = map[string]int{
@@ -421,7 +425,7 @@ func (cc *ClusterDaxClient) shouldRetry(o RequestOptions, err error) (request.Re
 type cluster struct {
 	lock           sync.RWMutex
 	active         map[hostPort]clientAndConfig // protected by lock
-	routes         []DaxAPI                     // protected by lock
+	routeManager   RouteManager                 // protected by lock
 	closed         bool                         // protected by lock
 	lastRefreshErr error                        // protected by lock
 
@@ -450,7 +454,8 @@ func newCluster(cfg Config) (*cluster, error) {
 	cfg.connConfig.skipHostnameVerification = cfg.SkipHostnameVerification
 	cfg.connConfig.hostname = hostname
 	cfg.validateConnConfig()
-	return &cluster{seeds: seeds, config: cfg, executor: newExecutor(), clientBuilder: &singleClientBuilder{}}, nil
+	routeManager := newRouteManager(cfg.RouteManagerEnabled, cfg.ClientHealthCheckInterval, cfg.logger, cfg.logLevel)
+	return &cluster{seeds: seeds, config: cfg, executor: newExecutor(), clientBuilder: &singleClientBuilder{}, routeManager: routeManager}, nil
 }
 
 func getHostPorts(hosts []string) (hostPorts []hostPort, hostname string, isEncrypted bool, err error) {
@@ -537,19 +542,17 @@ func (c *cluster) Close() error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.closed = true
-	for _, client := range c.routes {
-		c.closeClient(client)
+	for _, config := range c.active {
+		c.closeClient(config.client)
 	}
-	c.routes = nil
 	c.active = nil
+	c.routeManager.close()
+	c.routeManager = nil
 	return nil
 }
 
 func (c *cluster) reapIdleConnections() error {
-	c.lock.RLock()
-	clients := c.routes
-	c.lock.RUnlock()
-
+	clients := c.getAllRoutes()
 	for _, c := range clients {
 		if d, ok := c.(connectionReaper); ok {
 			d.reapIdleConnections()
@@ -561,22 +564,11 @@ func (c *cluster) reapIdleConnections() error {
 func (c *cluster) client(prev DaxAPI) (DaxAPI, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-
-	n := len(c.routes)
-	if n == 0 {
+	route := c.routeManager.getRoute(prev)
+	if route == nil {
 		return nil, awserr.New(ErrCodeServiceUnavailable, "No routes found", c.lastRefreshError())
 	}
-	if n == 1 {
-		return c.routes[0], nil
-	}
-	r := rand.Intn(n)
-	if c.routes[r] == prev {
-		r++
-		if r >= n {
-			r = r - n
-		}
-	}
-	return c.routes[r], nil
+	return route, nil
 }
 
 func (c *cluster) safeRefresh(force bool) {
@@ -671,7 +663,7 @@ func (c *cluster) update(config []serviceEndpoint) error {
 
 	if shouldUpdateRoutes {
 		c.active = newActive
-		c.routes = newRoutes
+		c.routeManager.setRoutes(newRoutes)
 	} else {
 		// cleanup newly created clients if they are not going to be tracked further.
 		toClose = append(toClose, newCliCfg...)
@@ -709,7 +701,7 @@ func (c *cluster) onHealthCheckFailed(host hostPort) {
 				newRoutes[i] = cliAndCfg.client
 				i++
 			}
-			c.routes = newRoutes
+			c.routeManager.setRoutes(newRoutes)
 		} else {
 			shouldCloseOldClient = false
 			c.debugLog(fmt.Sprintf("DEBUG: Failed to refresh cache for host: " + host.host))
@@ -770,7 +762,8 @@ func (c *cluster) pullEndpoints() ([]serviceEndpoint, error) {
 }
 
 func (c *cluster) pullEndpointsFrom(ip net.IP, port int) ([]serviceEndpoint, error) {
-	client, err := c.clientBuilder.newClient(ip, port, c.config.connConfig, c.config.Region, c.config.Credentials, c.config.MaxPendingConnectionsPerHost, c.config.DialContext)
+	client, err := c.clientBuilder.newClient(ip, port, c.config.connConfig, c.config.Region, c.config.Credentials,
+		c.config.MaxPendingConnectionsPerHost, c.config.DialContext, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -794,19 +787,41 @@ func (c *cluster) debugLog(args ...interface{}) {
 	}
 }
 
+func (c *cluster) isRouteManagerEnabled() bool {
+	return c.config.RouteManagerEnabled
+}
+
+func (c *cluster) addRoute(endpoint string, route DaxAPI) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.routeManager.addRoute(endpoint, route)
+}
+
+func (c *cluster) removeRoute(endpoint string, route DaxAPI) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.routeManager.removeRoute(endpoint, route, c.active)
+}
+
+func (c *cluster) getAllRoutes() []DaxAPI {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.routeManager.getAllRoutes()
+}
+
 func (c *cluster) newSingleClient(cfg serviceEndpoint) (DaxAPI, error) {
-	return c.clientBuilder.newClient(net.IP(cfg.address), cfg.port, c.config.connConfig, c.config.Region, c.config.Credentials, c.config.MaxPendingConnectionsPerHost, c.config.DialContext)
+	return c.clientBuilder.newClient(net.IP(cfg.address), cfg.port, c.config.connConfig, c.config.Region, c.config.Credentials, c.config.MaxPendingConnectionsPerHost, c.config.DialContext, c)
 }
 
 type clientBuilder interface {
-	newClient(net.IP, int, connConfig, string, *credentials.Credentials, int, dialContext) (DaxAPI, error)
+	newClient(net.IP, int, connConfig, string, *credentials.Credentials, int, dialContext, RouteListener) (DaxAPI, error)
 }
 
 type singleClientBuilder struct{}
 
-func (*singleClientBuilder) newClient(ip net.IP, port int, connConfigData connConfig, region string, credentials *credentials.Credentials, maxPendingConnects int, dialContextFn dialContext) (DaxAPI, error) {
+func (*singleClientBuilder) newClient(ip net.IP, port int, connConfigData connConfig, region string, credentials *credentials.Credentials, maxPendingConnects int, dialContextFn dialContext, routeListener RouteListener) (DaxAPI, error) {
 	endpoint := fmt.Sprintf("%s:%d", ip, port)
-	return newSingleClientWithOptions(endpoint, connConfigData, region, credentials, maxPendingConnects, dialContextFn)
+	return newSingleClientWithOptions(endpoint, connConfigData, region, credentials, maxPendingConnects, dialContextFn, routeListener)
 }
 
 type taskExecutor struct {
@@ -843,4 +858,10 @@ func (e *taskExecutor) numTasks() int32 {
 
 func (e *taskExecutor) stopAll() {
 	close(e.close)
+}
+
+type RouteListener interface {
+	isRouteManagerEnabled() bool
+	addRoute(string, DaxAPI)
+	removeRoute(string, DaxAPI)
 }

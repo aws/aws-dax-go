@@ -17,7 +17,9 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	"io"
 	"net"
 	"reflect"
 	"testing"
@@ -137,9 +139,9 @@ func TestDecodeTransactionCanceledException(t *testing.T) {
 // TestDecodeTransactionCancellationReasons tests decoding transaction cancellations reasons in daxTransactionCanceledFailure.
 //
 // Specifically, the decoding of items in cancellation reasons are being testing here. It covers three situations:
-//    1. transact item didn't fail conditional check
-//    2. transact item failed conditional check and was configured to return ALL_OLD item
-//    3. transact item failed conditional check and was configured to return NONE item
+//  1. transact item didn't fail conditional check
+//  2. transact item failed conditional check and was configured to return ALL_OLD item
+//  3. transact item failed conditional check and was configured to return NONE item
 func TestDecodeTransactionCancellationReasons(t *testing.T) {
 	expCodes := []int{1, 2, 3, 4}
 	expErrCode := dynamodb.ErrCodeTransactionCanceledException
@@ -315,5 +317,27 @@ func TestTranslateError(t *testing.T) {
 		if !reflect.DeepEqual(c.output, actual) {
 			t.Errorf("expected %v, got %v", c.output, actual)
 		}
+	}
+}
+
+func TestIsIoError(t *testing.T) {
+	if isIOError(context.DeadlineExceeded) != true {
+		t.Errorf("isIOError Failed to identify timeout error")
+	}
+
+	if isIOError(io.EOF) != true {
+		t.Errorf("isIOError Failed to identify EOF error")
+	}
+
+	if isIOError(awserr.New("c1", "network error: caused by: dial tcp 172.31.0.205:8111: connect: connection refused", nil)) != true {
+		t.Errorf("isIOError Failed to identify network error")
+	}
+
+	if isIOError(awserr.New("c1", "msg", nil)) == true {
+		t.Errorf("isIOError Failed to identify non-timeout error")
+	}
+
+	if isIOError(awserr.New("c1", "msg", awserr.New("c2", "network error: timeout", nil))) != true {
+		t.Errorf("isIOError Failed to identify timeout error")
 	}
 }

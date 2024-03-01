@@ -17,8 +17,11 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"io"
 	"net"
+	"strings"
 
 	"github.com/aws/aws-dax-go/dax/internal/cbor"
 	"github.com/aws/aws-dax-go/dax/internal/lru"
@@ -385,4 +388,25 @@ func inferStatusCode(codes []int) int {
 		return 400
 	}
 	return 500
+}
+
+func isIOError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if err == context.DeadlineExceeded || err == context.Canceled ||
+		err == io.EOF || strings.Contains(strings.ToLower(err.Error()), "network error") {
+		return true
+	}
+
+	switch err.(type) {
+	case net.Error:
+		return true
+	case awserr.Error:
+		errNew := err.(awserr.Error)
+		if errNew.OrigErr() != nil {
+			return isIOError(errNew.OrigErr())
+		}
+	}
+	return false
 }

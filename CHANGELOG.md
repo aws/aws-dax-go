@@ -1,3 +1,7 @@
+Release v1.2.14 (2024-03-01)
+===
+* Opt-in feature to stop sending requests to an endpoint for which read requests are facing network errors
+
 Release v1.2.13 (2023-07-13)
 ===
 * On errors close the single connection instead of destroying the whole pool

@@ -403,7 +403,7 @@ func TestCluster_refreshDup(t *testing.T) {
 	assertActiveClient(clientBuilder.clients[1], t)
 
 	oldActive := cluster.active
-	oldRoutes := cluster.routes
+	oldRoutes := cluster.getAllRoutes()
 	if err := cluster.refreshNow(); err != nil {
 		t.Errorf("unpexected error %v", err)
 	}
@@ -414,7 +414,7 @@ func TestCluster_refreshDup(t *testing.T) {
 	if fmt.Sprintf("%p", cluster.active) != fmt.Sprintf("%p", oldActive) {
 		t.Errorf("unexpected updation to active")
 	}
-	if fmt.Sprintf("%p", cluster.routes) != fmt.Sprintf("%p", oldRoutes) {
+	if fmt.Sprintf("%p", cluster.getAllRoutes()) != fmt.Sprintf("%p", oldRoutes) {
 		t.Errorf("unexpected updation to routes")
 	}
 	if len(clientBuilder.clients) != 3 {
@@ -664,6 +664,52 @@ func Test_MultipleEncryptedEndpoints(t *testing.T) {
 	assertEqual(t, reflect.TypeOf(err), reflect.TypeOf(awserr.New(request.ErrCodeRequestError, "", nil)), "")
 }
 
+func TestCluster_RouteManagerDisabled(t *testing.T) {
+	cluster, clientBuilder := newTestCluster([]string{"non-existent-host:8888", "127.0.0.1:8111"})
+	setExpectation(cluster, []serviceEndpoint{{hostname: "localhost", port: 8121}})
+
+	if cluster.isRouteManagerEnabled() {
+		t.Errorf("Route manager should be disabled!")
+	}
+
+	oldRoutes := cluster.getAllRoutes()
+	route, _ := clientBuilder.newClient(net.IP{}, 8111, connConfig{}, "dummy", nil, 10, nil, nil)
+	cluster.addRoute("dummy", route)
+	newRoutes := cluster.getAllRoutes()
+
+	if len(newRoutes) != len(oldRoutes) {
+		t.Errorf("Route added with disabled route manager")
+	}
+
+	cluster.removeRoute("dummy", route)
+	newRoutes = cluster.getAllRoutes()
+	if len(newRoutes) != len(oldRoutes) {
+		t.Errorf("Route removed with disabled route manager")
+	}
+}
+
+func TestCluster_RouteManagerEnabled(t *testing.T) {
+	cluster, clientBuilder := newTestClusterWithRouteManagerEnabled([]string{"non-existent-host:8888", "127.0.0.1:8111"})
+	setExpectation(cluster, []serviceEndpoint{{hostname: "localhost", port: 8121}})
+	if !cluster.isRouteManagerEnabled() {
+		t.Errorf("Route manager should be enabled!")
+	}
+	oldRoutes := cluster.getAllRoutes()
+	route, _ := clientBuilder.newClient(net.IP{}, 8111, connConfig{}, "dummy", nil, 10, nil, nil)
+	cluster.addRoute("dummy", route)
+	newRoutes := cluster.getAllRoutes()
+
+	if len(newRoutes) != len(oldRoutes)+1 {
+		t.Errorf("Route not added with enabled route manager")
+	}
+
+	cluster.removeRoute("dummy", route)
+	newRoutes = cluster.getAllRoutes()
+	if len(newRoutes) != len(oldRoutes) {
+		t.Errorf("Route not removed with enabled route manager")
+	}
+}
+
 func assertConnections(cluster *cluster, endpoints []serviceEndpoint, t *testing.T) {
 	if len(cluster.active) != len(endpoints) {
 		t.Errorf("expected %d, got %d", len(cluster.active), len(endpoints))
@@ -687,8 +733,8 @@ func assertNumRoutes(cluster *cluster, num int, t *testing.T) {
 	if len(cluster.active) != num {
 		t.Errorf("expected %d, got %d", num, len(cluster.active))
 	}
-	if len(cluster.routes) != num {
-		t.Errorf("expected %d, got %d", num, len(cluster.routes))
+	if len(cluster.getAllRoutes()) != num {
+		t.Errorf("expected %d, got %d", num, len(cluster.getAllRoutes()))
 	}
 }
 
@@ -743,6 +789,14 @@ func newTestCluster(seeds []string) (*cluster, *testClientBuilder) {
 	cfg := DefaultConfig()
 	cfg.HostPorts = seeds
 	cfg.Region = "us-west-2"
+	return newTestClusterWithConfig(cfg)
+}
+
+func newTestClusterWithRouteManagerEnabled(seeds []string) (*cluster, *testClientBuilder) {
+	cfg := DefaultConfig()
+	cfg.HostPorts = seeds
+	cfg.Region = "us-west-2"
+	cfg.RouteManagerEnabled = true
 	return newTestClusterWithConfig(cfg)
 }
 
@@ -802,7 +856,7 @@ type testClientBuilder struct {
 	clients []*testClient
 }
 
-func (b *testClientBuilder) newClient(ip net.IP, port int, connConfigData connConfig, region string, credentials *credentials.Credentials, maxConns int, dialContextFn dialContext) (DaxAPI, error) {
+func (b *testClientBuilder) newClient(ip net.IP, port int, connConfigData connConfig, region string, credentials *credentials.Credentials, maxConns int, dialContextFn dialContext, routeListener RouteListener) (DaxAPI, error) {
 	t := &testClient{ep: b.ep, hp: hostPort{ip.String(), port}}
 	b.clients = append(b.clients, []*testClient{t}...)
 	return t, nil

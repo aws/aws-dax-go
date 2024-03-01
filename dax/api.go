@@ -901,6 +901,18 @@ func (d *Dax) UpdateGlobalTableSettingsRequest(*dynamodb.UpdateGlobalTableSettin
 	return newRequestForUnimplementedOperation(), &dynamodb.UpdateGlobalTableSettingsOutput{}
 }
 
+func (d *Dax) UpdateKinesisStreamingDestination(*dynamodb.UpdateKinesisStreamingDestinationInput) (*dynamodb.UpdateKinesisStreamingDestinationOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) UpdateKinesisStreamingDestinationWithContext(aws.Context, *dynamodb.UpdateKinesisStreamingDestinationInput, ...request.Option) (*dynamodb.UpdateKinesisStreamingDestinationOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) UpdateKinesisStreamingDestinationRequest(*dynamodb.UpdateKinesisStreamingDestinationInput) (*request.Request, *dynamodb.UpdateKinesisStreamingDestinationOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.UpdateKinesisStreamingDestinationOutput{}
+}
+
 func (d *Dax) UpdateTable(*dynamodb.UpdateTableInput) (*dynamodb.UpdateTableOutput, error) {
 	return nil, d.unImpl()
 }

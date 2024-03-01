@@ -77,13 +77,15 @@ type SingleDaxClient struct {
 	keySchema         *lru.Lru
 	attrNamesListToId *lru.Lru
 	attrListIdToNames *lru.Lru
+
+	healthStatus HealthStatus
 }
 
-func NewSingleClient(endpoint string, connConfigData connConfig, region string, credentials *credentials.Credentials) (*SingleDaxClient, error) {
-	return newSingleClientWithOptions(endpoint, connConfigData, region, credentials, -1, defaultDialer.DialContext)
+func NewSingleClient(endpoint string, connConfigData connConfig, region string, credentials *credentials.Credentials, routeListener RouteListener) (*SingleDaxClient, error) {
+	return newSingleClientWithOptions(endpoint, connConfigData, region, credentials, -1, defaultDialer.DialContext, routeListener)
 }
 
-func newSingleClientWithOptions(endpoint string, connConfigData connConfig, region string, credentials *credentials.Credentials, maxPendingConnections int, dialContextFn dialContext) (*SingleDaxClient, error) {
+func newSingleClientWithOptions(endpoint string, connConfigData connConfig, region string, credentials *credentials.Credentials, maxPendingConnections int, dialContextFn dialContext, routeListener RouteListener) (*SingleDaxClient, error) {
 	po := defaultTubePoolOptions
 	if maxPendingConnections > 0 {
 		po.maxConcurrentConnAttempts = maxPendingConnections
@@ -97,6 +99,7 @@ func newSingleClientWithOptions(endpoint string, connConfigData connConfig, regi
 		tubeAuthWindowSecs: authTtlSecs * tubeAuthWindowScalar,
 		pool:               newTubePoolWithOptions(endpoint, po, connConfigData),
 		executor:           newExecutor(),
+		healthStatus:       newHealthStatus(endpoint, routeListener),
 	}
 
 	client.handlers = client.buildHandlers()
@@ -174,6 +177,7 @@ func (client *SingleDaxClient) startHealthChecks(cc *cluster, host hostPort) {
 			cc.debugLog(fmt.Sprintf("Health checks failed with error " + err.Error() + " for host :: " + host.host))
 			cc.onHealthCheckFailed(host)
 		} else {
+			client.healthStatus.onHealthCheckSuccess(client)
 			cc.debugLog(fmt.Sprintf("Health checks succeeded for host:: " + host.host))
 		}
 		return nil
@@ -308,8 +312,10 @@ func (client *SingleDaxClient) GetItemWithOptions(input *dynamodb.GetItemInput, 
 		return err
 	}
 	if err = client.executeWithRetries(OpGetItem, opt, encoder, decoder); err != nil {
+		client.healthStatus.onErrorInReadRequest(err, client)
 		return output, err
 	}
+	client.healthStatus.onSuccessInReadRequest()
 	return output, nil
 }
 
@@ -323,8 +329,10 @@ func (client *SingleDaxClient) ScanWithOptions(input *dynamodb.ScanInput, output
 		return err
 	}
 	if err = client.executeWithRetries(OpScan, opt, encoder, decoder); err != nil {
+		client.healthStatus.onErrorInReadRequest(err, client)
 		return output, err
 	}
+	client.healthStatus.onSuccessInReadRequest()
 	return output, nil
 }
 
@@ -338,8 +346,10 @@ func (client *SingleDaxClient) QueryWithOptions(input *dynamodb.QueryInput, outp
 		return err
 	}
 	if err = client.executeWithRetries(OpQuery, opt, encoder, decoder); err != nil {
+		client.healthStatus.onErrorInReadRequest(err, client)
 		return output, err
 	}
+	client.healthStatus.onSuccessInReadRequest()
 	return output, nil
 }
 
@@ -368,8 +378,10 @@ func (client *SingleDaxClient) BatchGetItemWithOptions(input *dynamodb.BatchGetI
 		return err
 	}
 	if err = client.executeWithRetries(OpBatchGetItem, opt, encoder, decoder); err != nil {
+		client.healthStatus.onErrorInReadRequest(err, client)
 		return output, err
 	}
+	client.healthStatus.onSuccessInReadRequest()
 	return output, nil
 }
 
