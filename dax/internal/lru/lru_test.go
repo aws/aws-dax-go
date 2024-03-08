@@ -18,12 +18,13 @@ package lru
 import (
 	"context"
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws"
 	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/aws/aws-sdk-go/aws"
 )
 
 func TestLruGet(t *testing.T) {
@@ -122,11 +123,8 @@ func TestLruEvict(t *testing.T) {
 
 func TestLruTimeout(t *testing.T) {
 	loadFn := func(ctx aws.Context, key Key) (interface{}, error) {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-		return key, nil
+		<-ctx.Done()
+		return nil, ctx.Err()
 	}
 
 	c := &Lru{
