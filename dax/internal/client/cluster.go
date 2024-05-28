@@ -58,16 +58,21 @@ type hostPort struct {
 
 type Config struct {
 	MaxPendingConnectionsPerHost int
-	ClusterUpdateThreshold       time.Duration
-	ClusterUpdateInterval        time.Duration
-	IdleConnectionReapDelay      time.Duration
-	ClientHealthCheckInterval    time.Duration
+	// TubePool configuration
+	MinConnectionsPerHost int
+	MaxConnectionsPerHost int
 
-	HostPorts   []string
-	Region      string
-	Credentials *credentials.Credentials
-	DialContext func(ctx context.Context, network string, address string) (net.Conn, error)
-	connConfig  connConfig
+	ClusterUpdateThreshold    time.Duration
+	ClusterUpdateInterval     time.Duration
+	IdleConnectionReapDelay   time.Duration
+	ClientHealthCheckInterval time.Duration
+
+	HostPorts      []string
+	Region         string
+	Credentials    *credentials.Credentials
+	DialContext    func(ctx context.Context, network string, address string) (net.Conn, error)
+	connConfig     connConfig
+	tubePoolConfig tubePoolOptions
 
 	SkipHostnameVerification bool
 	logger                   aws.Logger
@@ -95,6 +100,7 @@ func (cfg *Config) validate() error {
 	if cfg.MaxPendingConnectionsPerHost < 0 {
 		return awserr.New(request.InvalidParameterErrCode, "MaxPendingConnectionsPerHost cannot be negative", nil)
 	}
+	// TODO: add validation to new fields
 	return nil
 }
 
@@ -111,6 +117,8 @@ func (cfg *Config) SetLogger(logger aws.Logger, logLevelType aws.LogLevelType) {
 
 var defaultConfig = Config{
 	MaxPendingConnectionsPerHost: 10,
+	MinConnectionsPerHost:        1,
+	MaxConnectionsPerHost:        100,
 	ClusterUpdateInterval:        time.Second * 4,
 	ClusterUpdateThreshold:       time.Millisecond * 125,
 	ClientHealthCheckInterval:    time.Second * 5,
@@ -118,6 +126,7 @@ var defaultConfig = Config{
 	Credentials: defaults.CredChain(defaults.Config(), defaults.Handlers()),
 
 	connConfig:               connConfig{},
+	tubePoolConfig:           tubePoolOptions{},
 	SkipHostnameVerification: false,
 	logger:                   aws.NewDefaultLogger(),
 	logLevel:                 aws.LogOff,
@@ -450,9 +459,15 @@ func newCluster(cfg Config) (*cluster, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	cfg.connConfig.isEncrypted = isEncrypted
 	cfg.connConfig.skipHostnameVerification = cfg.SkipHostnameVerification
 	cfg.connConfig.hostname = hostname
+
+	cfg.tubePoolConfig.maxConnections = cfg.MaxConnectionsPerHost
+	cfg.tubePoolConfig.minConnections = cfg.MinConnectionsPerHost
+	cfg.tubePoolConfig.maxConcurrentConnAttempts = cfg.MaxPendingConnectionsPerHost
+
 	cfg.validateConnConfig()
 	routeManager := newRouteManager(cfg.RouteManagerEnabled, cfg.ClientHealthCheckInterval, cfg.logger, cfg.logLevel)
 	return &cluster{seeds: seeds, config: cfg, executor: newExecutor(), clientBuilder: &singleClientBuilder{}, routeManager: routeManager}, nil
@@ -763,7 +778,7 @@ func (c *cluster) pullEndpoints() ([]serviceEndpoint, error) {
 
 func (c *cluster) pullEndpointsFrom(ip net.IP, port int) ([]serviceEndpoint, error) {
 	client, err := c.clientBuilder.newClient(ip, port, c.config.connConfig, c.config.Region, c.config.Credentials,
-		c.config.MaxPendingConnectionsPerHost, c.config.DialContext, nil)
+		c.config.tubePoolConfig, c.config.DialContext, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -810,18 +825,18 @@ func (c *cluster) getAllRoutes() []DaxAPI {
 }
 
 func (c *cluster) newSingleClient(cfg serviceEndpoint) (DaxAPI, error) {
-	return c.clientBuilder.newClient(net.IP(cfg.address), cfg.port, c.config.connConfig, c.config.Region, c.config.Credentials, c.config.MaxPendingConnectionsPerHost, c.config.DialContext, c)
+	return c.clientBuilder.newClient(cfg.address, cfg.port, c.config.connConfig, c.config.Region, c.config.Credentials, c.config.tubePoolConfig, c.config.DialContext, c)
 }
 
 type clientBuilder interface {
-	newClient(net.IP, int, connConfig, string, *credentials.Credentials, int, dialContext, RouteListener) (DaxAPI, error)
+	newClient(net.IP, int, connConfig, string, *credentials.Credentials, tubePoolOptions, dialContext, RouteListener) (DaxAPI, error)
 }
 
 type singleClientBuilder struct{}
 
-func (*singleClientBuilder) newClient(ip net.IP, port int, connConfigData connConfig, region string, credentials *credentials.Credentials, maxPendingConnects int, dialContextFn dialContext, routeListener RouteListener) (DaxAPI, error) {
+func (*singleClientBuilder) newClient(ip net.IP, port int, connConfigData connConfig, region string, credentials *credentials.Credentials, po tubePoolOptions, dialContextFn dialContext, routeListener RouteListener) (DaxAPI, error) {
 	endpoint := fmt.Sprintf("%s:%d", ip, port)
-	return newSingleClientWithOptions(endpoint, connConfigData, region, credentials, maxPendingConnects, dialContextFn, routeListener)
+	return newSingleClientWithOptions(endpoint, connConfigData, region, credentials, po, dialContextFn, routeListener)
 }
 
 type taskExecutor struct {

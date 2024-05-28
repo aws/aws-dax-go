@@ -34,6 +34,7 @@ import (
 )
 
 var connConfigData = connConfig{isEncrypted: false}
+var tubePoolData = tubePoolOptions{10, 7, 10, false, time.Second * 1, defaultDialer.DialContext}
 
 type mockTube struct {
 	mock.Mock
@@ -95,7 +96,7 @@ func TestTubePoolConnectionCache(t *testing.T) {
 	}
 	defer listener.Close()
 
-	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{10, time.Second * 1, defaultDialer.DialContext}, connConfigData)
+	pool := newTubePoolWithOptions(endpoint, tubePoolData, connConfigData)
 
 	// verify tube is re-used
 	expectedConnections = 1
@@ -174,8 +175,28 @@ func TestTubePoolConnectionCache(t *testing.T) {
 			t.Errorf("expected most recent tube")
 		}
 	}
+
+	// put existing tubes back
+	for i := 0; i < len(tubes); i++ {
+		pool.put(tubes[i])
+	}
+	// verify maxConnections is respected
+	for i := 0; i < pool.maxConnections*2; i++ {
+		tube, err := pool.get()
+		if err != nil {
+			t.Errorf("unexpected error %v", err)
+		}
+		go func() {
+			time.Sleep(1 * time.Second)
+			pool.put(tube)
+		}()
+		if pool.connectionCount > pool.maxConnections {
+			t.Errorf("expected max connections not to be greater than %d", pool.maxConnections)
+		}
+	}
 }
 
+// Reaping should respect the minimum amount of connections allowed
 func TestTubePool_reapIdleTubes(t *testing.T) {
 	endpoint := ":8182"
 	startConnNotifier := make(chan net.Conn, 25)
@@ -186,7 +207,12 @@ func TestTubePool_reapIdleTubes(t *testing.T) {
 	}
 	defer listener.Close()
 
-	pool := newTubePool(endpoint, connConfigData)
+	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{
+		maxConcurrentConnAttempts: 10,
+		minConnections:            7,
+		maxConnections:            10,
+		timeout:                   time.Second * 5,
+	}, connConfigData)
 
 	tubeCount := 10
 	tubes := make([]tube, tubeCount)
@@ -217,8 +243,8 @@ func TestTubePool_reapIdleTubes(t *testing.T) {
 	}
 
 	pool.reapIdleConnections()
-	if countTubes(pool) != 1 {
-		t.Errorf("expected cached tube count %v, actual %v", 1, countTubes(pool))
+	if countTubes(pool)+len(active) != pool.minConnections {
+		t.Errorf("expected cached tube count %v, actual %v", pool.minConnections, countTubes(pool)+len(active))
 	}
 
 	putCount := (activeCount + 1) / 2
@@ -230,18 +256,17 @@ func TestTubePool_reapIdleTubes(t *testing.T) {
 	}
 
 	pool.reapIdleConnections()
-	if countTubes(pool) != putCount+1 {
-		t.Errorf("expected cached tube count %v, actual %v", putCount+1, countTubes(pool))
+	if countTubes(pool)+len(active) != pool.minConnections {
+		t.Errorf("expected cached tube count %v, actual %v", pool.minConnections, countTubes(pool)+len(active))
 	}
 
-	count := len(active)
 	for _, a := range active {
 		pool.put(a)
 	}
 
 	pool.reapIdleConnections()
-	if countTubes(pool) != count+1 {
-		t.Errorf("expected cached tube count %v, actual %v", count+1, countTubes(pool))
+	if countTubes(pool) != pool.minConnections {
+		t.Errorf("expected cached tube count %v, actual %v", pool.minConnections, countTubes(pool))
 	}
 }
 
@@ -255,7 +280,7 @@ func TestTubePool_Close(t *testing.T) {
 	}
 	defer listener.Close()
 
-	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{1, time.Second * 1, defaultDialer.DialContext}, connConfigData)
+	pool := newTubePoolWithOptions(endpoint, tubePoolData, connConfigData)
 	tubes := make([]tube, 2)
 	for i := 0; i < 2; i++ {
 		tubes[i], err = pool.get()
@@ -301,7 +326,7 @@ func TestTubePool_Close(t *testing.T) {
 
 func TestTubePoolError(t *testing.T) {
 	endpoint := ":8184"
-	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{10, time.Second * 1, defaultDialer.DialContext}, connConfigData)
+	pool := newTubePoolWithOptions(endpoint, tubePoolData, connConfigData)
 	_, err := pool.get()
 	if err == nil || !strings.Contains(err.Error(), "connection refused") {
 		t.Errorf("expected 'dial tcp :8184: connection refused', actual '%v'\n", err)
@@ -311,7 +336,7 @@ func TestTubePoolError(t *testing.T) {
 func TestTubePoolErrorWithCustomDialContext(t *testing.T) {
 	endpoint := ":8185"
 	var numDials int64
-	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{10, time.Second * 1, func(ctx context.Context, network, address string) (net.Conn, error) {
+	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{10, 1, 10, false, time.Second * 1, func(ctx context.Context, network, address string) (net.Conn, error) {
 		atomic.AddInt64(&numDials, 1)
 		var d net.Dialer
 		return d.DialContext(ctx, network, address)
@@ -345,7 +370,7 @@ func TestConnectionPriority(t *testing.T) {
 		return d.DialContext(ctx, network, address)
 	}
 
-	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{maxAttempts, 1 * time.Second, defaultDialer.DialContext}, connConfigData)
+	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{maxAttempts, 1, maxAttempts, false, 10 * time.Second, defaultDialer.DialContext}, connConfigData)
 	pool.dialContext = connectFn
 	defer pool.Close()
 
@@ -393,10 +418,10 @@ func TestGetWithClosedErrorChannel(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{1, 10 * time.Second, defaultDialer.DialContext}, connConfigData)
+	pool := newTubePoolWithOptions(endpoint, tubePoolOptions{1, 1, 1, false, 10 * time.Second, defaultDialer.DialContext}, connConfigData)
 	pool.dialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
 		wg.Done()
-		// Block indefinetely to mimic a long connection
+		// Block indefinitely to mimic a long connection
 		for {
 
 		}
@@ -499,18 +524,8 @@ func drainAndCloseConn(conn net.Conn, endConnNotifier chan net.Conn) {
 	}
 }
 
-func countTubes(pool *tubePool) int {
-	head := pool.top
-	count := 0
-	for head != nil {
-		count++
-		head = head.Next()
-	}
-	return count
-}
-
 func TestTubePool_close(t *testing.T) {
-	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, 5 * time.Second, defaultDialer.DialContext}, connConfigData)
+	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, 1, 10, false, 5 * time.Second, defaultDialer.DialContext}, connConfigData)
 	origSession := p.session
 	p.closeTubeImmediately = true
 
@@ -522,7 +537,7 @@ func TestTubePool_close(t *testing.T) {
 }
 
 func TestTubePool_PutClosesTubesIfPoolIsClosed(t *testing.T) {
-	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, 5 * time.Second, defaultDialer.DialContext}, connConfigData)
+	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, 1, 10, false, 5 * time.Second, defaultDialer.DialContext}, connConfigData)
 	p.closed = true
 
 	tt := &mockTube{}
@@ -535,7 +550,7 @@ func TestTubePool_PutClosesTubesIfPoolIsClosed(t *testing.T) {
 }
 
 func TestTubePool_PutClosesTubesFromDifferentSession(t *testing.T) {
-	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, 5 * time.Second, defaultDialer.DialContext}, connConfigData)
+	p := newTubePoolWithOptions(":1234", tubePoolOptions{1, 1, 10, false, 5 * time.Second, defaultDialer.DialContext}, connConfigData)
 
 	tt := &mockTube{}
 	tt.On("Session").Return(p.session + 100)

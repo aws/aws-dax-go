@@ -115,14 +115,15 @@ func SecureDialContext(endpoint string, skipHostnameVerification bool) (func(ctx
 // Only configurations relevent to DAX will be used, others will be ignored.
 //
 // Example:
-// 		mySession := session.Must(session.NewSession(
-// 			&aws.Config{
-// 				Region: aws.String("us-east-1"),
-// 				Endpoint: aws.String("dax://mycluster.frfx8h.clustercfg.dax.usw2.amazonaws.com:8111"),
-// 			}))
 //
-// 		// Create a DAX client from just a session.
-// 		svc := dax.NewWithSession(mySession)
+//	mySession := session.Must(session.NewSession(
+//		&aws.Config{
+//			Region: aws.String("us-east-1"),
+//			Endpoint: aws.String("dax://mycluster.frfx8h.clustercfg.dax.usw2.amazonaws.com:8111"),
+//		}))
+//
+//	// Create a DAX client from just a session.
+//	svc := dax.NewWithSession(mySession)
 func NewWithSession(session session.Session) (*Dax, error) {
 	dc := DefaultConfig()
 	if session.Config != nil {

@@ -673,7 +673,7 @@ func TestCluster_RouteManagerDisabled(t *testing.T) {
 	}
 
 	oldRoutes := cluster.getAllRoutes()
-	route, _ := clientBuilder.newClient(net.IP{}, 8111, connConfig{}, "dummy", nil, 10, nil, nil)
+	route, _ := clientBuilder.newClient(net.IP{}, 8111, connConfig{}, "dummy", nil, tubePoolOptions{}, nil, nil)
 	cluster.addRoute("dummy", route)
 	newRoutes := cluster.getAllRoutes()
 
@@ -695,7 +695,7 @@ func TestCluster_RouteManagerEnabled(t *testing.T) {
 		t.Errorf("Route manager should be enabled!")
 	}
 	oldRoutes := cluster.getAllRoutes()
-	route, _ := clientBuilder.newClient(net.IP{}, 8111, connConfig{}, "dummy", nil, 10, nil, nil)
+	route, _ := clientBuilder.newClient(net.IP{}, 8111, connConfig{}, "dummy", nil, tubePoolOptions{}, nil, nil)
 	cluster.addRoute("dummy", route)
 	newRoutes := cluster.getAllRoutes()
 
@@ -856,7 +856,7 @@ type testClientBuilder struct {
 	clients []*testClient
 }
 
-func (b *testClientBuilder) newClient(ip net.IP, port int, connConfigData connConfig, region string, credentials *credentials.Credentials, maxConns int, dialContextFn dialContext, routeListener RouteListener) (DaxAPI, error) {
+func (b *testClientBuilder) newClient(ip net.IP, port int, connConfigData connConfig, region string, credentials *credentials.Credentials, po tubePoolOptions, dialContextFn dialContext, routeListener RouteListener) (DaxAPI, error) {
 	t := &testClient{ep: b.ep, hp: hostPort{ip.String(), port}}
 	b.clients = append(b.clients, []*testClient{t}...)
 	return t, nil
