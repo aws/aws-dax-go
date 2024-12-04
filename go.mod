@@ -4,7 +4,7 @@ module github.com/aws/aws-dax-go
 
 require (
 	github.com/antlr/antlr4 v0.0.0-20181218183524-be58ebffde8e
-	github.com/aws/aws-sdk-go v1.50.0
+	github.com/aws/aws-sdk-go v1.55.5
 	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/stretchr/testify v1.9.0
 )

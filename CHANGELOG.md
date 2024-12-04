@@ -1,3 +1,7 @@
+Release v1.2.15 (2024-12-04)
+===
+* Added DeleteResourcePolicy, GetResourcePolicy and PutResourcePolicy methods in api.go for supporting github.com/aws/aws-sdk-go v1.55.5
+
 Release v1.2.14 (2024-03-01)
 ===
 * Opt-in feature to stop sending requests to an endpoint for which read requests are facing network errors

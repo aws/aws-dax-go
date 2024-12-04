@@ -965,6 +965,40 @@ func (d *Dax) WaitUntilTableNotExistsWithContext(aws.Context, *dynamodb.Describe
 	return d.unImpl()
 }
 
+func (d *Dax) DeleteResourcePolicy(*dynamodb.DeleteResourcePolicyInput) (*dynamodb.DeleteResourcePolicyOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) DeleteResourcePolicyWithContext(aws.Context, *dynamodb.DeleteResourcePolicyInput, ...request.Option) (*dynamodb.DeleteResourcePolicyOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) DeleteResourcePolicyRequest(input *dynamodb.DeleteResourcePolicyInput) (*request.Request, *dynamodb.DeleteResourcePolicyOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.DeleteResourcePolicyOutput{}
+}
+
+func (d *Dax) GetResourcePolicy(*dynamodb.GetResourcePolicyInput) (*dynamodb.GetResourcePolicyOutput, error) {
+	return nil, d.unImpl()
+}
+func (d *Dax) GetResourcePolicyWithContext(aws.Context, *dynamodb.GetResourcePolicyInput, ...request.Option) (*dynamodb.GetResourcePolicyOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) GetResourcePolicyRequest(input *dynamodb.GetResourcePolicyInput) (*request.Request, *dynamodb.GetResourcePolicyOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.GetResourcePolicyOutput{}
+}
+
+func (d *Dax) PutResourcePolicy(*dynamodb.PutResourcePolicyInput) (*dynamodb.PutResourcePolicyOutput, error) {
+	return nil, d.unImpl()
+}
+func (d *Dax) PutResourcePolicyWithContext(aws.Context, *dynamodb.PutResourcePolicyInput, ...request.Option) (*dynamodb.PutResourcePolicyOutput, error) {
+	return nil, d.unImpl()
+}
+
+func (d *Dax) PutResourcePolicyRequest(input *dynamodb.PutResourcePolicyInput) (*request.Request, *dynamodb.PutResourcePolicyOutput) {
+	return newRequestForUnimplementedOperation(), &dynamodb.PutResourcePolicyOutput{}
+}
+
 func (d *Dax) unImpl() error {
 	return errors.New(client.ErrCodeNotImplemented)
 }
