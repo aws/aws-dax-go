@@ -2,10 +2,11 @@ package client
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws"
 	"math"
 	"math/rand"
 	"time"
+
+	"github.com/aws/smithy-go/logging"
 )
 
 const failOpenThreshold = 3
@@ -17,11 +18,10 @@ type routeManager struct {
 	multipleFailOpenWindow time.Duration // if we see multiple fail open events within this window, we will disable route manager.
 	disableDuration        time.Duration // disable route manager for this duration after multiple fail open in a row
 	timer                  *time.Timer
-	logger                 aws.Logger
-	logLevel               aws.LogLevelType
+	logger                 logging.Logger
 }
 
-func newRouteManager(isEnabled bool, healthCheckDuration time.Duration, logger aws.Logger, logLevel aws.LogLevelType) *routeManager {
+func newRouteManager(isEnabled bool, healthCheckDuration time.Duration, logger logging.Logger) *routeManager {
 	return &routeManager{
 		routes:                 make([]DaxAPI, 0),
 		isEnabled:              isEnabled,
@@ -29,13 +29,12 @@ func newRouteManager(isEnabled bool, healthCheckDuration time.Duration, logger a
 		multipleFailOpenWindow: time.Duration(math.Ceil(failOpenThreshold/2.0)) * healthCheckDuration,
 		disableDuration:        10 * time.Minute, // Disable route manager after multiple fail open in a row
 		logger:                 logger,
-		logLevel:               logLevel,
 	}
 }
 
-func (r *routeManager) debugLog(args ...interface{}) {
-	if r.logger != nil && r.logLevel.AtLeast(aws.LogDebug) {
-		r.logger.Log(args)
+func (r *routeManager) debugLog(format string, args ...interface{}) {
+	if r.logger != nil {
+		r.logger.Logf(ClassificationDebug, format, args)
 	}
 }
 

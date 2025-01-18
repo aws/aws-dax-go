@@ -19,9 +19,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/aws/smithy-go"
 )
 
 const (
@@ -56,7 +57,7 @@ func translateLegacyPutItemInput(input *dynamodb.PutItemInput) (*dynamodb.PutIte
 	if err != nil {
 		return input, err
 	}
-	output.ConditionalOperator = nil
+	output.ConditionalOperator = ""
 	output.Expected = nil
 	return output, err
 }
@@ -70,7 +71,7 @@ func translateLegacyDeleteItemInput(input *dynamodb.DeleteItemInput) (*dynamodb.
 	output := input
 	output.ConditionExpression, output.ExpressionAttributeNames, output.ExpressionAttributeValues, err =
 		translateExpected(output.ConditionalOperator, output.Expected, input.ExpressionAttributeNames, output.ExpressionAttributeValues)
-	output.ConditionalOperator = nil
+	output.ConditionalOperator = ""
 	output.Expected = nil
 	if err != nil {
 		return input, err
@@ -98,7 +99,7 @@ func translateLegacyUpdateItemInput(input *dynamodb.UpdateItemInput) (*dynamodb.
 		if err != nil {
 			return input, err
 		}
-		output.ConditionalOperator = nil
+		output.ConditionalOperator = ""
 		output.Expected = nil
 	}
 	if uf {
@@ -111,8 +112,11 @@ func translateLegacyUpdateItemInput(input *dynamodb.UpdateItemInput) (*dynamodb.
 	}
 	return output, nil
 }
-
 func translateLegacyScanInput(input *dynamodb.ScanInput) (*dynamodb.ScanInput, error) {
+	// if ProjectionExpression is not nil, Should set Select type.
+	if input.ProjectionExpression != nil {
+		input.Select = types.SelectSpecificAttributes
+	}
 	pf, err := hasAttributesToGet(input.AttributesToGet, input.ProjectionExpression)
 	if err != nil {
 		return input, err
@@ -140,7 +144,7 @@ func translateLegacyScanInput(input *dynamodb.ScanInput) (*dynamodb.ScanInput, e
 		if err != nil {
 			return input, err
 		}
-		output.ConditionalOperator = nil
+		output.ConditionalOperator = ""
 		output.ScanFilter = nil
 	}
 
@@ -179,12 +183,12 @@ func translateLegacyQueryInput(input *dynamodb.QueryInput) (*dynamodb.QueryInput
 		if err != nil {
 			return input, err
 		}
-		output.ConditionalOperator = nil
+		output.ConditionalOperator = ""
 		output.QueryFilter = nil
 	}
 	if kf {
 		output.KeyConditionExpression, output.ExpressionAttributeNames, output.ExpressionAttributeValues, err =
-			translateFilter(aws.String(dynamodb.ConditionalOperatorAnd), output.KeyConditions, output.ExpressionAttributeNames, output.ExpressionAttributeValues, true)
+			translateFilter(types.ConditionalOperatorAnd, output.KeyConditions, output.ExpressionAttributeNames, output.ExpressionAttributeValues, true)
 		if err != nil {
 			return input, err
 		}
@@ -199,7 +203,7 @@ func translateLegacyBatchGetItemInput(input *dynamodb.BatchGetItemInput) (*dynam
 		return input, nil
 	}
 
-	for _, kaas := range input.RequestItems {
+	for i, kaas := range input.RequestItems {
 		f, err := hasAttributesToGet(kaas.AttributesToGet, kaas.ProjectionExpression)
 		if err != nil {
 			return input, err
@@ -211,57 +215,74 @@ func translateLegacyBatchGetItemInput(input *dynamodb.BatchGetItemInput) (*dynam
 		if err != nil {
 			return input, err
 		}
+		input.RequestItems[i] = kaas
 	}
 	return input, nil
 }
 
-func hasAttributesToGet(a []*string, p *string) (bool, error) {
+func hasAttributesToGet(a []string, p *string) (bool, error) {
 	af := len(a) != 0
 	pf := p != nil
 	if af && pf {
-		return false, awserr.New(ErrCodeValidationException, "Cannot specify both AttributesToGet and ProjectionExpression", nil)
+		return false, &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: "Cannot specify both AttributesToGet and ProjectionExpression",
+			Fault:   smithy.FaultClient,
+		}
 	}
 	return af, nil
 }
 
-func hasExpected(e map[string]*dynamodb.ExpectedAttributeValue, c *string) (bool, error) {
+func hasExpected(e map[string]types.ExpectedAttributeValue, c *string) (bool, error) {
 	ef := len(e) != 0
 	cf := c != nil
 	if ef && cf {
-		return false, awserr.New(ErrCodeValidationException, "Cannot specify both Expected and ConditionExpression", nil)
+		return false, &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: "Cannot specify both Expected and ConditionExpression",
+			Fault:   smithy.FaultClient,
+		}
 	}
 	return ef, nil
 }
 
-func hasAttributeUpdates(u map[string]*dynamodb.AttributeValueUpdate, e *string) (bool, error) {
+func hasAttributeUpdates(u map[string]types.AttributeValueUpdate, e *string) (bool, error) {
 	uf := len(u) > 0
 	ef := e != nil
 	if uf && ef {
-		return false, awserr.New(ErrCodeValidationException, "Cannot specify both AttributeUpdates and UpdateExpression", nil)
+		return false, &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: "Cannot specify both AttributeUpdates and UpdateExpression",
+			Fault:   smithy.FaultClient,
+		}
 	}
 	return uf, nil
 }
 
-func hasFilter(c map[string]*dynamodb.Condition, e *string) (bool, error) {
+func hasFilter(c map[string]types.Condition, e *string) (bool, error) {
 	cf := len(c) > 0
 	ef := e != nil
 	if cf && ef {
-		return false, awserr.New(ErrCodeValidationException, "Cannot specify both [Scan|Query]Filter and [Scan|Query]FilterExpression", nil)
+		return false, &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: "Cannot specify both [Scan|Query]Filter and [Scan|Query]FilterExpression",
+			Fault:   smithy.FaultClient,
+		}
 	}
 	return cf, nil
 }
 
-func translateAttributesToGet(attrs []*string, subs map[string]*string) (*string, map[string]*string, error) {
+func translateAttributesToGet(attrs []string, subs map[string]string) (*string, map[string]string, error) {
 	out, sub := appendAttributeNames(nil, attrs, subs)
 	return aws.String(string(out)), sub, nil
 }
 
-func translateExpected(o *string, e map[string]*dynamodb.ExpectedAttributeValue, subs map[string]*string, vars map[string]*dynamodb.AttributeValue) (*string, map[string]*string, map[string]*dynamodb.AttributeValue, error) {
-	op := dynamodb.ConditionalOperatorAnd
-	if o != nil && len(*o) > 0 {
-		op = *o
+func translateExpected(o types.ConditionalOperator, e map[string]types.ExpectedAttributeValue, subs map[string]string, vars map[string]types.AttributeValue) (*string, map[string]string, map[string]types.AttributeValue, error) {
+	op := types.ConditionalOperatorAnd
+	if len(o) > 0 {
+		op = o
 	}
-	ops := fmt.Sprintf(" %s ", strings.TrimSpace(op))
+	ops := fmt.Sprintf(" %s ", strings.TrimSpace(string(op)))
 
 	var out []byte
 	var err error
@@ -280,12 +301,12 @@ func translateExpected(o *string, e map[string]*dynamodb.ExpectedAttributeValue,
 	return aws.String(string(out)), subs, vars, err
 }
 
-func translateFilter(o *string, c map[string]*dynamodb.Condition, subs map[string]*string, vars map[string]*dynamodb.AttributeValue, keyCondition bool) (*string, map[string]*string, map[string]*dynamodb.AttributeValue, error) {
-	op := dynamodb.ConditionalOperatorAnd
-	if o != nil && len(*o) > 0 {
-		op = *o
+func translateFilter(o types.ConditionalOperator, c map[string]types.Condition, subs map[string]string, vars map[string]types.AttributeValue, keyCondition bool) (*string, map[string]string, map[string]types.AttributeValue, error) {
+	op := types.ConditionalOperatorAnd
+	if len(o) > 0 {
+		op = o
 	}
-	ops := fmt.Sprintf(" %s ", strings.TrimSpace(op))
+	ops := fmt.Sprintf(" %s ", strings.TrimSpace(string(op)))
 
 	var out []byte
 	var err error
@@ -304,40 +325,45 @@ func translateFilter(o *string, c map[string]*dynamodb.Condition, subs map[strin
 	return aws.String(string(out)), subs, vars, err
 }
 
-func translateAttributeUpdates(avus map[string]*dynamodb.AttributeValueUpdate, subs map[string]*string, vars map[string]*dynamodb.AttributeValue) (*string, map[string]*string, map[string]*dynamodb.AttributeValue, error) {
+func translateAttributeUpdates(avus map[string]types.AttributeValueUpdate, subs map[string]string, vars map[string]types.AttributeValue) (*string, map[string]string, map[string]types.AttributeValue, error) {
 	var sets, adds, dels, rems []string
 
 	for a, avu := range avus {
-		if avu == nil {
-			continue
+		act := types.AttributeActionPut
+		if avu.Action != "" {
+			act = avu.Action
 		}
-		act := dynamodb.AttributeActionPut
-		if avu.Action != nil {
-			act = *avu.Action
-		}
-		if avu.Value == nil && act != dynamodb.AttributeActionDelete {
-			return nil, subs, vars, awserr.New(ErrCodeValidationException, "only DELETE action is allowed when no attribute value is specified", nil)
+		if avu.Value == nil && act != types.AttributeActionDelete {
+			return nil, subs, vars, &smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: "only DELETE action is allowed when no attribute value is specified",
+				Fault:   smithy.FaultClient,
+			}
 		}
 
 		var an, av string
 		subs, an = appendAttributeName(subs, a)
 		if avu.Value != nil {
-			vars, av = appendAttributeValue(vars, *avu.Value)
+			vars, av = appendAttributeValue(vars, avu.Value)
 		}
 
 		switch act {
-		case dynamodb.AttributeActionPut:
+		case types.AttributeActionPut:
 			sets = append(sets, fmt.Sprintf("%s=%s", an, av))
-		case dynamodb.AttributeActionAdd:
+		case types.AttributeActionAdd:
 			adds = append(adds, fmt.Sprintf("%s %s", an, av))
-		case dynamodb.AttributeActionDelete:
+		case types.AttributeActionDelete:
 			if len(av) == 0 {
 				rems = append(rems, an)
 			} else {
 				dels = append(dels, fmt.Sprintf("%s %s", an, av))
 			}
 		default:
-			return nil, subs, vars, awserr.New(ErrCodeValidationException, fmt.Sprintf("unknown AttributeValueUpdate Action: %s", act), nil)
+			return nil, subs, vars, &smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: fmt.Sprintf("unknown AttributeValueUpdate Action: %s", act),
+				Fault:   smithy.FaultClient,
+			}
 		}
 	}
 
@@ -357,10 +383,10 @@ func translateAttributeUpdates(avus map[string]*dynamodb.AttributeValueUpdate, s
 	return aws.String(strings.Join(all, " ")), subs, vars, nil
 }
 
-func appendAttributeNames(in []byte, attrs []*string, sub map[string]*string) ([]byte, map[string]*string) {
+func appendAttributeNames(in []byte, attrs []string, sub map[string]string) ([]byte, map[string]string) {
 	f := true
 	for _, a := range attrs {
-		if a == nil || len(*a) == 0 {
+		if len(a) == 0 {
 			continue
 		}
 		if f {
@@ -369,13 +395,13 @@ func appendAttributeNames(in []byte, attrs []*string, sub map[string]*string) ([
 			in = append(in, []byte(",")...)
 		}
 		var an string
-		sub, an = appendAttributeName(sub, *a)
+		sub, an = appendAttributeName(sub, a)
 		in = append(in, []byte(an)...)
 	}
 	return in, sub
 }
 
-func appendAttributeValues(in []byte, avl []*dynamodb.AttributeValue, vars map[string]*dynamodb.AttributeValue) ([]byte, map[string]*dynamodb.AttributeValue) {
+func appendAttributeValues(in []byte, avl []types.AttributeValue, vars map[string]types.AttributeValue) ([]byte, map[string]types.AttributeValue) {
 	f := true
 	for _, v := range avl {
 		if v == nil {
@@ -387,50 +413,57 @@ func appendAttributeValues(in []byte, avl []*dynamodb.AttributeValue, vars map[s
 			in = append(in, []byte(",")...)
 		}
 		var av string
-		vars, av = appendAttributeValue(vars, *v)
+		vars, av = appendAttributeValue(vars, v)
 		in = append(in, []byte(av)...)
 	}
 	return in, vars
 }
 
-func appendCondition(in []byte, a string, eav *dynamodb.ExpectedAttributeValue, subs map[string]*string, vars map[string]*dynamodb.AttributeValue) ([]byte, map[string]*string, map[string]*dynamodb.AttributeValue, error) {
-	if eav == nil {
-		return in, subs, vars, nil
-	}
+func appendCondition(in []byte, a string, eav types.ExpectedAttributeValue, subs map[string]string, vars map[string]types.AttributeValue) ([]byte, map[string]string, map[string]types.AttributeValue, error) {
 	if eav.Value != nil && len(eav.AttributeValueList) > 0 {
-		return in, subs, vars, awserr.New(ErrCodeValidationException, fmt.Sprintf("One or more parameter values were invalid: Value and AttributeValueList cannot be used together for Attribute: %s", a), nil)
+		return in, subs, vars, &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: fmt.Sprintf("One or more parameter values were invalid: Value and AttributeValueList cannot be used together for Attribute: %s", a),
+			Fault:   smithy.FaultClient,
+		}
 	}
 
 	op := eav.ComparisonOperator
-	if op == nil || len(*op) == 0 {
+	if len(op) == 0 {
 		return appendExistsCondition(in, a, eav, subs, vars)
 	} else if eav.Exists != nil && *eav.Exists {
-		return in, subs, vars, awserr.New(ErrCodeValidationException, fmt.Sprintf("One or more parameter values were invalid: Exists and ComparisonOperator cannot be used together for Attribute: %s", a), nil)
+		return in, subs, vars, &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: fmt.Sprintf("One or more parameter values were invalid: Exists and ComparisonOperator cannot be used together for Attribute: %s", a),
+			Fault:   smithy.FaultClient,
+		}
 	}
 	avl := eav.AttributeValueList
 	if len(avl) == 0 && eav.Value != nil {
-		avl = []*dynamodb.AttributeValue{eav.Value}
+		avl = []types.AttributeValue{eav.Value}
 	}
-	return appendComparisonCondition(in, a, *op, avl, subs, vars, false)
+	return appendComparisonCondition(in, a, op, avl, subs, vars, false)
 }
 
-func appendFilterCondition(in []byte, a string, c *dynamodb.Condition, subs map[string]*string, vars map[string]*dynamodb.AttributeValue, keyCondition bool) ([]byte, map[string]*string, map[string]*dynamodb.AttributeValue, error) {
-	if c == nil {
-		if keyCondition {
-			return in, subs, vars, awserr.New(ErrCodeValidationException, fmt.Sprintf("KeyCondition cannot be nil for key: %s", a), nil)
-		}
-		return in, subs, vars, nil
-	}
+func appendFilterCondition(in []byte, a string, c types.Condition, subs map[string]string, vars map[string]types.AttributeValue, keyCondition bool) ([]byte, map[string]string, map[string]types.AttributeValue, error) {
 	op := c.ComparisonOperator
-	if op == nil || len(*op) == 0 {
-		return in, subs, vars, awserr.New(ErrCodeValidationException, fmt.Sprintf("One or more parameter values were invalid: AttributeValueList can only be used with a ComparisonOperator for Attribute: %s", a), nil)
+	if len(op) == 0 {
+		return in, subs, vars, &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: fmt.Sprintf("One or more parameter values were invalid: AttributeValueList can only be used with a ComparisonOperator for Attribute: %s", a),
+			Fault:   smithy.FaultClient,
+		}
 	}
-	return appendComparisonCondition(in, a, *op, c.AttributeValueList, subs, vars, keyCondition)
+	return appendComparisonCondition(in, a, op, c.AttributeValueList, subs, vars, keyCondition)
 }
 
-func appendExistsCondition(in []byte, a string, eav *dynamodb.ExpectedAttributeValue, subs map[string]*string, vars map[string]*dynamodb.AttributeValue) ([]byte, map[string]*string, map[string]*dynamodb.AttributeValue, error) {
+func appendExistsCondition(in []byte, a string, eav types.ExpectedAttributeValue, subs map[string]string, vars map[string]types.AttributeValue) ([]byte, map[string]string, map[string]types.AttributeValue, error) {
 	if len(eav.AttributeValueList) != 0 {
-		return in, subs, vars, awserr.New(ErrCodeValidationException, fmt.Sprintf("One or more parameter values were invalid: AttributeValueList can only be used with a ComparisonOperator for Attribute: %s", a), nil)
+		return in, subs, vars, &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: fmt.Sprintf("One or more parameter values were invalid: AttributeValueList can only be used with a ComparisonOperator for Attribute: %s", a),
+			Fault:   smithy.FaultClient,
+		}
 	}
 	if eav.Exists == nil || *eav.Exists {
 		if eav.Value == nil {
@@ -440,18 +473,26 @@ func appendExistsCondition(in []byte, a string, eav *dynamodb.ExpectedAttributeV
 			} else {
 				s = fmt.Sprintf("%v", *eav.Exists)
 			}
-			return in, subs, vars, awserr.New(ErrCodeValidationException, fmt.Sprintf("One or more parameter values were invalid: Value must be provided when Exists is %s for Attribute: %s", s, a), nil)
+			return in, subs, vars, &smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: fmt.Sprintf("One or more parameter values were invalid: Value must be provided when Exists is %s for Attribute: %s", s, a),
+				Fault:   smithy.FaultClient,
+			}
 		}
 
 		var an, av string
 		subs, an = appendAttributeName(subs, a)
-		vars, av = appendAttributeValue(vars, *eav.Value)
+		vars, av = appendAttributeValue(vars, eav.Value)
 		in = append(in, []byte(an)...)
 		in = append(in, []byte(" = ")...)
 		in = append(in, []byte(av)...)
 	} else {
 		if eav.Value != nil {
-			return in, subs, vars, awserr.New(ErrCodeValidationException, fmt.Sprintf("One or more parameter values were invalid: Value cannot be used when Exists is false for Attribute: %s", a), nil)
+			return in, subs, vars, &smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: fmt.Sprintf("One or more parameter values were invalid: Value cannot be used when Exists is false for Attribute: %s", a),
+				Fault:   smithy.FaultClient,
+			}
 		}
 
 		var an string
@@ -463,67 +504,69 @@ func appendExistsCondition(in []byte, a string, eav *dynamodb.ExpectedAttributeV
 	return in, subs, vars, nil
 }
 
-func appendComparisonCondition(in []byte, a string, op string, avl []*dynamodb.AttributeValue, subs map[string]*string, vars map[string]*dynamodb.AttributeValue, keyCondition bool) ([]byte, map[string]*string, map[string]*dynamodb.AttributeValue, error) {
+func appendComparisonCondition(in []byte, a string, op types.ComparisonOperator, avl []types.AttributeValue, subs map[string]string, vars map[string]types.AttributeValue, keyCondition bool) ([]byte, map[string]string, map[string]types.AttributeValue, error) {
 	switch op {
-	case dynamodb.ComparisonOperatorBetween:
+	case types.ComparisonOperatorBetween:
 		return appendBetweenCondition(in, a, op, avl, subs, vars)
-	case dynamodb.ComparisonOperatorBeginsWith:
+	case types.ComparisonOperatorBeginsWith:
 		return appendBeginsWithCondition(in, a, op, avl, subs, vars)
-	case dynamodb.ComparisonOperatorContains:
+	case types.ComparisonOperatorContains:
 		if err := validateNotKeyCondition(keyCondition, op); err != nil {
 			return in, subs, vars, err
 		}
 		return appendContainsCondition(in, a, op, avl, subs, vars, true)
-	case dynamodb.ComparisonOperatorNotContains:
+	case types.ComparisonOperatorNotContains:
 		if err := validateNotKeyCondition(keyCondition, op); err != nil {
 			return in, subs, vars, err
 		}
 		return appendContainsCondition(in, a, op, avl, subs, vars, false)
-	case dynamodb.ComparisonOperatorNull:
+	case types.ComparisonOperatorNull:
 		if err := validateNotKeyCondition(keyCondition, op); err != nil {
 			return in, subs, vars, err
 		}
 		var err error
 		in, subs, err = appendNullCondition(in, a, op, avl, subs, true)
 		return in, subs, vars, err
-	case dynamodb.ComparisonOperatorNotNull:
+	case types.ComparisonOperatorNotNull:
 		if err := validateNotKeyCondition(keyCondition, op); err != nil {
 			return in, subs, vars, err
 		}
 		var err error
 		in, subs, err = appendNullCondition(in, a, op, avl, subs, false)
 		return in, subs, vars, err
-	case dynamodb.ComparisonOperatorIn:
+	case types.ComparisonOperatorIn:
 		if err := validateNotKeyCondition(keyCondition, op); err != nil {
 			return in, subs, vars, err
 		}
 		return appendInCondition(in, a, op, avl, subs, vars)
 	default:
-		var eop string
 		switch op {
-		case dynamodb.ComparisonOperatorEq:
-			eop = "="
-		case dynamodb.ComparisonOperatorNe:
+		case types.ComparisonOperatorEq:
+			// do nothing
+		case types.ComparisonOperatorNe:
 			if err := validateNotKeyCondition(keyCondition, op); err != nil {
 				return in, subs, vars, err
 			}
-			eop = "<>"
-		case dynamodb.ComparisonOperatorLe:
-			eop = "<="
-		case dynamodb.ComparisonOperatorGe:
-			eop = ">="
-		case dynamodb.ComparisonOperatorLt:
-			eop = "<"
-		case dynamodb.ComparisonOperatorGt:
-			eop = ">"
+		case types.ComparisonOperatorLe:
+			// do nothing
+		case types.ComparisonOperatorGe:
+			// do nothing
+		case types.ComparisonOperatorLt:
+			// do nothing
+		case types.ComparisonOperatorGt:
+			// do nothing
 		default:
-			return in, subs, vars, awserr.New(ErrCodeValidationException, fmt.Sprintf("Unknown comparison operator: %s", op), nil)
+			return in, subs, vars, &smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: fmt.Sprintf("Unknown comparison operator: %s", op),
+				Fault:   smithy.FaultClient,
+			}
 		}
-		return appendArithmeticComparisonCondition(in, a, eop, avl, subs, vars)
+		return appendArithmeticComparisonCondition(in, a, op, avl, subs, vars)
 	}
 }
 
-func appendBetweenCondition(in []byte, a string, op string, avl []*dynamodb.AttributeValue, subs map[string]*string, vars map[string]*dynamodb.AttributeValue) ([]byte, map[string]*string, map[string]*dynamodb.AttributeValue, error) {
+func appendBetweenCondition(in []byte, a string, op types.ComparisonOperator, avl []types.AttributeValue, subs map[string]string, vars map[string]types.AttributeValue) ([]byte, map[string]string, map[string]types.AttributeValue, error) {
 	if err := validateArgCount(2, avl, op, a); err != nil {
 		return in, subs, vars, err
 	}
@@ -533,8 +576,8 @@ func appendBetweenCondition(in []byte, a string, op string, avl []*dynamodb.Attr
 
 	var an, av0, av1 string
 	subs, an = appendAttributeName(subs, a)
-	vars, av0 = appendAttributeValue(vars, *avl[0])
-	vars, av1 = appendAttributeValue(vars, *avl[1])
+	vars, av0 = appendAttributeValue(vars, avl[0])
+	vars, av1 = appendAttributeValue(vars, avl[1])
 	in = append(in, []byte(an)...)
 	in = append(in, []byte(" between ")...)
 	in = append(in, []byte(av0)...)
@@ -543,7 +586,7 @@ func appendBetweenCondition(in []byte, a string, op string, avl []*dynamodb.Attr
 	return in, subs, vars, nil
 }
 
-func appendBeginsWithCondition(in []byte, a string, op string, avl []*dynamodb.AttributeValue, subs map[string]*string, vars map[string]*dynamodb.AttributeValue) ([]byte, map[string]*string, map[string]*dynamodb.AttributeValue, error) {
+func appendBeginsWithCondition(in []byte, a string, op types.ComparisonOperator, avl []types.AttributeValue, subs map[string]string, vars map[string]types.AttributeValue) ([]byte, map[string]string, map[string]types.AttributeValue, error) {
 	if err := validateArgCount(1, avl, op, a); err != nil {
 		return in, subs, vars, err
 	}
@@ -553,7 +596,7 @@ func appendBeginsWithCondition(in []byte, a string, op string, avl []*dynamodb.A
 
 	var an, av0 string
 	subs, an = appendAttributeName(subs, a)
-	vars, av0 = appendAttributeValue(vars, *avl[0])
+	vars, av0 = appendAttributeValue(vars, avl[0])
 	in = append(in, []byte("begins_with(")...)
 	in = append(in, []byte(an)...)
 	in = append(in, []byte(",")...)
@@ -562,7 +605,7 @@ func appendBeginsWithCondition(in []byte, a string, op string, avl []*dynamodb.A
 	return in, subs, vars, nil
 }
 
-func appendContainsCondition(in []byte, a string, op string, avl []*dynamodb.AttributeValue, subs map[string]*string, vars map[string]*dynamodb.AttributeValue, p bool) ([]byte, map[string]*string, map[string]*dynamodb.AttributeValue, error) {
+func appendContainsCondition(in []byte, a string, op types.ComparisonOperator, avl []types.AttributeValue, subs map[string]string, vars map[string]types.AttributeValue, p bool) ([]byte, map[string]string, map[string]types.AttributeValue, error) {
 	if err := validateArgCount(1, avl, op, a); err != nil {
 		return in, subs, vars, err
 	}
@@ -572,7 +615,7 @@ func appendContainsCondition(in []byte, a string, op string, avl []*dynamodb.Att
 
 	var an, av0 string
 	subs, an = appendAttributeName(subs, a)
-	vars, av0 = appendAttributeValue(vars, *avl[0])
+	vars, av0 = appendAttributeValue(vars, avl[0])
 
 	if !p {
 		in = append(in, []byte("not ")...)
@@ -585,7 +628,7 @@ func appendContainsCondition(in []byte, a string, op string, avl []*dynamodb.Att
 	return in, subs, vars, nil
 }
 
-func appendNullCondition(in []byte, a string, op string, avl []*dynamodb.AttributeValue, subs map[string]*string, p bool) ([]byte, map[string]*string, error) {
+func appendNullCondition(in []byte, a string, op types.ComparisonOperator, avl []types.AttributeValue, subs map[string]string, p bool) ([]byte, map[string]string, error) {
 	if err := validateArgCount(0, avl, op, a); err != nil {
 		return in, subs, err
 	}
@@ -603,12 +646,20 @@ func appendNullCondition(in []byte, a string, op string, avl []*dynamodb.Attribu
 	return in, subs, nil
 }
 
-func appendInCondition(in []byte, a string, op string, avl []*dynamodb.AttributeValue, subs map[string]*string, vars map[string]*dynamodb.AttributeValue) ([]byte, map[string]*string, map[string]*dynamodb.AttributeValue, error) {
+func appendInCondition(in []byte, a string, op types.ComparisonOperator, avl []types.AttributeValue, subs map[string]string, vars map[string]types.AttributeValue) ([]byte, map[string]string, map[string]types.AttributeValue, error) {
 	if avl == nil {
-		return in, subs, vars, awserr.New(ErrCodeValidationException, fmt.Sprintf("One or more parameter values were invalid: AttributeValueList must be used with ComparisonOperator: %s for Attribute: %s", op, a), nil)
+		return in, subs, vars, &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: fmt.Sprintf("One or more parameter values were invalid: AttributeValueList must be used with ComparisonOperator: %s for Attribute: %s", op, a),
+			Fault:   smithy.FaultClient,
+		}
 	}
 	if len(avl) == 0 {
-		return in, subs, vars, awserr.New(ErrCodeValidationException, fmt.Sprintf("One or more parameter values were invalid: Invalid number of argument(s)0 for the %s ComparisonOperator", op), nil)
+		return in, subs, vars, &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: fmt.Sprintf("One or more parameter values were invalid: Invalid number of argument(s)0 for the %s ComparisonOperator", op),
+			Fault:   smithy.FaultClient,
+		}
 	}
 	if err := validateScalarAttribute(avl, op); err != nil {
 		return in, subs, vars, err
@@ -623,32 +674,36 @@ func appendInCondition(in []byte, a string, op string, avl []*dynamodb.Attribute
 	return in, subs, vars, nil
 }
 
-func appendArithmeticComparisonCondition(in []byte, a string, op string, avl []*dynamodb.AttributeValue, subs map[string]*string, vars map[string]*dynamodb.AttributeValue) ([]byte, map[string]*string, map[string]*dynamodb.AttributeValue, error) {
+func appendArithmeticComparisonCondition(in []byte, a string, op types.ComparisonOperator, avl []types.AttributeValue, subs map[string]string, vars map[string]types.AttributeValue) ([]byte, map[string]string, map[string]types.AttributeValue, error) {
 	if err := validateArgCount(1, avl, op, a); err != nil {
 		return in, subs, vars, err
 	}
 	if err := validateScalarAttribute(avl, op); err != nil {
 		return in, subs, vars, err
 	}
+	eop, err := convertArithmeticComparisonOperator(op)
+	if err != nil {
+		return in, subs, vars, err
+	}
 
 	var an, av0 string
 	subs, an = appendAttributeName(subs, a)
-	vars, av0 = appendAttributeValue(vars, *avl[0])
+	vars, av0 = appendAttributeValue(vars, avl[0])
 
 	in = append(in, []byte(an)...)
 	in = append(in, []byte(" ")...)
-	in = append(in, []byte(op)...)
+	in = append(in, []byte(eop)...)
 	in = append(in, []byte(" ")...)
 	in = append(in, []byte(av0)...)
 	return in, subs, vars, nil
 }
 
-func appendAttributeName(subs map[string]*string, a string) (map[string]*string, string) {
+func appendAttributeName(subs map[string]string, a string) (map[string]string, string) {
 	if len(a) == 0 {
 		return subs, ""
 	}
 	if subs == nil {
-		subs = make(map[string]*string)
+		subs = make(map[string]string)
 	}
 	l := len(subs)
 	k := fmt.Sprintf("%s%d", attributeNamesKeyPrefix, l)
@@ -656,13 +711,13 @@ func appendAttributeName(subs map[string]*string, a string) (map[string]*string,
 		l++
 		k = fmt.Sprintf("%s%d", attributeNamesKeyPrefix, l)
 	}
-	subs[k] = &a
+	subs[k] = a
 	return subs, k
 }
 
-func appendAttributeValue(vars map[string]*dynamodb.AttributeValue, av dynamodb.AttributeValue) (map[string]*dynamodb.AttributeValue, string) {
+func appendAttributeValue(vars map[string]types.AttributeValue, av types.AttributeValue) (map[string]types.AttributeValue, string) {
 	if vars == nil {
-		vars = make(map[string]*dynamodb.AttributeValue)
+		vars = make(map[string]types.AttributeValue)
 	}
 	l := len(vars)
 	k := fmt.Sprintf("%s%d", attributeValuesKeyPrefix, l)
@@ -670,69 +725,115 @@ func appendAttributeValue(vars map[string]*dynamodb.AttributeValue, av dynamodb.
 		l++
 		k = fmt.Sprintf("%s%d", attributeValuesKeyPrefix, l)
 	}
-	vars[k] = &av
+	vars[k] = av
 	return vars, k
 }
 
-func validateArgCount(e int, a []*dynamodb.AttributeValue, op, n string) error {
+func validateArgCount(e int, a []types.AttributeValue, op types.ComparisonOperator, n string) error {
 	if a == nil && e > 0 {
-		return awserr.New(ErrCodeValidationException, fmt.Sprintf("One or more parameter values were invalid: Value or AttributeValueList must be used with ComparisonOperator: %s for Attribute %s", op, n), nil)
+		return &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: fmt.Sprintf("One or more parameter values were invalid: Value or AttributeValueList must be used with ComparisonOperator: %s for Attribute %s", op, n),
+			Fault:   smithy.FaultClient,
+		}
 	}
 	if len(a) != e {
-		return awserr.New(ErrCodeValidationException, fmt.Sprintf("One or more parameter values were invalid: Invalid number of argument(s) for the %s ComparisonOperator", op), nil)
+		return &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: fmt.Sprintf("One or more parameter values were invalid: Invalid number of argument(s) for the %s ComparisonOperator", op),
+			Fault:   smithy.FaultClient,
+		}
 	}
 	for _, i := range a {
 		if i == nil {
-			return awserr.New(ErrCodeValidationException, fmt.Sprintf("One or more parameter values were invalid: Invalid number of argument(s) for the %s ComparisonOperator", op), nil)
-		}
-	}
-	return nil
-}
-
-func validateScalarAttribute(avl []*dynamodb.AttributeValue, op string) error {
-	if op == "=" || op == "<>" {
-		return nil
-	}
-	for _, v := range avl {
-		if v != nil {
-			if v.S == nil && v.N == nil && v.B == nil {
-				return awserr.New(ErrCodeValidationException, fmt.Sprintf("One or more parameter values were invalid: ComparisonOperator %s is not valid for %s AttributeValue type", op, attributeTypeName(*v)), nil)
+			return &smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: fmt.Sprintf("One or more parameter values were invalid: Invalid number of argument(s) for the %s ComparisonOperator", op),
+				Fault:   smithy.FaultClient,
 			}
 		}
 	}
 	return nil
 }
 
-func validateNotKeyCondition(kc bool, op string) error {
-	if kc {
-		return awserr.New(ErrCodeValidationException, fmt.Sprintf("Unsupported operator on KeyCondition: %s", op), nil)
+func validateScalarAttribute(avl []types.AttributeValue, op types.ComparisonOperator) error {
+	if op == types.ComparisonOperatorEq || op == types.ComparisonOperatorNe {
+		return nil
+	}
+	for _, v := range avl {
+		if v != nil {
+			switch v.(type) {
+			case *types.AttributeValueMemberS, *types.AttributeValueMemberN, *types.AttributeValueMemberB:
+			// ok
+			default:
+				return &smithy.GenericAPIError{
+					Code:    ErrCodeValidationException,
+					Message: fmt.Sprintf("One or more parameter values were invalid: ComparisonOperator %s is not valid for %s AttributeValue type", op, attributeTypeName(v)),
+					Fault:   smithy.FaultClient,
+				}
+			}
+		}
 	}
 	return nil
 }
 
-func attributeTypeName(v dynamodb.AttributeValue) string {
-	switch {
-	case v.S != nil:
-		return dynamodb.ScalarAttributeTypeS
-	case v.N != nil:
-		return dynamodb.ScalarAttributeTypeN
-	case v.B != nil:
-		return dynamodb.ScalarAttributeTypeB
-	case len(v.SS) > 0:
+func validateNotKeyCondition(kc bool, op types.ComparisonOperator) error {
+	if kc {
+		return &smithy.GenericAPIError{
+			Code:    ErrCodeValidationException,
+			Message: fmt.Sprintf("Unsupported operator on KeyCondition: %s", op),
+			Fault:   smithy.FaultClient,
+		}
+	}
+	return nil
+}
+
+func attributeTypeName(v types.AttributeValue) string {
+	switch v.(type) {
+	case *types.AttributeValueMemberS:
+		return string(types.ScalarAttributeTypeS)
+	case *types.AttributeValueMemberN:
+		return string(types.ScalarAttributeTypeN)
+	case *types.AttributeValueMemberB:
+		return string(types.ScalarAttributeTypeB)
+	case *types.AttributeValueMemberSS:
 		return "SS"
-	case len(v.NS) > 0:
+	case *types.AttributeValueMemberNS:
 		return "NS"
-	case len(v.BS) > 0:
+	case *types.AttributeValueMemberBS:
 		return "BS"
-	case len(v.M) > 0:
+	case *types.AttributeValueMemberM:
 		return "M"
-	case len(v.L) > 0:
+	case *types.AttributeValueMemberL:
 		return "L"
-	case v.BOOL != nil:
+	case *types.AttributeValueMemberBOOL:
 		return "BOOL"
-	case v.NULL != nil:
+	case *types.AttributeValueMemberNULL:
 		return "NULL"
 	default:
 		return ""
+	}
+}
+
+func convertArithmeticComparisonOperator(op types.ComparisonOperator) (string, error) {
+	// convert inequality operator
+	switch op {
+	case types.ComparisonOperatorEq:
+		return "=", nil
+	case types.ComparisonOperatorNe:
+		return "<>", nil
+	case types.ComparisonOperatorLe:
+		return "<=", nil
+	case types.ComparisonOperatorGe:
+		return ">=", nil
+	case types.ComparisonOperatorLt:
+		return "<", nil
+	case types.ComparisonOperatorGt:
+		return ">", nil
+	}
+	return "", &smithy.GenericAPIError{
+		Code:    ErrCodeValidationException,
+		Message: fmt.Sprintf("Unknown arithmetic comparison operator: %s", op),
+		Fault:   smithy.FaultClient,
 	}
 }

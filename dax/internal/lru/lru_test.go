@@ -18,7 +18,6 @@ package lru
 import (
 	"context"
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -28,7 +27,7 @@ import (
 
 func TestLruGet(t *testing.T) {
 	c := &Lru{
-		LoadFunc: func(ctx aws.Context, key Key) (interface{}, error) {
+		LoadFunc: func(ctx context.Context, key Key) (interface{}, error) {
 			return key, nil
 		},
 	}
@@ -47,7 +46,7 @@ func TestLruGet(t *testing.T) {
 func TestLruKeyMarshaller(t *testing.T) {
 	loadCount := 0
 	c := &Lru{
-		LoadFunc: func(ctx aws.Context, key Key) (interface{}, error) {
+		LoadFunc: func(ctx context.Context, key Key) (interface{}, error) {
 			loadCount++
 			return key, nil
 		},
@@ -71,7 +70,7 @@ func TestLruKeyMarshaller(t *testing.T) {
 
 func TestLruEvict(t *testing.T) {
 	loads := 0
-	loadFn := func(ctx aws.Context, key Key) (interface{}, error) {
+	loadFn := func(ctx context.Context, key Key) (interface{}, error) {
 		loads++
 		return key, nil
 	}
@@ -121,7 +120,7 @@ func TestLruEvict(t *testing.T) {
 }
 
 func TestLruTimeout(t *testing.T) {
-	loadFn := func(ctx aws.Context, key Key) (interface{}, error) {
+	loadFn := func(ctx context.Context, key Key) (interface{}, error) {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -134,7 +133,7 @@ func TestLruTimeout(t *testing.T) {
 		LoadFunc:   loadFn,
 	}
 
-	ctx, cfn := context.WithTimeout(aws.BackgroundContext(), 1*time.Millisecond)
+	ctx, cfn := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cfn()
 	key := "key1"
 	v, err := c.GetWithContext(ctx, key)
@@ -149,7 +148,7 @@ func TestLruTimeout(t *testing.T) {
 func TestLruConcurrentLoad(t *testing.T) {
 	var loads int32
 	loadTime := 10 * time.Millisecond
-	loadFn := func(ctx aws.Context, key Key) (interface{}, error) {
+	loadFn := func(ctx context.Context, key Key) (interface{}, error) {
 		<-time.After(loadTime)
 		atomic.AddInt32(&loads, 1)
 		return key, nil
@@ -195,7 +194,7 @@ func TestLruConcurrentLoad(t *testing.T) {
 
 func TestLruSingleLoader(t *testing.T) {
 	valueCh := make(chan interface{})
-	loadFn := func(ctx aws.Context, key Key) (interface{}, error) {
+	loadFn := func(ctx context.Context, key Key) (interface{}, error) {
 		return <-valueCh, nil
 	}
 
@@ -252,7 +251,7 @@ func TestLoadGroup(t *testing.T) {
 
 func BenchmarkLruGet(b *testing.B) {
 	c := &Lru{
-		LoadFunc: func(ctx aws.Context, key Key) (interface{}, error) {
+		LoadFunc: func(ctx context.Context, key Key) (interface{}, error) {
 			return key, nil
 		},
 	}

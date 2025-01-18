@@ -17,42 +17,42 @@ package cbor
 
 import (
 	"bytes"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"reflect"
 	"testing"
+
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
 func TestAttrVal(t *testing.T) {
 	cases := []struct {
-		val dynamodb.AttributeValue
+		val types.AttributeValue
 		enc []byte
 	}{
-		{val: dynamodb.AttributeValue{S: aws.String("abc")}},
-		{val: dynamodb.AttributeValue{S: aws.String("abcdefghijklmnopqrstuvwxyz0123456789")}},
-		{val: dynamodb.AttributeValue{N: aws.String("123")}},
-		{val: dynamodb.AttributeValue{N: aws.String("-123")}},
-		{val: dynamodb.AttributeValue{N: aws.String("123456789012345678901234567890")}},
-		{val: dynamodb.AttributeValue{N: aws.String("-123456789012345678901234567890")}},
-		{val: dynamodb.AttributeValue{N: aws.String("314E-2")}},
-		{val: dynamodb.AttributeValue{N: aws.String("-314E-2")}},
-		//{val: dynamodb.AttributeValue{N: stringptr("3.14")}},	// Decimal.String() return 314E-2
-		{val: dynamodb.AttributeValue{B: fromHex("0x010203")}},
-		{val: dynamodb.AttributeValue{SS: []*string{aws.String("abc"), aws.String("def"), aws.String("xyz")}}},
-		{val: dynamodb.AttributeValue{NS: []*string{aws.String("123"), aws.String("456"), aws.String("789")}}},
-		{val: dynamodb.AttributeValue{BS: [][]byte{fromHex("0x010203"), fromHex("0x040506")}}},
-		{val: dynamodb.AttributeValue{L: []*dynamodb.AttributeValue{&dynamodb.AttributeValue{S: aws.String("abc")}, &dynamodb.AttributeValue{N: aws.String("123")}}}},
-		{val: dynamodb.AttributeValue{M: map[string]*dynamodb.AttributeValue{"s": &dynamodb.AttributeValue{S: aws.String("abc")}, "n": &dynamodb.AttributeValue{N: aws.String("123")}}}},
-		{val: dynamodb.AttributeValue{BOOL: aws.Bool(true)}},
-		{val: dynamodb.AttributeValue{BOOL: aws.Bool(false)}},
-		{val: dynamodb.AttributeValue{NULL: aws.Bool(true)}},
+		{val: &types.AttributeValueMemberS{Value: "abc"}},
+		{val: &types.AttributeValueMemberS{Value: "abcdefghijklmnopqrstuvwxyz0123456789"}},
+		{val: &types.AttributeValueMemberN{Value: "123"}},
+		{val: &types.AttributeValueMemberN{Value: "-123"}},
+		{val: &types.AttributeValueMemberN{Value: "123456789012345678901234567890"}},
+		{val: &types.AttributeValueMemberN{Value: "-123456789012345678901234567890"}},
+		{val: &types.AttributeValueMemberN{Value: "314E-2"}},
+		{val: &types.AttributeValueMemberN{Value: "-314E-2"}},
+		//{val: types.AttributeValue{N: stringptr("3.14")}},	// Decimal.String() return 314E-2
+		{val: &types.AttributeValueMemberB{Value: fromHex("0x010203")}},
+		{val: &types.AttributeValueMemberSS{Value: []string{"abc", "def", "xyz"}}},
+		{val: &types.AttributeValueMemberNS{Value: []string{"123", "456", "789"}}},
+		{val: &types.AttributeValueMemberBS{Value: [][]byte{fromHex("0x010203"), fromHex("0x040506")}}},
+		{val: &types.AttributeValueMemberL{Value: []types.AttributeValue{&types.AttributeValueMemberS{Value: "abc"}, &types.AttributeValueMemberN{Value: "123"}}}},
+		{val: &types.AttributeValueMemberM{Value: map[string]types.AttributeValue{"s": &types.AttributeValueMemberS{Value: "abc"}, "n": &types.AttributeValueMemberN{Value: "123"}}}},
+		{val: &types.AttributeValueMemberBOOL{Value: true}},
+		{val: &types.AttributeValueMemberBOOL{Value: false}},
+		{val: &types.AttributeValueMemberNULL{Value: true}},
 	}
 
 	for _, c := range cases {
 		lval := c.val
 		var buf bytes.Buffer
 		w := NewWriter(&buf)
-		if err := EncodeAttributeValue(&lval, w); err != nil {
+		if err := EncodeAttributeValue(lval, w); err != nil {
 			t.Errorf("unexpected error %v for %v", err, lval)
 			continue
 		}
@@ -61,8 +61,8 @@ func TestAttrVal(t *testing.T) {
 			continue
 		}
 
-		bytes := buf.Bytes()
-		if c.enc != nil && !reflect.DeepEqual(c.enc, bytes) {
+		bufBytes := buf.Bytes()
+		if c.enc != nil && !reflect.DeepEqual(c.enc, bufBytes) {
 			t.Errorf("incorrect encoding for %v", c.val)
 		}
 
@@ -73,7 +73,7 @@ func TestAttrVal(t *testing.T) {
 			continue
 		}
 
-		if !reflect.DeepEqual(lval, *rval) {
+		if !reflect.DeepEqual(lval, rval) {
 			t.Errorf("expected: %v, actual: %v", lval, rval)
 		}
 	}
@@ -101,7 +101,7 @@ func TestDecodeIntBoundariesFromCbor(t *testing.T) {
 		if err != nil {
 			t.Errorf("unexpected error %v for %s", err, e.name)
 		}
-		if eAttr := (dynamodb.AttributeValue{N: aws.String(e.value.String())}); !reflect.DeepEqual(eAttr, *a) {
+		if eAttr := types.AttributeValue(&types.AttributeValueMemberN{Value: e.value.String()}); !reflect.DeepEqual(eAttr, a) {
 			t.Errorf("test %s expected: %v, actual: %v", e.name, eAttr, a)
 		}
 	}

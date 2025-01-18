@@ -2,9 +2,10 @@ package client
 
 import (
 	"context"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/stretchr/testify/mock"
+	"errors"
 	"testing"
+
+	"github.com/stretchr/testify/mock"
 )
 
 // Generate all unit tests for onReadRequest method in healthStatus file
@@ -51,7 +52,7 @@ func Test_onErrorInReadRequest_differentError(t *testing.T) {
 	}
 
 	prevReadTimeoutCount = ehs.curReadTimeoutCount
-	hs.onErrorInReadRequest(awserr.New("c1", "msg", nil), nil)
+	hs.onErrorInReadRequest(errors.New("non timeout error"), nil)
 	if ehs.curReadTimeoutCount != prevReadTimeoutCount {
 		t.Errorf("onErrorInReadRequest incremented curReadTimeoutCount on non timeout error")
 	}

@@ -23,16 +23,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
 func TestExpressionEncoder(t *testing.T) {
 	cases := []struct {
 		typ  int
 		in   string
-		subs map[string]*string
-		vars map[string]*dynamodb.AttributeValue
+		subs map[string]string
+		vars map[string]types.AttributeValue
 		out  []byte
 	}{
 		{
@@ -58,7 +57,7 @@ func TestExpressionEncoder(t *testing.T) {
 		{
 			typ:  ProjectionExpr,
 			in:   "a1,a3.#s1",
-			subs: map[string]*string{"#s1": aws.String("k2")},
+			subs: map[string]string{"#s1": "k2"},
 			out:  fromHex("0x82018282126261318312626133626B32"),
 		},
 		{
@@ -69,24 +68,24 @@ func TestExpressionEncoder(t *testing.T) {
 		{
 			typ:  FilterExpr,
 			in:   "a1 <> :v1",
-			vars: map[string]*dynamodb.AttributeValue{":v1": &dynamodb.AttributeValue{N: aws.String("5")}},
+			vars: map[string]types.AttributeValue{":v1": &types.AttributeValueMemberN{Value: "5"}},
 			out:  fromHex("0x8301830182126261318211008105"),
 		},
 		{
 			typ: FilterExpr,
 			in:  "a1 < :v1 and a2 >= :v2",
-			vars: map[string]*dynamodb.AttributeValue{
-				":v1": &dynamodb.AttributeValue{N: aws.String("5")},
-				":v2": &dynamodb.AttributeValue{N: aws.String("10")},
+			vars: map[string]types.AttributeValue{
+				":v1": &types.AttributeValueMemberN{Value: "5"},
+				":v2": &types.AttributeValueMemberN{Value: "10"},
 			},
 			out: fromHex("0x83018306830282126261318211008303821262613282110182050A"),
 		},
 		{
 			typ: FilterExpr,
 			in:  "a1 > :v1 or a2 <= :v2",
-			vars: map[string]*dynamodb.AttributeValue{
-				":v1": &dynamodb.AttributeValue{N: aws.String("5")},
-				":v2": &dynamodb.AttributeValue{N: aws.String("10")},
+			vars: map[string]types.AttributeValue{
+				":v1": &types.AttributeValueMemberN{Value: "5"},
+				":v2": &types.AttributeValueMemberN{Value: "10"},
 			},
 			out: fromHex("0x83018307830482126261318211008305821262613282110182050A"),
 		},
@@ -103,9 +102,9 @@ func TestExpressionEncoder(t *testing.T) {
 		{
 			typ: FilterExpr,
 			in:  "a between :v1 and :v2",
-			vars: map[string]*dynamodb.AttributeValue{
-				":v1": &dynamodb.AttributeValue{N: aws.String("5")},
-				":v2": &dynamodb.AttributeValue{N: aws.String("10")},
+			vars: map[string]types.AttributeValue{
+				":v1": &types.AttributeValueMemberN{Value: "5"},
+				":v2": &types.AttributeValueMemberN{Value: "10"},
 			},
 			out: fromHex("0x830184098212616182110082110182050A"),
 		},
@@ -117,7 +116,7 @@ func TestExpressionEncoder(t *testing.T) {
 		{
 			typ:  ConditionExpr,
 			in:   "attribute_not_exists(#a.k1)",
-			subs: map[string]*string{"#a": aws.String("a1")},
+			subs: map[string]string{"#a": "a1"},
 			out:  fromHex("0x8301820C8312626131626B3180"),
 		},
 		{
@@ -133,7 +132,7 @@ func TestExpressionEncoder(t *testing.T) {
 		{
 			typ:  ConditionExpr,
 			in:   "CONTAINS(a, :v)",
-			vars: map[string]*dynamodb.AttributeValue{":v": &dynamodb.AttributeValue{N: aws.String("5")}},
+			vars: map[string]types.AttributeValue{":v": &types.AttributeValueMemberN{Value: "5"}},
 			out:  fromHex("0x8301830F821261618211008105"),
 		},
 		{
@@ -144,34 +143,34 @@ func TestExpressionEncoder(t *testing.T) {
 		{
 			typ: UpdateExpr,
 			in:  "SET #pr.#5star[1] = :r5, #pr.#3star = :r3",
-			subs: map[string]*string{
-				"#pr":    aws.String("a1"),
-				"#5star": aws.String("k5"),
-				"#3star": aws.String("k3"),
+			subs: map[string]string{
+				"#pr":    "a1",
+				"#5star": "k5",
+				"#3star": "k3",
 			},
-			vars: map[string]*dynamodb.AttributeValue{
-				":r3": &dynamodb.AttributeValue{N: aws.String("3")},
-				":r5": &dynamodb.AttributeValue{N: aws.String("5")},
+			vars: map[string]types.AttributeValue{
+				":r3": &types.AttributeValueMemberN{Value: "3"},
+				":r5": &types.AttributeValueMemberN{Value: "5"},
 			},
 			out: fromHex("0x83018283138412626131626B35D90CFC0182110083138312626131626B33821101820503"),
 		},
 		{
 			typ:  UpdateExpr,
 			in:   "SET Price = Price - :p",
-			vars: map[string]*dynamodb.AttributeValue{":p": &dynamodb.AttributeValue{N: aws.String("5")}},
+			vars: map[string]types.AttributeValue{":p": &types.AttributeValueMemberN{Value: "5"}},
 			out:  fromHex("0x8301818313821265507269636583181A82126550726963658211008105"),
 		},
 		{
 			typ:  UpdateExpr,
 			in:   "SET #ri = list_append(#ri, :vals)",
-			subs: map[string]*string{"#ri": aws.String("RelatedItems")},
-			vars: map[string]*dynamodb.AttributeValue{":vals": &dynamodb.AttributeValue{N: aws.String("5")}},
+			subs: map[string]string{"#ri": "RelatedItems"},
+			vars: map[string]types.AttributeValue{":vals": &types.AttributeValueMemberN{Value: "5"}},
 			out:  fromHex("0x830181831382126C52656C617465644974656D7383181882126C52656C617465644974656D738211008105"),
 		},
 		{
 			typ:  UpdateExpr,
 			in:   "SET Price = if_not_exists(Price, :p)",
-			vars: map[string]*dynamodb.AttributeValue{":p": &dynamodb.AttributeValue{N: aws.String("10")}},
+			vars: map[string]types.AttributeValue{":p": &types.AttributeValueMemberN{Value: "10"}},
 			out:  fromHex("0x8301818313821265507269636583178212655072696365821100810A"),
 		},
 		{
@@ -182,19 +181,19 @@ func TestExpressionEncoder(t *testing.T) {
 		{
 			typ:  UpdateExpr,
 			in:   "ADD QuantityOnHand :q",
-			vars: map[string]*dynamodb.AttributeValue{":q": &dynamodb.AttributeValue{N: aws.String("5")}},
+			vars: map[string]types.AttributeValue{":q": &types.AttributeValueMemberN{Value: "5"}},
 			out:  fromHex("0x830181831482126E5175616E746974794F6E48616E648211008105"),
 		},
 		{
 			typ:  UpdateExpr,
 			in:   "DELETE Color :p",
-			vars: map[string]*dynamodb.AttributeValue{":p": &dynamodb.AttributeValue{N: aws.String("5")}},
+			vars: map[string]types.AttributeValue{":p": &types.AttributeValueMemberN{Value: "5"}},
 			out:  fromHex("0x8301818315821265436F6C6F728211008105"),
 		},
 		{
 			typ:  UpdateExpr,
 			in:   "DELETE Color :p, Color_2 :p",
-			vars: map[string]*dynamodb.AttributeValue{":p": &dynamodb.AttributeValue{N: aws.String("5")}},
+			vars: map[string]types.AttributeValue{":p": &types.AttributeValueMemberN{Value: "5"}},
 			out:  fromHex("0x8301828315821265436F6C6F728211008315821267436F6C6F725F328211008105"),
 		},
 	}
@@ -225,8 +224,8 @@ func TestExpressionEncoderErrors(t *testing.T) {
 	cases := []struct {
 		typ  int
 		in   string
-		subs map[string]*string
-		vars map[string]*dynamodb.AttributeValue
+		subs map[string]string
+		vars map[string]types.AttributeValue
 		err  error
 	}{
 		{
@@ -237,7 +236,7 @@ func TestExpressionEncoderErrors(t *testing.T) {
 		{
 			typ:  ProjectionExpr,
 			in:   "a",
-			subs: map[string]*string{"#b": aws.String("c")},
+			subs: map[string]string{"#b": "c"},
 			err:  newInvalidParameterError("Value provided in ExpressionAttributeNames unused in expressions: keys: {#b}"),
 		},
 		{
@@ -253,9 +252,9 @@ func TestExpressionEncoderErrors(t *testing.T) {
 		{
 			typ: ConditionExpr,
 			in:  "a < :v",
-			vars: map[string]*dynamodb.AttributeValue{
-				":v": &dynamodb.AttributeValue{N: aws.String("10")},
-				":z": &dynamodb.AttributeValue{N: aws.String("5")},
+			vars: map[string]types.AttributeValue{
+				":v": &types.AttributeValueMemberN{Value: "10"},
+				":z": &types.AttributeValueMemberN{Value: "5"},
 			},
 			err: newInvalidParameterError("Value provided in ExpressionAttributeValues unused in expressions: keys: {:z}"),
 		},
@@ -335,9 +334,9 @@ func BenchmarkFilter(b *testing.B) {
 	expr := map[int]string{
 		KeyConditionExpr: "pk = :v1 and hk < :v2",
 	}
-	vars := map[string]*dynamodb.AttributeValue{
-		":v1": &dynamodb.AttributeValue{S: aws.String("pkval")},
-		":v2": &dynamodb.AttributeValue{N: aws.String("5")},
+	vars := map[string]types.AttributeValue{
+		":v1": &types.AttributeValueMemberS{Value: "pkval"},
+		":v2": &types.AttributeValueMemberN{Value: "5"},
 	}
 	expected := []byte{131, 1, 131, 6, 131, 0, 130, 18, 98, 112, 107, 130, 17, 0, 131, 2, 130, 18, 98, 104, 107, 130, 17, 1, 130, 101, 112, 107, 118, 97, 108, 5}
 

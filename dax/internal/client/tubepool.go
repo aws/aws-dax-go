@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-dax-go/dax/internal/proxy"
-	"github.com/aws/aws-sdk-go/aws"
 )
 
 const network = "tcp"
@@ -348,8 +347,8 @@ func (p *tubePool) sessionBump() {
 
 // Logs debug logs if DEBUG logging is enabled.
 func (p *tubePool) logDebug(opt RequestOptions, logString string) {
-	if opt.Logger != nil && opt.LogLevel.AtLeast(aws.LogDebug) {
-		opt.Logger.Log(logString)
+	if opt.Logger != nil {
+		opt.Logger.Logf(ClassificationDebug, logString)
 	}
 }
 

@@ -1,75 +1,63 @@
 package client
 
 import (
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"context"
 	"testing"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 )
 
 type mockDaxAPI struct {
 	id int
 }
 
-func (m mockDaxAPI) PutItemWithOptions(input *dynamodb.PutItemInput, output *dynamodb.PutItemOutput, opt RequestOptions) (*dynamodb.PutItemOutput, error) {
+func (m mockDaxAPI) PutItemWithOptions(_ context.Context, _ *dynamodb.PutItemInput, _ RequestOptions) (*dynamodb.PutItemOutput, error) {
 	panic("implement me")
 }
 
-func (m mockDaxAPI) DeleteItemWithOptions(input *dynamodb.DeleteItemInput, output *dynamodb.DeleteItemOutput, opt RequestOptions) (*dynamodb.DeleteItemOutput, error) {
+func (m mockDaxAPI) DeleteItemWithOptions(_ context.Context, _ *dynamodb.DeleteItemInput, _ RequestOptions) (*dynamodb.DeleteItemOutput, error) {
 	panic("implement me")
 }
 
-func (m mockDaxAPI) UpdateItemWithOptions(input *dynamodb.UpdateItemInput, output *dynamodb.UpdateItemOutput, opt RequestOptions) (*dynamodb.UpdateItemOutput, error) {
+func (m mockDaxAPI) UpdateItemWithOptions(_ context.Context, _ *dynamodb.UpdateItemInput, _ RequestOptions) (*dynamodb.UpdateItemOutput, error) {
 	panic("implement me")
 }
 
-func (m mockDaxAPI) GetItemWithOptions(input *dynamodb.GetItemInput, output *dynamodb.GetItemOutput, opt RequestOptions) (*dynamodb.GetItemOutput, error) {
+func (m mockDaxAPI) GetItemWithOptions(_ context.Context, _ *dynamodb.GetItemInput, _ RequestOptions) (*dynamodb.GetItemOutput, error) {
 	panic("implement me")
 }
 
-func (m mockDaxAPI) ScanWithOptions(input *dynamodb.ScanInput, output *dynamodb.ScanOutput, opt RequestOptions) (*dynamodb.ScanOutput, error) {
+func (m mockDaxAPI) ScanWithOptions(_ context.Context, _ *dynamodb.ScanInput, _ RequestOptions) (*dynamodb.ScanOutput, error) {
 	panic("implement me")
 }
 
-func (m mockDaxAPI) QueryWithOptions(input *dynamodb.QueryInput, output *dynamodb.QueryOutput, opt RequestOptions) (*dynamodb.QueryOutput, error) {
+func (m mockDaxAPI) QueryWithOptions(_ context.Context, _ *dynamodb.QueryInput, _ RequestOptions) (*dynamodb.QueryOutput, error) {
 	panic("implement me")
 }
 
-func (m mockDaxAPI) BatchWriteItemWithOptions(input *dynamodb.BatchWriteItemInput, output *dynamodb.BatchWriteItemOutput, opt RequestOptions) (*dynamodb.BatchWriteItemOutput, error) {
+func (m mockDaxAPI) BatchWriteItemWithOptions(_ context.Context, _ *dynamodb.BatchWriteItemInput, _ RequestOptions) (*dynamodb.BatchWriteItemOutput, error) {
 	panic("implement me")
 }
 
-func (m mockDaxAPI) BatchGetItemWithOptions(input *dynamodb.BatchGetItemInput, output *dynamodb.BatchGetItemOutput, opt RequestOptions) (*dynamodb.BatchGetItemOutput, error) {
+func (m mockDaxAPI) BatchGetItemWithOptions(_ context.Context, _ *dynamodb.BatchGetItemInput, _ RequestOptions) (*dynamodb.BatchGetItemOutput, error) {
 	panic("implement me")
 }
 
-func (m mockDaxAPI) TransactWriteItemsWithOptions(input *dynamodb.TransactWriteItemsInput, output *dynamodb.TransactWriteItemsOutput, opt RequestOptions) (*dynamodb.TransactWriteItemsOutput, error) {
+func (m mockDaxAPI) TransactWriteItemsWithOptions(_ context.Context, _ *dynamodb.TransactWriteItemsInput, _ RequestOptions) (*dynamodb.TransactWriteItemsOutput, error) {
 	panic("implement me")
 }
 
-func (m mockDaxAPI) TransactGetItemsWithOptions(input *dynamodb.TransactGetItemsInput, output *dynamodb.TransactGetItemsOutput, opt RequestOptions) (*dynamodb.TransactGetItemsOutput, error) {
+func (m mockDaxAPI) TransactGetItemsWithOptions(_ context.Context, _ *dynamodb.TransactGetItemsInput, _ RequestOptions) (*dynamodb.TransactGetItemsOutput, error) {
 	panic("implement me")
 }
 
-func (m mockDaxAPI) NewDaxRequest(op *request.Operation, input, output interface{}, opt RequestOptions) *request.Request {
-	panic("implement me")
-}
-
-func (m mockDaxAPI) build(req *request.Request) {
-	panic("implement me")
-}
-
-func (m mockDaxAPI) send(req *request.Request) {
-	panic("implement me")
-}
-
-func (m mockDaxAPI) endpoints(opt RequestOptions) ([]serviceEndpoint, error) {
+func (m mockDaxAPI) endpoints(_ context.Context, _ RequestOptions) ([]serviceEndpoint, error) {
 	panic("implement me")
 }
 
 func Test_disabledRouteManager(t *testing.T) {
-	rm := newRouteManager(false, time.Second, nil, aws.LogOff)
+	rm := newRouteManager(false, time.Second, nil)
 	defer rm.close()
 	if rm.isEnabled {
 		t.Errorf("Expected route manager to be disabled")
@@ -87,7 +75,7 @@ func Test_disabledRouteManager(t *testing.T) {
 }
 
 func Test_setRoutes(t *testing.T) {
-	rm := newRouteManager(true, time.Second, nil, aws.LogOff)
+	rm := newRouteManager(true, time.Second, nil)
 	defer rm.close()
 	if len(rm.routes) != 0 {
 		t.Errorf("Expected empty routes list, got %v", rm.routes)
@@ -98,7 +86,7 @@ func Test_setRoutes(t *testing.T) {
 	}
 }
 func Test_getRoute(t *testing.T) {
-	rm := newRouteManager(true, time.Second, nil, aws.LogOff)
+	rm := newRouteManager(true, time.Second, nil)
 	defer rm.close()
 	if rm.getRoute(nil) != nil {
 		t.Errorf("Expected nil route, got other")
@@ -118,7 +106,7 @@ func Test_getRoute(t *testing.T) {
 }
 
 func Test_addRoute(t *testing.T) {
-	rm := newRouteManager(true, time.Second, nil, aws.LogOff)
+	rm := newRouteManager(true, time.Second, nil)
 	defer rm.close()
 	if len(rm.routes) != 0 {
 		t.Errorf("Expected empty routes list, got %v", rm.routes)
@@ -130,7 +118,7 @@ func Test_addRoute(t *testing.T) {
 }
 
 func Test_removeRoute(t *testing.T) {
-	rm := newRouteManager(true, time.Second, nil, aws.LogOff)
+	rm := newRouteManager(true, time.Second, nil)
 	defer rm.close()
 	if len(rm.routes) != 0 {
 		t.Errorf("Expected empty routes list, got %v", rm.routes)
@@ -169,7 +157,7 @@ func Test_removeRouteFailOpen(t *testing.T) {
 		hostPort{"dummy.2", 9111}: {client: daxAPI2},
 		hostPort{"dummy.3", 9111}: {client: daxAPI3},
 	}
-	rm := newRouteManager(true, time.Second, nil, aws.LogOff)
+	rm := newRouteManager(true, time.Second, nil)
 	defer rm.close()
 	if len(rm.routes) != 0 {
 		t.Errorf("Expected empty routes list, got %v", rm.routes)
@@ -199,7 +187,7 @@ func Test_removeRouteFailOpen(t *testing.T) {
 }
 
 func Test_verifyAndDisable(t *testing.T) {
-	rm := newRouteManager(true, time.Second, nil, aws.LogOff)
+	rm := newRouteManager(true, time.Second, nil)
 	defer rm.close()
 	rm.disableDuration = 100 * time.Millisecond
 	rm.failOpenTimeList = []time.Time{time.Now(), time.Now(), time.Now()}
@@ -223,7 +211,7 @@ func Test_verifyAndDisable(t *testing.T) {
 }
 
 func Test_rebuildRoutes(t *testing.T) {
-	rm := newRouteManager(true, time.Second, nil, aws.LogOff)
+	rm := newRouteManager(true, time.Second, nil)
 	defer rm.close()
 	daxAPI1 := mockDaxAPI{}
 	daxAPI2 := mockDaxAPI{}
@@ -243,7 +231,7 @@ func Test_rebuildRoutes(t *testing.T) {
 }
 
 func Test_stopTimer(t *testing.T) {
-	rm := newRouteManager(true, time.Second, nil, aws.LogOff)
+	rm := newRouteManager(true, time.Second, nil)
 	defer rm.close()
 	timer := time.AfterFunc(rm.disableDuration, func() { rm.isEnabled = true })
 	rm.timer = timer

@@ -16,7 +16,7 @@
 package lru
 
 import (
-	"github.com/aws/aws-sdk-go/aws"
+	"context"
 	"sync"
 )
 
@@ -28,7 +28,7 @@ type Lru struct {
 
 	// LoadFunc specifies the function that loads a value
 	// for a specific key when not found in the cache.
-	LoadFunc  func(ctx aws.Context, key Key) (interface{}, error)
+	LoadFunc  func(ctx context.Context, key Key) (interface{}, error)
 	loadGroup loadGroup
 
 	// Optional KeyMarshaller. Caller should provide one when using
@@ -62,7 +62,7 @@ func (c *Lru) lookup(key Key) (*entry, bool) {
 	return v, ok
 }
 
-func (c *Lru) GetWithContext(ctx aws.Context, okey Key) (interface{}, error) {
+func (c *Lru) GetWithContext(ctx context.Context, okey Key) (interface{}, error) {
 	ikey := okey
 	if c.KeyMarshaller != nil {
 		ikey = c.KeyMarshaller(okey)

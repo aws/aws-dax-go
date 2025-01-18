@@ -16,11 +16,13 @@
 package client
 
 import (
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"reflect"
 	"testing"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/aws/smithy-go"
 )
 
 var functions = map[reflect.Type]interface{}{
@@ -40,304 +42,339 @@ func TestTranslateLegacyPositive(t *testing.T) {
 	}{
 		{
 			&dynamodb.GetItemInput{
-				AttributesToGet: []*string{aws.String("a1"), aws.String("a2")},
+				AttributesToGet: []string{"a1", "a2"},
 			},
 			&dynamodb.GetItemInput{
 				ProjectionExpression:     aws.String("#key0,#key1"),
-				ExpressionAttributeNames: map[string]*string{"#key0": aws.String("a1"), "#key1": aws.String("a2")},
+				ExpressionAttributeNames: map[string]string{"#key0": "a1", "#key1": "a2"},
 			},
 		},
 		{
 			&dynamodb.PutItemInput{
-				Expected: map[string]*dynamodb.ExpectedAttributeValue{
-					"a": {Exists: aws.Bool(true), Value: &dynamodb.AttributeValue{N: aws.String("5")}},
+				Expected: map[string]types.ExpectedAttributeValue{
+					"a": {Exists: aws.Bool(true), Value: &types.AttributeValueMemberN{Value: "5"}},
 				},
 			},
 			&dynamodb.PutItemInput{
 				ConditionExpression:       aws.String("#key0 = :val0"),
-				ExpressionAttributeNames:  map[string]*string{"#key0": aws.String("a")},
-				ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{":val0": {N: aws.String("5")}},
+				ExpressionAttributeNames:  map[string]string{"#key0": "a"},
+				ExpressionAttributeValues: map[string]types.AttributeValue{":val0": &types.AttributeValueMemberN{Value: "5"}},
 			},
 		},
 		{
 			&dynamodb.PutItemInput{
-				Expected: map[string]*dynamodb.ExpectedAttributeValue{
+				Expected: map[string]types.ExpectedAttributeValue{
 					"a": {Exists: aws.Bool(false)},
 				},
 			},
 			&dynamodb.PutItemInput{
 				ConditionExpression:      aws.String("attribute_not_exists(#key0)"),
-				ExpressionAttributeNames: map[string]*string{"#key0": aws.String("a")},
+				ExpressionAttributeNames: map[string]string{"#key0": "a"},
 			},
 		},
 		{
 			&dynamodb.PutItemInput{
-				Expected: map[string]*dynamodb.ExpectedAttributeValue{
-					"a": {ComparisonOperator: aws.String(dynamodb.ComparisonOperatorBetween),
-						AttributeValueList: []*dynamodb.AttributeValue{{N: aws.String("5")}, {N: aws.String("6")}}},
+				Expected: map[string]types.ExpectedAttributeValue{
+					"a": {ComparisonOperator: types.ComparisonOperatorBetween,
+						AttributeValueList: []types.AttributeValue{
+							&types.AttributeValueMemberN{Value: "5"},
+							&types.AttributeValueMemberN{Value: "6"},
+						}},
 				},
 			},
 			&dynamodb.PutItemInput{
-				ConditionExpression:       aws.String("#key0 between :val0 and :val1"),
-				ExpressionAttributeNames:  map[string]*string{"#key0": aws.String("a")},
-				ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{":val0": {N: aws.String("5")}, ":val1": {N: aws.String("6")}},
+				ConditionExpression:      aws.String("#key0 between :val0 and :val1"),
+				ExpressionAttributeNames: map[string]string{"#key0": "a"},
+				ExpressionAttributeValues: map[string]types.AttributeValue{
+					":val0": &types.AttributeValueMemberN{Value: "5"},
+					":val1": &types.AttributeValueMemberN{Value: "6"}},
 			},
 		},
 		{
 			&dynamodb.PutItemInput{
-				Expected: map[string]*dynamodb.ExpectedAttributeValue{
-					"a": {ComparisonOperator: aws.String(dynamodb.ComparisonOperatorBeginsWith),
-						AttributeValueList: []*dynamodb.AttributeValue{{S: aws.String("abc")}}},
+				Expected: map[string]types.ExpectedAttributeValue{
+					"a": {ComparisonOperator: types.ComparisonOperatorBeginsWith,
+						AttributeValueList: []types.AttributeValue{&types.AttributeValueMemberS{Value: "abc"}}},
 				},
 			},
 			&dynamodb.PutItemInput{
-				ConditionExpression:       aws.String("begins_with(#key0,:val0)"),
-				ExpressionAttributeNames:  map[string]*string{"#key0": aws.String("a")},
-				ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{":val0": {S: aws.String("abc")}},
+				ConditionExpression:      aws.String("begins_with(#key0,:val0)"),
+				ExpressionAttributeNames: map[string]string{"#key0": "a"},
+				ExpressionAttributeValues: map[string]types.AttributeValue{
+					":val0": &types.AttributeValueMemberS{Value: "abc"},
+				},
 			},
 		},
 		{
 			&dynamodb.PutItemInput{
-				Expected: map[string]*dynamodb.ExpectedAttributeValue{
-					"a": {ComparisonOperator: aws.String(dynamodb.ComparisonOperatorContains),
-						AttributeValueList: []*dynamodb.AttributeValue{{S: aws.String("abc")}}},
+				Expected: map[string]types.ExpectedAttributeValue{
+					"a": {ComparisonOperator: types.ComparisonOperatorContains,
+						AttributeValueList: []types.AttributeValue{&types.AttributeValueMemberS{Value: "abc"}}},
 				},
 			},
 			&dynamodb.PutItemInput{
-				ConditionExpression:       aws.String("contains(#key0,:val0)"),
-				ExpressionAttributeNames:  map[string]*string{"#key0": aws.String("a")},
-				ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{":val0": {S: aws.String("abc")}},
+				ConditionExpression:      aws.String("contains(#key0,:val0)"),
+				ExpressionAttributeNames: map[string]string{"#key0": "a"},
+				ExpressionAttributeValues: map[string]types.AttributeValue{
+					":val0": &types.AttributeValueMemberS{Value: "abc"},
+				},
 			},
 		},
 		{
 			&dynamodb.PutItemInput{
-				Expected: map[string]*dynamodb.ExpectedAttributeValue{
-					"a": {ComparisonOperator: aws.String(dynamodb.ComparisonOperatorNotContains),
-						AttributeValueList: []*dynamodb.AttributeValue{{S: aws.String("abc")}}},
+				Expected: map[string]types.ExpectedAttributeValue{
+					"a": {ComparisonOperator: types.ComparisonOperatorNotContains,
+						AttributeValueList: []types.AttributeValue{&types.AttributeValueMemberS{Value: "abc"}}},
 				},
 			},
 			&dynamodb.PutItemInput{
-				ConditionExpression:       aws.String("not contains(#key0,:val0)"),
-				ExpressionAttributeNames:  map[string]*string{"#key0": aws.String("a")},
-				ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{":val0": {S: aws.String("abc")}},
+				ConditionExpression:      aws.String("not contains(#key0,:val0)"),
+				ExpressionAttributeNames: map[string]string{"#key0": "a"},
+				ExpressionAttributeValues: map[string]types.AttributeValue{
+					":val0": &types.AttributeValueMemberS{Value: "abc"},
+				},
 			},
 		},
 		{
 			&dynamodb.PutItemInput{
-				Expected: map[string]*dynamodb.ExpectedAttributeValue{
-					"a": {ComparisonOperator: aws.String(dynamodb.ComparisonOperatorNull)},
+				Expected: map[string]types.ExpectedAttributeValue{
+					"a": {ComparisonOperator: types.ComparisonOperatorNull},
 				},
 			},
 			&dynamodb.PutItemInput{
 				ConditionExpression:      aws.String("attribute_not_exists(#key0)"),
-				ExpressionAttributeNames: map[string]*string{"#key0": aws.String("a")},
+				ExpressionAttributeNames: map[string]string{"#key0": "a"},
 			},
 		},
 		{
 			&dynamodb.PutItemInput{
-				Expected: map[string]*dynamodb.ExpectedAttributeValue{
-					"a": {ComparisonOperator: aws.String(dynamodb.ComparisonOperatorNotNull)},
+				Expected: map[string]types.ExpectedAttributeValue{
+					"a": {ComparisonOperator: types.ComparisonOperatorNotNull},
 				},
 			},
 			&dynamodb.PutItemInput{
 				ConditionExpression:      aws.String("attribute_exists(#key0)"),
-				ExpressionAttributeNames: map[string]*string{"#key0": aws.String("a")},
+				ExpressionAttributeNames: map[string]string{"#key0": "a"},
 			},
 		},
 		{
 			&dynamodb.PutItemInput{
-				Expected: map[string]*dynamodb.ExpectedAttributeValue{
-					"a": {ComparisonOperator: aws.String(dynamodb.ComparisonOperatorIn),
-						AttributeValueList: []*dynamodb.AttributeValue{{S: aws.String("abc")}, {S: aws.String("def")}, {S: aws.String("ghi")}}},
+				Expected: map[string]types.ExpectedAttributeValue{
+					"a": {ComparisonOperator: types.ComparisonOperatorIn,
+						AttributeValueList: []types.AttributeValue{
+							&types.AttributeValueMemberS{Value: "abc"},
+							&types.AttributeValueMemberS{Value: "def"},
+							&types.AttributeValueMemberS{Value: "ghi"},
+						},
+					},
 				},
 			},
 			&dynamodb.PutItemInput{
-				ConditionExpression:       aws.String("#key0 in (:val0,:val1,:val2)"),
-				ExpressionAttributeNames:  map[string]*string{"#key0": aws.String("a")},
-				ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{":val0": {S: aws.String("abc")}, ":val1": {S: aws.String("def")}, ":val2": {S: aws.String("ghi")}},
+				ConditionExpression:      aws.String("#key0 in (:val0,:val1,:val2)"),
+				ExpressionAttributeNames: map[string]string{"#key0": "a"},
+				ExpressionAttributeValues: map[string]types.AttributeValue{
+					":val0": &types.AttributeValueMemberS{Value: "abc"},
+					":val1": &types.AttributeValueMemberS{Value: "def"},
+					":val2": &types.AttributeValueMemberS{Value: "ghi"}},
 			},
 		},
 		{
 			&dynamodb.PutItemInput{
-				Expected: map[string]*dynamodb.ExpectedAttributeValue{
-					"a": {ComparisonOperator: aws.String(dynamodb.ComparisonOperatorNe),
-						AttributeValueList: []*dynamodb.AttributeValue{{S: aws.String("abc")}}},
+				Expected: map[string]types.ExpectedAttributeValue{
+					"a": {ComparisonOperator: types.ComparisonOperatorNe,
+						AttributeValueList: []types.AttributeValue{&types.AttributeValueMemberS{Value: "abc"}}},
 				},
 			},
 			&dynamodb.PutItemInput{
-				ConditionExpression:       aws.String("#key0 <> :val0"),
-				ExpressionAttributeNames:  map[string]*string{"#key0": aws.String("a")},
-				ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{":val0": {S: aws.String("abc")}},
+				ConditionExpression:      aws.String("#key0 <> :val0"),
+				ExpressionAttributeNames: map[string]string{"#key0": "a"},
+				ExpressionAttributeValues: map[string]types.AttributeValue{
+					":val0": &types.AttributeValueMemberS{Value: "abc"},
+				},
 			},
 		},
 		{
 			&dynamodb.DeleteItemInput{
-				Expected: map[string]*dynamodb.ExpectedAttributeValue{
-					"a": {ComparisonOperator: aws.String(dynamodb.ComparisonOperatorEq),
-						AttributeValueList: []*dynamodb.AttributeValue{{S: aws.String("abc")}}},
+				Expected: map[string]types.ExpectedAttributeValue{
+					"a": {ComparisonOperator: types.ComparisonOperatorEq,
+						AttributeValueList: []types.AttributeValue{&types.AttributeValueMemberS{Value: "abc"}}},
 				},
 			},
 			&dynamodb.DeleteItemInput{
-				ConditionExpression:       aws.String("#key0 = :val0"),
-				ExpressionAttributeNames:  map[string]*string{"#key0": aws.String("a")},
-				ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{":val0": {S: aws.String("abc")}},
+				ConditionExpression:      aws.String("#key0 = :val0"),
+				ExpressionAttributeNames: map[string]string{"#key0": "a"},
+				ExpressionAttributeValues: map[string]types.AttributeValue{
+					":val0": &types.AttributeValueMemberS{Value: "abc"},
+				},
 			},
 		},
 		{
 			&dynamodb.UpdateItemInput{
-				Expected: map[string]*dynamodb.ExpectedAttributeValue{
-					"a": {ComparisonOperator: aws.String(dynamodb.ComparisonOperatorLe),
-						AttributeValueList: []*dynamodb.AttributeValue{{S: aws.String("abc")}}},
+				Expected: map[string]types.ExpectedAttributeValue{
+					"a": {ComparisonOperator: types.ComparisonOperatorLe,
+						AttributeValueList: []types.AttributeValue{&types.AttributeValueMemberS{Value: "abc"}}},
 				},
-				AttributeUpdates: map[string]*dynamodb.AttributeValueUpdate{
-					"b": {Value: &dynamodb.AttributeValue{S: aws.String("def")}},
+				AttributeUpdates: map[string]types.AttributeValueUpdate{
+					"b": {Value: &types.AttributeValueMemberS{Value: "def"}},
 				},
 			},
 			&dynamodb.UpdateItemInput{
 				ConditionExpression: aws.String("#key0 <= :val0"),
 				UpdateExpression:    aws.String("set #key1=:val1"),
-				ExpressionAttributeNames: map[string]*string{
-					"#key0": aws.String("a"),
-					"#key1": aws.String("b"),
+				ExpressionAttributeNames: map[string]string{
+					"#key0": "a",
+					"#key1": "b",
 				},
-				ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-					":val0": {S: aws.String("abc")},
-					":val1": {S: aws.String("def")},
+				ExpressionAttributeValues: map[string]types.AttributeValue{
+					":val0": &types.AttributeValueMemberS{Value: "abc"},
+					":val1": &types.AttributeValueMemberS{Value: "def"},
 				},
 			},
 		},
 		{
 			&dynamodb.UpdateItemInput{
-				AttributeUpdates: map[string]*dynamodb.AttributeValueUpdate{
-					"a": {Action: aws.String(dynamodb.AttributeActionPut), Value: &dynamodb.AttributeValue{S: aws.String("def")}},
+				AttributeUpdates: map[string]types.AttributeValueUpdate{
+					"a": {Action: types.AttributeActionPut, Value: &types.AttributeValueMemberS{Value: "def"}},
 				},
 			},
 			&dynamodb.UpdateItemInput{
 				UpdateExpression: aws.String("set #key0=:val0"),
-				ExpressionAttributeNames: map[string]*string{
-					"#key0": aws.String("a"),
+				ExpressionAttributeNames: map[string]string{
+					"#key0": "a",
 				},
-				ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-					":val0": {S: aws.String("def")},
+				ExpressionAttributeValues: map[string]types.AttributeValue{
+					":val0": &types.AttributeValueMemberS{Value: "def"},
 				},
 			},
 		},
 		{
 			&dynamodb.UpdateItemInput{
-				AttributeUpdates: map[string]*dynamodb.AttributeValueUpdate{
-					"a": {Action: aws.String(dynamodb.AttributeActionAdd), Value: &dynamodb.AttributeValue{S: aws.String("def")}},
+				AttributeUpdates: map[string]types.AttributeValueUpdate{
+					"a": {
+						Action: types.AttributeActionAdd,
+						Value:  &types.AttributeValueMemberS{Value: "def"}},
 				},
 			},
 			&dynamodb.UpdateItemInput{
 				UpdateExpression: aws.String("add #key0 :val0"),
-				ExpressionAttributeNames: map[string]*string{
-					"#key0": aws.String("a"),
+				ExpressionAttributeNames: map[string]string{
+					"#key0": "a",
 				},
-				ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-					":val0": {S: aws.String("def")},
+				ExpressionAttributeValues: map[string]types.AttributeValue{
+					":val0": &types.AttributeValueMemberS{Value: "def"},
 				},
 			},
 		},
 		{
 			&dynamodb.UpdateItemInput{
-				AttributeUpdates: map[string]*dynamodb.AttributeValueUpdate{
-					"a": {Action: aws.String(dynamodb.AttributeActionDelete), Value: &dynamodb.AttributeValue{S: aws.String("def")}},
+				AttributeUpdates: map[string]types.AttributeValueUpdate{
+					"a": {
+						Action: types.AttributeActionDelete,
+						Value:  &types.AttributeValueMemberS{Value: "def"}},
 				},
 			},
 			&dynamodb.UpdateItemInput{
 				UpdateExpression: aws.String("delete #key0 :val0"),
-				ExpressionAttributeNames: map[string]*string{
-					"#key0": aws.String("a"),
+				ExpressionAttributeNames: map[string]string{
+					"#key0": "a",
 				},
-				ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-					":val0": {S: aws.String("def")},
+				ExpressionAttributeValues: map[string]types.AttributeValue{
+					":val0": &types.AttributeValueMemberS{Value: "def"},
 				},
 			},
 		},
 		{
 			&dynamodb.UpdateItemInput{
-				AttributeUpdates: map[string]*dynamodb.AttributeValueUpdate{
-					"a": {Action: aws.String(dynamodb.AttributeActionDelete)},
+				AttributeUpdates: map[string]types.AttributeValueUpdate{
+					"a": {Action: types.AttributeActionDelete},
 				},
 			},
 			&dynamodb.UpdateItemInput{
 				UpdateExpression: aws.String("remove #key0"),
-				ExpressionAttributeNames: map[string]*string{
-					"#key0": aws.String("a"),
+				ExpressionAttributeNames: map[string]string{
+					"#key0": "a",
 				},
 			},
 		},
 		{
 			&dynamodb.ScanInput{
-				AttributesToGet:     []*string{aws.String("a1"), aws.String("a2")},
-				ConditionalOperator: aws.String(dynamodb.ConditionalOperatorOr),
-				ScanFilter: map[string]*dynamodb.Condition{
-					"a": {ComparisonOperator: aws.String(dynamodb.ComparisonOperatorGe), AttributeValueList: []*dynamodb.AttributeValue{{N: aws.String("5")}}},
+				AttributesToGet:     []string{"a1", "a2"},
+				ConditionalOperator: types.ConditionalOperatorOr,
+				ScanFilter: map[string]types.Condition{
+					"a": {
+						ComparisonOperator: types.ComparisonOperatorGe,
+						AttributeValueList: []types.AttributeValue{&types.AttributeValueMemberN{Value: "5"}}},
 				},
 			},
 			&dynamodb.ScanInput{
 				ProjectionExpression: aws.String("#key0,#key1"),
 				FilterExpression:     aws.String("#key2 >= :val0"),
-				ExpressionAttributeNames: map[string]*string{
-					"#key0": aws.String("a1"),
-					"#key1": aws.String("a2"),
-					"#key2": aws.String("a"),
+				ExpressionAttributeNames: map[string]string{
+					"#key0": "a1",
+					"#key1": "a2",
+					"#key2": "a",
 				},
-				ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-					":val0": {N: aws.String("5")},
+				ExpressionAttributeValues: map[string]types.AttributeValue{
+					":val0": &types.AttributeValueMemberN{Value: "5"},
 				},
 			},
 		},
 		{
 			&dynamodb.QueryInput{
-				AttributesToGet:     []*string{aws.String("a1"), aws.String("a2")},
-				ConditionalOperator: aws.String(dynamodb.ConditionalOperatorOr),
-				QueryFilter: map[string]*dynamodb.Condition{
-					"a": {ComparisonOperator: aws.String(dynamodb.ComparisonOperatorGe), AttributeValueList: []*dynamodb.AttributeValue{{N: aws.String("5")}}},
+				AttributesToGet:     []string{"a1", "a2"},
+				ConditionalOperator: types.ConditionalOperatorOr,
+				QueryFilter: map[string]types.Condition{
+					"a": {
+						ComparisonOperator: types.ComparisonOperatorGe,
+						AttributeValueList: []types.AttributeValue{&types.AttributeValueMemberN{Value: "5"}},
+					},
 				},
-				KeyConditions: map[string]*dynamodb.Condition{
-					"k": {ComparisonOperator: aws.String(dynamodb.ComparisonOperatorEq), AttributeValueList: []*dynamodb.AttributeValue{{S: aws.String("abc")}}},
+				KeyConditions: map[string]types.Condition{
+					"k": {
+						ComparisonOperator: types.ComparisonOperatorEq,
+						AttributeValueList: []types.AttributeValue{&types.AttributeValueMemberS{Value: "abc"}},
+					},
 				},
 			},
 			&dynamodb.QueryInput{
 				ProjectionExpression:   aws.String("#key0,#key1"),
 				FilterExpression:       aws.String("#key2 >= :val0"),
 				KeyConditionExpression: aws.String("#key3 = :val1"),
-				ExpressionAttributeNames: map[string]*string{
-					"#key0": aws.String("a1"),
-					"#key1": aws.String("a2"),
-					"#key2": aws.String("a"),
-					"#key3": aws.String("k"),
+				ExpressionAttributeNames: map[string]string{
+					"#key0": "a1",
+					"#key1": "a2",
+					"#key2": "a",
+					"#key3": "k",
 				},
-				ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-					":val0": {N: aws.String("5")},
-					":val1": {S: aws.String("abc")},
+				ExpressionAttributeValues: map[string]types.AttributeValue{
+					":val0": &types.AttributeValueMemberN{Value: "5"},
+					":val1": &types.AttributeValueMemberS{Value: "abc"},
 				},
 			},
 		},
 		{
-			&dynamodb.BatchGetItemInput{
-				RequestItems: map[string]*dynamodb.KeysAndAttributes{
-					"table1": {AttributesToGet: []*string{aws.String("a1"), aws.String("a2")}},
-					"table2": {AttributesToGet: []*string{aws.String("a3"), aws.String("a4")}},
+			inp: &dynamodb.BatchGetItemInput{
+				RequestItems: map[string]types.KeysAndAttributes{
+					"table1": {AttributesToGet: []string{"a1", "a2"}},
+					"table2": {AttributesToGet: []string{"a3", "a4"}},
 				},
 			},
-			&dynamodb.BatchGetItemInput{
-				RequestItems: map[string]*dynamodb.KeysAndAttributes{
+			exp: &dynamodb.BatchGetItemInput{
+				RequestItems: map[string]types.KeysAndAttributes{
 					"table1": {
-						AttributesToGet:      []*string{aws.String("a1"), aws.String("a2")},
+						AttributesToGet:      []string{"a1", "a2"},
 						ProjectionExpression: aws.String("#key0,#key1"),
-						ExpressionAttributeNames: map[string]*string{
-							"#key0": aws.String("a1"),
-							"#key1": aws.String("a2"),
+						ExpressionAttributeNames: map[string]string{
+							"#key0": "a1",
+							"#key1": "a2",
 						},
 					},
 					"table2": {
-						AttributesToGet:      []*string{aws.String("a3"), aws.String("a4")},
+						AttributesToGet:      []string{"a3", "a4"},
 						ProjectionExpression: aws.String("#key0,#key1"),
-						ExpressionAttributeNames: map[string]*string{
-							"#key0": aws.String("a3"),
-							"#key1": aws.String("a4"),
+						ExpressionAttributeNames: map[string]string{
+							"#key0": "a3",
+							"#key1": "a4",
 						},
 					},
 				},
@@ -361,95 +398,148 @@ func TestTranslateLegacyPositive(t *testing.T) {
 func TestTranslateLegacyNegative(t *testing.T) {
 	cases := []struct {
 		inp interface{}
-		err awserr.Error
+		err error
 	}{
 		{
 			&dynamodb.GetItemInput{
-				AttributesToGet:      []*string{aws.String("a1"), aws.String("a2")},
+				AttributesToGet:      []string{"a1", "a2"},
 				ProjectionExpression: aws.String("a1, a2"),
 			},
-			awserr.New(ErrCodeValidationException, "Cannot specify both AttributesToGet and ProjectionExpression", nil),
-		},
-		{
-			&dynamodb.PutItemInput{
-				ConditionExpression:       aws.String("a < :v"),
-				Expected:                  map[string]*dynamodb.ExpectedAttributeValue{"a": {Exists: aws.Bool(true), Value: &dynamodb.AttributeValue{N: aws.String("5")}}},
-				ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{":v": {N: aws.String("5")}},
+			&smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: "Cannot specify both AttributesToGet and ProjectionExpression",
+				Fault:   smithy.FaultClient,
 			},
-			awserr.New(ErrCodeValidationException, "Cannot specify both Expected and ConditionExpression", nil),
 		},
 		{
 			&dynamodb.PutItemInput{
-				Expected: map[string]*dynamodb.ExpectedAttributeValue{
+				ConditionExpression: aws.String("a < :v"),
+				Expected: map[string]types.ExpectedAttributeValue{
+					"a": {Exists: aws.Bool(true), Value: &types.AttributeValueMemberN{Value: "5"}},
+				},
+				ExpressionAttributeValues: map[string]types.AttributeValue{":v": &types.AttributeValueMemberN{Value: "5"}},
+			},
+			&smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: "Cannot specify both Expected and ConditionExpression",
+				Fault:   smithy.FaultClient,
+			},
+		},
+		{
+			&dynamodb.PutItemInput{
+				Expected: map[string]types.ExpectedAttributeValue{
 					"a": {
-						Value:              &dynamodb.AttributeValue{N: aws.String("5")},
-						AttributeValueList: []*dynamodb.AttributeValue{{N: aws.String("5")}},
+						Value:              &types.AttributeValueMemberN{Value: "5"},
+						AttributeValueList: []types.AttributeValue{&types.AttributeValueMemberN{Value: "5"}},
 					},
 				},
 			},
-			awserr.New(ErrCodeValidationException, "One or more parameter values were invalid: Value and AttributeValueList cannot be used together for Attribute: a", nil),
+			&smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: "One or more parameter values were invalid: Value and AttributeValueList cannot be used together for Attribute: a",
+				Fault:   smithy.FaultClient,
+			},
 		},
 		{
 			&dynamodb.PutItemInput{
-				Expected: map[string]*dynamodb.ExpectedAttributeValue{
-					"a": {AttributeValueList: []*dynamodb.AttributeValue{{N: aws.String("5")}}},
+				Expected: map[string]types.ExpectedAttributeValue{
+					"a": {AttributeValueList: []types.AttributeValue{&types.AttributeValueMemberN{Value: "5"}}},
 				},
 			},
-			awserr.New(ErrCodeValidationException, "One or more parameter values were invalid: AttributeValueList can only be used with a ComparisonOperator for Attribute: a", nil),
+			&smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: "One or more parameter values were invalid: AttributeValueList can only be used with a ComparisonOperator for Attribute: a",
+				Fault:   smithy.FaultClient,
+			},
 		},
 		{
 			&dynamodb.PutItemInput{
-				Expected: map[string]*dynamodb.ExpectedAttributeValue{
+				Expected: map[string]types.ExpectedAttributeValue{
 					"a": {Exists: aws.Bool(true)},
 				},
 			},
-			awserr.New(ErrCodeValidationException, "One or more parameter values were invalid: Value must be provided when Exists is true for Attribute: a", nil),
+			&smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: "One or more parameter values were invalid: Value must be provided when Exists is true for Attribute: a",
+				Fault:   smithy.FaultClient,
+			},
 		},
 		{
 			&dynamodb.PutItemInput{
-				Expected: map[string]*dynamodb.ExpectedAttributeValue{
-					"a": {Exists: aws.Bool(false), Value: &dynamodb.AttributeValue{N: aws.String("5")}},
+				Expected: map[string]types.ExpectedAttributeValue{
+					"a": {Exists: aws.Bool(false), Value: &types.AttributeValueMemberN{Value: "5"}},
 				},
 			},
-			awserr.New(ErrCodeValidationException, "One or more parameter values were invalid: Value cannot be used when Exists is false for Attribute: a", nil),
+			&smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: "One or more parameter values were invalid: Value cannot be used when Exists is false for Attribute: a",
+				Fault:   smithy.FaultClient,
+			},
 		},
 		{
 			&dynamodb.PutItemInput{
-				Expected: map[string]*dynamodb.ExpectedAttributeValue{
-					"a": {ComparisonOperator: aws.String(dynamodb.ComparisonOperatorBetween), AttributeValueList: []*dynamodb.AttributeValue{{N: aws.String("5")}, {NULL: aws.Bool(true)}}},
+				Expected: map[string]types.ExpectedAttributeValue{
+					"a": {
+						ComparisonOperator: types.ComparisonOperatorBetween,
+						AttributeValueList: []types.AttributeValue{
+							&types.AttributeValueMemberN{Value: "5"},
+							&types.AttributeValueMemberNULL{Value: true}}},
 				},
 			},
-			awserr.New(ErrCodeValidationException, "One or more parameter values were invalid: ComparisonOperator BETWEEN is not valid for NULL AttributeValue type", nil),
+			&smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: "One or more parameter values were invalid: ComparisonOperator BETWEEN is not valid for NULL AttributeValue type",
+				Fault:   smithy.FaultClient,
+			},
 		},
 		{
 			&dynamodb.UpdateItemInput{
 				UpdateExpression: aws.String("a < :v"),
-				AttributeUpdates: map[string]*dynamodb.AttributeValueUpdate{
-					"a": {Action: aws.String(dynamodb.AttributeActionDelete)},
+				AttributeUpdates: map[string]types.AttributeValueUpdate{
+					"a": {Action: types.AttributeActionDelete},
 				},
-				ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{":v": {N: aws.String("5")}},
+				ExpressionAttributeValues: map[string]types.AttributeValue{":v": &types.AttributeValueMemberN{Value: "5"}},
 			},
-			awserr.New(ErrCodeValidationException, "Cannot specify both AttributeUpdates and UpdateExpression", nil),
+			&smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: "Cannot specify both AttributeUpdates and UpdateExpression",
+				Fault:   smithy.FaultClient,
+			},
 		},
 		{
 			&dynamodb.UpdateItemInput{
 				ConditionExpression:       aws.String("a < :v"),
-				Expected:                  map[string]*dynamodb.ExpectedAttributeValue{"a": {Exists: aws.Bool(true), Value: &dynamodb.AttributeValue{N: aws.String("5")}}},
-				ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{":v": {N: aws.String("5")}},
+				Expected:                  map[string]types.ExpectedAttributeValue{"a": {Exists: aws.Bool(true), Value: &types.AttributeValueMemberN{Value: "5"}}},
+				ExpressionAttributeValues: map[string]types.AttributeValue{":v": &types.AttributeValueMemberN{Value: "5"}},
 			},
-			awserr.New(ErrCodeValidationException, "Cannot specify both Expected and ConditionExpression", nil),
+			&smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: "Cannot specify both Expected and ConditionExpression",
+				Fault:   smithy.FaultClient,
+			},
 		},
 		{
 			&dynamodb.ScanInput{
-				ScanFilter: map[string]*dynamodb.Condition{"a": {}},
+				ScanFilter: map[string]types.Condition{"a": {}},
 			},
-			awserr.New(ErrCodeValidationException, "One or more parameter values were invalid: AttributeValueList can only be used with a ComparisonOperator for Attribute: a", nil),
+			&smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: "One or more parameter values were invalid: AttributeValueList can only be used with a ComparisonOperator for Attribute: a",
+				Fault:   smithy.FaultClient,
+			},
 		},
 		{
 			&dynamodb.QueryInput{
-				KeyConditions: map[string]*dynamodb.Condition{"a": {ComparisonOperator: aws.String(dynamodb.ComparisonOperatorContains), AttributeValueList: []*dynamodb.AttributeValue{{N: aws.String("5")}}}},
+				KeyConditions: map[string]types.Condition{
+					"a": {
+						ComparisonOperator: types.ComparisonOperatorContains,
+						AttributeValueList: []types.AttributeValue{&types.AttributeValueMemberN{Value: "5"}}}},
 			},
-			awserr.New(ErrCodeValidationException, "Unsupported operator on KeyCondition: CONTAINS", nil),
+			&smithy.GenericAPIError{
+				Code:    ErrCodeValidationException,
+				Message: "Unsupported operator on KeyCondition: CONTAINS",
+				Fault:   smithy.FaultClient,
+			},
 		},
 	}
 

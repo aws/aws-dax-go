@@ -19,9 +19,10 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-	"github.com/aws/aws-sdk-go/aws/credentials"
 	"strings"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
 )
 
 const (
@@ -42,11 +43,11 @@ const (
 var signedHeaders = []string{headerHost, headerDate}
 var signedHeadersBytes = []byte(strings.Join(signedHeaders, ";"))
 
-func generateSigV4(credentials credentials.Value, hostname, region, payload string) (string, string) {
+func generateSigV4(credentials aws.Credentials, hostname, region, payload string) (string, string) {
 	return generateSigV4WithTime(credentials, hostname, region, payload, time.Now().UTC())
 }
 
-func generateSigV4WithTime(credentials credentials.Value, hostname, region, payload string, time time.Time) (string, string) {
+func generateSigV4WithTime(credentials aws.Credentials, hostname, region, payload string, time time.Time) (string, string) {
 	headers := sigv4Headers(hostname, time, credentials.SessionToken)
 
 	canonicalRequest := make([]byte, 0, 256) // 4 + 1 + 1 + 1 + 1 + (74+1+28+1) + 1 + 16 + 1 + 64 + 25%

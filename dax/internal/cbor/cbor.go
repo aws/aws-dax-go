@@ -19,13 +19,13 @@ import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
 	"io"
 	"math"
 	"math/big"
 	"strconv"
 	"sync"
+
+	"github.com/aws/smithy-go"
 )
 
 const (
@@ -33,9 +33,9 @@ const (
 	maxObjLenBytes = 1024 * 1024 * 1024
 )
 
-var ErrNaN = awserr.New(request.InvalidParameterErrCode, "cbor: not a number", nil)
-var ErrObjTooBig = awserr.New(request.ErrCodeSerialization, "cbor: object too big", nil)
-var ErrNegLength = awserr.New(request.ErrCodeSerialization, "cbor: negative length", nil)
+var ErrNaN = &smithy.InvalidParamsError{Context: "cbor: not a number"}                    // awserr.New(request.InvalidParameterErrCode, "cbor: not a number", nil)
+var ErrObjTooBig = &smithy.DeserializationError{Err: fmt.Errorf("cbor: object too big")}  //awserr.New(request.ErrCodeSerialization, "cbor: object too big", nil)
+var ErrNegLength = &smithy.DeserializationError{Err: fmt.Errorf("cbor: negative length")} //awserr.New(request.ErrCodeSerialization, "cbor: negative length", nil)
 
 // A Writer writes cbor-encoded data.
 type Writer struct {
@@ -483,7 +483,8 @@ func (r *Reader) readTypeHeader() (hdr int, value uint64, err error) {
 
 func (r *Reader) verifyMajorType(hdr, exp int) error {
 	if (hdr & MajorTypeMask) != exp {
-		return awserr.New(request.ErrCodeSerialization, fmt.Sprintf("cbor: expected major type %d, got %d", exp, hdr&MajorTypeMask), nil)
+		//return awserr.New(request.ErrCodeSerialization, fmt.Sprintf("cbor: expected major type %d, got %d", exp, hdr&MajorTypeMask), nil)
+		return &smithy.DeserializationError{Err: fmt.Errorf("cbor: expected major type %d, got %d", exp, hdr&MajorTypeMask)}
 	}
 	return nil
 }
