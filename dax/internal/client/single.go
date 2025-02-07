@@ -729,7 +729,13 @@ func (client *SingleDaxClient) executeWithRetries(op string, o RequestOptions, e
 		if err = client.executeWithContext(ctx, op, encoder, decoder, o); err == nil {
 			return nil
 		} else if ctx != nil && err == ctx.Err() {
-			return awserr.New(request.CanceledErrorCode, "request context canceled", err)
+			if err == context.Canceled {
+				return awserr.New(request.CanceledErrorCode, "request context canceled", err)
+			} else if err == context.DeadlineExceeded {
+				return awserr.New(request.CanceledErrorCode, "request context deadline exceeded", err)
+			} else { // if the behaviour of ctx.Err() changes
+				return awserr.New(request.CanceledErrorCode, "request context canceled", err)
+			}
 		}
 
 		if i != attempts && sleepFun != nil {
