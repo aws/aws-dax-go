@@ -79,6 +79,28 @@ func TestItemKey(t *testing.T) {
 		{
 			keydef: []dynamodb.AttributeDefinition{
 				{AttributeName: aws.String("hks"), AttributeType: aws.String(dynamodb.ScalarAttributeTypeS)},
+				{AttributeName: aws.String("rkn"), AttributeType: aws.String(dynamodb.ScalarAttributeTypeN)},
+			},
+			item: map[string]*dynamodb.AttributeValue{
+				"hks": {S: aws.String("hkv")},
+				"rkn": {N: aws.String("1E61")},
+			},
+			enc: fromHex("0x4c63686b76fe8000003e1c0000"),
+		},
+		{
+			keydef: []dynamodb.AttributeDefinition{
+				{AttributeName: aws.String("hks"), AttributeType: aws.String(dynamodb.ScalarAttributeTypeS)},
+				{AttributeName: aws.String("rkn"), AttributeType: aws.String(dynamodb.ScalarAttributeTypeN)},
+			},
+			item: map[string]*dynamodb.AttributeValue{
+				"hks": {S: aws.String("hkv")},
+				"rkn": {N: aws.String("1E-64")},
+			},
+			enc: fromHex("0x4c63686b76817fffffc11c0000"),
+		},
+		{
+			keydef: []dynamodb.AttributeDefinition{
+				{AttributeName: aws.String("hks"), AttributeType: aws.String(dynamodb.ScalarAttributeTypeS)},
 				{AttributeName: aws.String("rkb"), AttributeType: aws.String(dynamodb.ScalarAttributeTypeB)},
 			},
 			item: map[string]*dynamodb.AttributeValue{
