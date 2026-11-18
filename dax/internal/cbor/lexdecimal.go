@@ -243,7 +243,7 @@ func decode(reader BytesReader, xormask int) (*Decimal, error) {
 		if err != nil {
 			return nil, err
 		}
-		exponent = v ^ xormask ^ 0x7fffffff
+		exponent = int(int32(v ^ xormask ^ 0x7fffffff))
 
 	case 0x81, 0xfe:
 		digitAdjust = 12
@@ -251,7 +251,8 @@ func decode(reader BytesReader, xormask int) (*Decimal, error) {
 		if err != nil {
 			return nil, err
 		}
-		exponent = v ^ xormask ^ 0x80000000
+		// Restore the signed 32-bit exponent after flipping its sign bit.
+		exponent = int(int32(v ^ xormask ^ 0x80000000))
 
 	default:
 		exponent = (int(b) ^ xormask) & 0xff

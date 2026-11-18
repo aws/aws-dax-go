@@ -26,6 +26,10 @@ func TestLexDecimal(t *testing.T) {
 		in, out string
 		encoded []byte
 	}{
+		{in: "-1E125", out: "-1E125"},
+		{in: "-1E62", out: "-1E62"},
+		{in: "-1E61", out: "-1E61", encoded: fromHex("0x017fffffc1e3fff0")},
+		{in: "-1E60", out: "-1E60"},
 		{in: "-1000000000001", out: "-1000000000001"},
 		{in: "-999999999998", out: "-999999999998"},
 		{in: "-123.0", out: "-1230E-1"},
@@ -52,8 +56,16 @@ func TestLexDecimal(t *testing.T) {
 		{in: "-0.001", out: "-1E-3"},
 		{in: "-0.0001", out: "-1E-4"},
 		{in: "-0.00001", out: "-1E-5"},
+		{in: "-1E-62", out: "-1E-62"},
+		{in: "-1E-63", out: "-1E-63"},
+		{in: "-1E-64", out: "-1E-64", encoded: fromHex("0x7e8000003ee3fff0")},
+		{in: "-1E-130", out: "-1E-130"},
 		{in: "-22234353.464363E-43534545", out: "-22234353464363E-43534551", encoded: fromHex("0x7e829848c8c569c775705f7fe0")},
 		{in: "0", out: "0"},
+		{in: "1E-130", out: "1E-130", encoded: fromHex("0x817fffff7f1c0000")},
+		{in: "1E-64", out: "1E-64", encoded: fromHex("0x817fffffc11c0000")},
+		{in: "1E-63", out: "1E-63", encoded: fromHex("0x821c0000")},
+		{in: "1E-62", out: "1E-62"},
 		{in: "0.00001", out: "1E-5"},
 		{in: "0.0001", out: "1E-4"},
 		{in: "0.001", out: "1E-3"},
@@ -86,6 +98,10 @@ func TestLexDecimal(t *testing.T) {
 		{in: "1000000000000", out: "1000000000000"},
 		{in: "111122223333444445555.66667777", out: "11112222333344444555566667777E-8", encoded: fromHex("0xd51ec863ad59721c98dea6ac70e004")},
 		{in: "111122223333444445555.66667778", out: "11112222333344444555566667778E-8", encoded: fromHex("0xd51ec863ad59721c98dea6ac718004")},
+		{in: "1E60", out: "1E60", encoded: fromHex("0xfd1c0000")},
+		{in: "1E61", out: "1E61", encoded: fromHex("0xfe8000003e1c0000")},
+		{in: "1E62", out: "1E62"},
+		{in: "1E125", out: "1E125", encoded: fromHex("0xfe8000007e1c0000")},
 	}
 
 	var last []byte
